@@ -289,6 +289,7 @@
       <div class="stage" id="chatStage" style="padding:12px; width:100%">
         <div id="chatMessages" class="panel" style="padding:12px; border-radius:12px; border:1px solid var(--border); background:var(--panel-2); height:340px; overflow:auto"></div>
         <div id="ragDebug" class="rag-debug"></div>
+        <div id="ragStats" class="rag-debug" style="display:block"></div>
       </div>
       <div class="composer panel">
         <div class="composer-head">
@@ -824,9 +825,9 @@
           await db_updateNote(n.id, { title, content, updated_at: new Date().toISOString() }).catch(console.error);
           // Background index for RAG
           try {
-            await fetch('https://lmrnnfjuytygomdfujhs.supabase.co/functions/v1/rag-embed-index', {
+            await fetch('https://lmrnnfjuytygomdfujhs.supabase.co/functions/v1/rag-embed-index-openai', {
               method:'POST', headers:{ 'Content-Type':'application/json', 'Authorization': `Bearer ${util_getEnv('SUPABASE_ANON_KEY','SUPABASE_ANON_KEY')}`, 'apikey': util_getEnv('SUPABASE_ANON_KEY','SUPABASE_ANON_KEY') },
-              body: JSON.stringify({ space_id: spaceId, items:[{ source_type:'note', source_id:n.id, content }] })
+              body: JSON.stringify({ space_id: spaceId, items:[{ source_type:'note', source_id:n.id, content }], openai_api_key: (window.OPENAI_API_KEY||'') })
             });
           } catch {}
         }, 800);
@@ -860,9 +861,9 @@
         if (error) { console.error('Insert link error', error); showToast('Failed to add link'); }
         else {
           try {
-            await fetch('https://lmrnnfjuytygomdfujhs.supabase.co/functions/v1/rag-embed-index', {
+            await fetch('https://lmrnnfjuytygomdfujhs.supabase.co/functions/v1/rag-embed-index-openai', {
               method:'POST', headers:{ 'Content-Type':'application/json', 'Authorization': `Bearer ${util_getEnv('SUPABASE_ANON_KEY','SUPABASE_ANON_KEY')}`, 'apikey': util_getEnv('SUPABASE_ANON_KEY','SUPABASE_ANON_KEY') },
-              body: JSON.stringify({ space_id: spaceId, items:[{ source_type:'file', source_id:data?.[0]?.id, content: `${name} ${url}` }] })
+              body: JSON.stringify({ space_id: spaceId, items:[{ source_type:'file', source_id:data?.[0]?.id, content: `${name} ${url}` }], openai_api_key: (window.OPENAI_API_KEY||'') })
             });
           } catch {}
           showToast('Link added'); render();
@@ -895,9 +896,9 @@
             else if ((file.name||'').toLowerCase().endsWith('.docx')){ textContent = await extractDocxText(file); }
             // Always include the public URL and name so search can match
             const content = `${file.name} ${pub}\n` + (textContent || `(${file.type||'file'})`);
-            await fetch('https://lmrnnfjuytygomdfujhs.supabase.co/functions/v1/rag-embed-index', {
+            await fetch('https://lmrnnfjuytygomdfujhs.supabase.co/functions/v1/rag-embed-index-openai', {
               method:'POST', headers:{ 'Content-Type':'application/json', 'Authorization': `Bearer ${util_getEnv('SUPABASE_ANON_KEY','SUPABASE_ANON_KEY')}`, 'apikey': util_getEnv('SUPABASE_ANON_KEY','SUPABASE_ANON_KEY') },
-              body: JSON.stringify({ space_id: spaceId, items:[{ source_type:'file', source_id: fRow.id, content }] })
+              body: JSON.stringify({ space_id: spaceId, items:[{ source_type:'file', source_id: fRow.id, content }], openai_api_key: (window.OPENAI_API_KEY||'') })
             });
           } catch {}
           showToast('File uploaded'); render();
@@ -907,11 +908,13 @@
       contentEl.querySelector('#reindexBtn').addEventListener('click', async ()=>{
         try{
           const notesPayload = (notes||[]).slice(0,50).map(n=>({ source_type:'note', source_id:n.id, content: `${n.title||''}\n${n.content||''}` }));
-          await fetch('https://lmrnnfjuytygomdfujhs.supabase.co/functions/v1/rag-embed-index', {
+          const idxRes = await fetch('https://lmrnnfjuytygomdfujhs.supabase.co/functions/v1/rag-embed-index-openai', {
             method:'POST', headers:{ 'Content-Type':'application/json', 'Authorization': `Bearer ${util_getEnv('SUPABASE_ANON_KEY','SUPABASE_ANON_KEY')}`, 'apikey': util_getEnv('SUPABASE_ANON_KEY','SUPABASE_ANON_KEY') },
-            body: JSON.stringify({ space_id: spaceId, items: notesPayload })
+            body: JSON.stringify({ space_id: spaceId, items: notesPayload, openai_api_key: (window.OPENAI_API_KEY||'') })
           });
-          showToast('Reindex started');
+          const idxJson = await idxRes.json().catch(()=>null);
+          showToast(`Reindex: processed ${idxJson?.processed ?? notesPayload.length}, ok ${idxJson?.successes ?? '?'}, fail ${idxJson?.failures ?? '?'}`);
+          const dbg = document.getElementById('ragDebug'); if (dbg) { dbg.style.display='block'; dbg.textContent = 'INDEX DEBUG\n'+JSON.stringify(idxJson,null,2); }
         }catch{ showToast('Reindex failed'); }
       });
 
@@ -962,12 +965,14 @@
             db_listNotes(sp.id).catch(()=>[])
           ]);
           const items = [];
-          for (const n of notes){ items.push({ source_type:'note', source_id:n.id, content:n.content||'' }); }
+          for (const n of notes){ items.push({ source_type:'note', source_id:n.id, content:(n.title||'')+'\n'+(n.content||'') }); }
           for (const f of files){ items.push({ source_type:'file', source_id:f.id, content: `${f.name} ${f.url||''}` }); }
           if (items.length){
             totalItems += items.length;
             const anon = util_getEnv('SUPABASE_ANON_KEY','SUPABASE_ANON_KEY');
-            await fetch('https://lmrnnfjuytygomdfujhs.supabase.co/functions/v1/rag-embed-index', { method:'POST', headers:{ 'Content-Type':'application/json', 'Authorization': `Bearer ${anon}`, 'apikey': anon }, body: JSON.stringify({ space_id: sp.id, items }) });
+            const res = await fetch('https://lmrnnfjuytygomdfujhs.supabase.co/functions/v1/rag-embed-index-openai', { method:'POST', headers:{ 'Content-Type':'application/json', 'Authorization': `Bearer ${anon}`, 'apikey': anon }, body: JSON.stringify({ space_id: sp.id, items, openai_api_key: (window.OPENAI_API_KEY||'') }) });
+            const js = await res.json().catch(()=>null);
+            const dbg = document.getElementById('ragDebug'); if (dbg) { dbg.style.display='block'; dbg.textContent = 'INDEX DEBUG\n'+JSON.stringify(js,null,2); }
           }
         }
         const elapsed = Math.round(performance.now() - startedAt);
@@ -984,6 +989,25 @@
       for (const sp of spaces){
         const opt = document.createElement('option'); opt.value = sp.id; opt.textContent = sp.name; scopeSel.appendChild(opt);
       }
+      // Update RAG stats initially and on change
+      async function updateRagStats(){
+        try{
+          const sb = getSupabase();
+          const sel = scopeSel ? scopeSel.value : 'ALL';
+          let count = 0;
+          if (sel === 'ALL'){
+            const { count: c } = await sb.from('doc_chunks').select('id', { count:'exact', head:true });
+            count = c || 0;
+          } else {
+            const { count: c } = await sb.from('doc_chunks').select('id', { count:'exact', head:true }).eq('space_id', sel);
+            count = c || 0;
+          }
+          const el = document.getElementById('ragStats');
+          if (el){ el.style.display = 'block'; el.textContent = `Indexed chunks: ${count} (scope: ${sel})`; }
+        } catch {}
+      }
+      scopeSel.addEventListener('change', updateRagStats);
+      updateRagStats();
     })();
 
     // Chat open/close via side tab and scrim
