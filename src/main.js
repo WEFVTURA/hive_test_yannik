@@ -111,6 +111,16 @@ openProfileBtn?.setAttribute('tabindex','0');
 openSettings2?.addEventListener('keydown', (e)=>{ if(e.key==='Enter' || e.key===' '){ e.preventDefault(); openSettingsModal(); } });
 openProfileBtn?.addEventListener('keydown', (e)=>{ if(e.key==='Enter' || e.key===' '){ e.preventDefault(); openProfileModal(); } });
 
+// Open chat side panel
+const askBtn = document.getElementById('askHiveBtn');
+askBtn?.addEventListener('click', ()=>{
+  const appRoot = document.getElementById('appRoot');
+  const scrim = document.getElementById('scrim');
+  if (appRoot){ appRoot.classList.remove('chat-closed'); appRoot.classList.add('chat-open'); }
+  if (scrim){ scrim.style.display='block'; }
+  setTimeout(()=>{ try{ document.getElementById('chatInput')?.focus(); }catch{} }, 0);
+});
+
 // Meeting Intelligence button -> modal
 const meetingBtn = document.getElementById('meetingBtn');
 meetingBtn?.addEventListener('click', async ()=>{
@@ -171,8 +181,19 @@ async function renderLibrary(){
   navItems.querySelectorAll('[data-id]').forEach(el=>{ el.addEventListener('click', ()=>{ location.hash = 'space/'+el.getAttribute('data-id'); }); });
 
   const grid = document.getElementById('grid');
+  // Promote baseline spaces first
+  const meetingsId = localStorage.getItem('hive_meetings_space_id')||'';
+  const chatsId = localStorage.getItem('hive_chats_space_id')||'';
+  spaces.sort((a,b)=>{
+    const aScore = ((a.id===meetingsId)?-2:0) + ((a.id===chatsId)?-1:0);
+    const bScore = ((b.id===meetingsId)?-2:0) + ((b.id===chatsId)?-1:0);
+    return aScore - bScore;
+  });
   grid.innerHTML = spaces.map(s=>{
-    const cover = s.cover_url ? `<img src="${s.cover_url}" alt="cover" style="width:100%; height:100%; object-fit:cover; border-radius:12px">` : `<div style=\"display:grid; place-items:center; gap:8px\"><svg class=\"icon\"><use href=\"#box\"></use></svg><span class=\"muted\">Cover</span></div>`;
+    let cover;
+    if (s.id===meetingsId){ cover = `<div style=\"display:grid; place-items:center; height:100%\"><svg class=\"icon card-icon\"><use href=\"#video\"></use></svg></div>`; }
+    else if (s.id===chatsId){ cover = `<div style=\"display:grid; place-items:center; height:100%\"><svg class=\"icon card-icon\"><use href=\"#chat\"></use></svg></div>`; }
+    else { cover = s.cover_url ? `<img src="${s.cover_url}" alt="cover" style="width:100%; height:100%; object-fit:cover; border-radius:12px">` : `<div style=\"display:grid; place-items:center; gap:8px\"><svg class=\"icon\"><use href=\"#box\"></use></svg><span class=\"muted\">Cover</span></div>`; }
     return `<article class="lib-card" data-id="${s.id}">
       <div class="lib-visual">${cover}<div class="card-title-overlay">${s.name}</div></div>
       <div class="lib-meta"><span>Space</span><span></span><span title="Open">›</span></div>
@@ -183,7 +204,12 @@ async function renderLibrary(){
 
 async function renderRoute(){
   const hash = location.hash.replace(/^#/, '');
-  if (hash.startsWith('space/')){ await renderSpace(content, hash.split('/')[1]); }
+  if (hash.startsWith('space/')){
+    const sid = hash.split('/')[1];
+    const chatsId = localStorage.getItem('hive_chats_space_id')||'';
+    if (sid && chatsId && sid===chatsId){ const { renderChatsSpace } = await import('./ui/chat.js'); await renderChatsSpace(content); }
+    else { await renderSpace(content, sid); }
+  }
   else { await renderLibrary(); }
 }
 
@@ -217,7 +243,7 @@ async function ensureAuth(){
 }
 
 // Bootstrap auth early (restore from cookies first to avoid re-login on refresh)
-(async()=>{ await auth_restoreFromCookies(); await ensureAuth(); await hydrateProfileUI(); })();
+(async()=>{ await auth_restoreFromCookies(); await ensureAuth(); await ensureBaselineSpaces(); await hydrateProfileUI(); })();
 
 // Hydrates sidebar avatar and name from Supabase profile
 async function hydrateProfileUI(){
@@ -247,4 +273,17 @@ async function hydrateProfileUI(){
 			avatarEl.textContent = letterSource.slice(0,1).toUpperCase();
 		}
 	}
+}
+
+// Ensure baseline spaces exist: Meetings and Chats
+async function ensureBaselineSpaces(){
+  try{
+    const spaces = await db_listSpaces().catch(()=>[]);
+    const hasMeetings = spaces.find(s=> (s.name||'').toLowerCase()==='meetings');
+    const hasChats = spaces.find(s=> (s.name||'').toLowerCase()==='chats');
+    if (!hasMeetings){ const s = await db_createSpace('Meetings'); localStorage.setItem('hive_meetings_space_id', s.id); }
+    else { localStorage.setItem('hive_meetings_space_id', hasMeetings.id); }
+    if (!hasChats){ const s2 = await db_createSpace('Chats'); localStorage.setItem('hive_chats_space_id', s2.id); }
+    else { localStorage.setItem('hive_chats_space_id', hasChats.id); }
+  }catch{}
 }

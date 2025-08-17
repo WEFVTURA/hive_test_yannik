@@ -26,6 +26,15 @@ export function renderChat(root){
         <div class="composer-body" style="padding:12px; display:grid; gap:8px">
           <div class="muted">context: <span id="chatScopeLabel">All Libraries</span></div>
           <div style="display:flex; gap:8px; align-items:center">
+            <label class="muted" style="font-size:12px">Mode</label>
+            <select id="queryMode" style="background:transparent; color:var(--text); border:1px solid var(--border); border-radius:8px; padding:6px 8px">
+              <option value="rag">RAG</option>
+              <option value="direct">Direct (concat notes)</option>
+              <option value="fts">FTS (BM25)</option>
+              <option value="sql">SQL (notes)</option>
+            </select>
+          </div>
+          <div style="display:flex; gap:8px; align-items:center">
             <label class="muted" style="font-size:12px">Search scope</label>
             <select id="spaceScope" style="flex:1; background:transparent; color:var(--text); border:1px solid var(--border); border-radius:8px; padding:6px 8px">
               <option value="ALL" ${prefs.defaultScope==='ALL'?'selected':''}>ALL</option>
@@ -142,19 +151,56 @@ export function renderChat(root){
     return chunks.join('');
   }
 
+  async function queryViaFTS(scopeVal, question){
+    const { fts_searchNotes } = await import('../lib/supabase.js');
+    const limit = Math.max(1, prefs.topK||6);
+    const space = scopeVal==='ALL' ? null : scopeVal;
+    const rows = await fts_searchNotes(question, space, limit).catch(()=>[]);
+    const context = rows.map(r=>`[${(r.similarity??0).toFixed(2)}] ${r.title||''} ${r.content||''}`).join('\n');
+    if (ragDebugEl){ ragDebugEl.style.display='block'; ragDebugEl.textContent = `FTS mode | scope: ${scopeVal} | matches: ${rows.length}\n`; }
+    const sys = prefs.contextOnly ? 'Answer ONLY using provided context. If nothing relevant, reply: "Information not found, try a different query".' : 'Prefer provided context; if none, answer briefly without fabricating citations.';
+    return `${sys}\n\nContext:\n${context}\n\nQuestion: ${question}`;
+  }
+
+  async function queryViaSQL(scopeVal, question){
+    const sb = getSupabase();
+    let rows = [];
+    if (scopeVal==='ALL'){
+      const spaces = await db_listSpaces().catch(()=>[]);
+      for (const sp of spaces){
+        const { data } = await sb.from('notes').select('id,title,content,space_id,updated_at').eq('space_id', sp.id).order('updated_at', { ascending:false }).limit(200);
+        rows = rows.concat(data||[]);
+      }
+    } else {
+      const { data } = await sb.from('notes').select('id,title,content,space_id,updated_at').eq('space_id', scopeVal).order('updated_at', { ascending:false }).limit(500);
+      rows = data||[];
+    }
+    const hay = rows.map(r=>`[${r.id}] ${r.title}\n${r.content}`).join('\n\n');
+    const sys = 'Search the provided notes text for relevant passages. Quote note ids that support the answer.';
+    return `${sys}\n\nNotes:\n${hay}\n\nQuestion: ${question}`;
+  }
+
   chatInput.addEventListener('keydown', async (e)=>{
     if (e.key==='Enter' && !e.shiftKey){
       e.preventDefault();
       const text = (chatInput.value||'').trim(); if(!text) return; chatInput.value='';
       history = history.concat([{ role:'user', content:text }]); renderMessages();
       const scopeVal = scopeSel ? scopeSel.value : 'ALL';
+      const modeSel = root.querySelector('#queryMode');
+      const qMode = modeSel ? modeSel.value : 'rag';
 
       let prompt;
-      if (prefs.directMode){
+      if (qMode==='direct' || prefs.directMode){
         const ctx = await buildDirectContext(scopeVal);
         const sys = 'Use the following project notes as authoritative context. If insufficient, say: "Information not found, try a different query".';
         prompt = `${sys}\n\nContext:\n${ctx}\n\nQuestion: ${text}`;
         if (ragDebugEl){ ragDebugEl.style.display='block'; ragDebugEl.textContent = `Direct mode | scope: ${scopeVal} | ctx chars: ${ctx.length}\n`; }
+      } else if (qMode==='fts'){
+        prompt = await queryViaFTS(scopeVal, text);
+      } else if (qMode==='sql'){
+        const sqlPrompt = await queryViaSQL(scopeVal, text);
+        prompt = sqlPrompt;
+        if (ragDebugEl){ ragDebugEl.style.display='block'; ragDebugEl.textContent = `SQL mode | scope: ${scopeVal} | length: ${sqlPrompt.length}`; }
       } else {
         const started = performance.now();
         const useOpenAI = prefs.searchProvider === 'openai';
@@ -180,4 +226,47 @@ export function renderChat(root){
   });
 
   renderMessages();
+
+  // Expose a helper to open a saved chat from elsewhere (e.g., Chats space)
+  window.hiveOpenChatById = async (id)=>{
+    try{
+      // Prefer Supabase chats if available
+      const supa = await (await import('../lib/supabase.js')).db_listChats().catch(()=>[]);
+      let row = Array.isArray(supa) ? supa.find(c=>c.id===id) : null;
+      if (!row) row = getChat(id);
+      if (!row) return;
+      currentChatId = row.id; history = row.messages||[]; renderMessages();
+      const appRoot=document.getElementById('appRoot'); const scrim=document.getElementById('scrim');
+      if(appRoot){ appRoot.classList.remove('chat-closed'); appRoot.classList.add('chat-open'); }
+      if(scrim){ scrim.style.display='block'; }
+    }catch{}
+  };
+}
+
+// Renders a list of saved chats in the main content area
+export async function renderChatsSpace(root){
+  const { db_listChats, db_deleteChat } = await import('../lib/supabase.js');
+  let list = await db_listChats().catch(()=>[]);
+  if (!Array.isArray(list) || !list.length){ list = listChats(); }
+  root.innerHTML = `
+    <div class="content-head">
+      <div class="title"><h2>Chats</h2></div>
+      <div class="view-controls"><button class="button" id="newChatBtn">New chat</button></div>
+    </div>
+    <div id="chatsList" style="display:grid; gap:8px"></div>`;
+  const listEl = root.querySelector('#chatsList');
+  if (!list.length){ listEl.innerHTML = '<div class="empty">No saved chats yet</div>'; return; }
+  listEl.innerHTML = list.map(c=>`<div style='display:flex; align-items:center; justify-content:space-between; border:1px solid var(--border); padding:10px; border-radius:10px'>
+    <div><div style='font-weight:600'>${c.title||'Untitled chat'}</div><div class='muted' style='font-size:12px'>${c.scope||'ALL'} · ${new Date(c.updated_at||c.created_at).toLocaleString()}</div></div>
+    <div style='display:flex; gap:8px'>
+      <button class='button' data-open='${c.id}'>Open</button>
+      <button class='button ghost' data-del='${c.id}'>Delete</button>
+    </div>
+  </div>`).join('');
+  listEl.querySelectorAll('[data-open]').forEach(btn=>btn.addEventListener('click', ()=>{ window.hiveOpenChatById && window.hiveOpenChatById(btn.getAttribute('data-open')); }));
+  listEl.querySelectorAll('[data-del]').forEach(btn=>btn.addEventListener('click', async ()=>{
+    const id = btn.getAttribute('data-del');
+    await db_deleteChat(id).catch(()=>deleteChat(id));
+    btn.closest('div[style]')?.remove();
+  }));
 }

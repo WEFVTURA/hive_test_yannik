@@ -20,7 +20,7 @@
 html,body{height:100%}
 body{margin:0; background:var(--bg); color:var(--text); font:14px/1.45 ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, "Apple Color Emoji","Segoe UI Emoji"}
 
-.app{display:grid; grid-template-columns: 260px 1fr 6px var(--chatWidth, 360px); gap:18px; height:100vh; padding:18px}
+.app{display:grid; grid-template-columns: 260px 1fr 6px var(--chatWidth, 360px); gap:12px; height:100vh; padding:12px}
 .app.chat-closed{grid-template-columns: 260px 1fr}
 .panel{background:var(--panel); border:1px solid var(--border); border-radius:var(--radius); box-shadow:var(--shadow)}
 .sidebar{display:flex; flex-direction:column; padding:14px; gap:12px}
@@ -53,13 +53,13 @@ body{margin:0; background:var(--bg); color:var(--text); font:14px/1.45 ui-sans-s
 .spacer{flex:1}
 
 /* MAIN */
-.main{display:grid; grid-template-rows:auto 1fr; padding:14px; min-height:0; overflow:auto}
+.main{display:grid; grid-template-rows:auto 1fr; padding:10px; min-height:0; overflow:auto}
 .topbar{display:flex; align-items:center; gap:10px}
 .search{position:relative; flex:1}
 .search input{width:100%; padding:12px 40px; border-radius:999px; background:var(--panel-2); border:1px solid var(--border); color:var(--text)}
 .search svg{position:absolute; left:12px; top:50%; transform:translateY(-50%); width:18px; height:18px; opacity:.7}
 .go-btn{border-radius:999px; padding:10px; border:1px solid var(--border); background:var(--panel-2); cursor:pointer}
-.content{margin-top:14px; display:grid; grid-template-rows:auto 1fr}
+.content{margin-top:10px; display:grid; grid-template-rows:auto 1fr}
 .content-head{display:flex; align-items:center; justify-content:space-between}
 .title{display:flex; align-items:baseline; gap:10px}
 .title h2{margin:0}
@@ -68,9 +68,11 @@ body{margin:0; background:var(--bg); color:var(--text); font:14px/1.45 ui-sans-s
 .segmented button{padding:8px 12px; background:transparent; border:0; color:var(--text); cursor:pointer}
 .segmented button.active{background:var(--panel-2)}
 
-.card-grid{margin-top:12px;display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,520px));gap:16px;grid-auto-flow:row dense; align-items:start; align-content:start; justify-content:start}
-.lib-card{background:var(--panel-2); border:1px solid var(--border); border-radius:14px; padding:14px; display:flex; flex-direction:column; gap:16px; cursor:pointer; align-self:start; max-width:520px}
-.lib-visual{aspect-ratio:16/6; max-height:180px; border:1px dashed var(--border);border-radius:12px;display:grid;place-items:center;color:var(--muted);position:relative;overflow:hidden}
+.card-grid{margin-top:12px;display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;grid-auto-flow:row dense; align-items:start; align-content:start; justify-content:stretch}
+.space-2col{grid-template-columns:1fr 1fr}
+.space-2col .lib-card{max-width:none}
+.lib-card{background:var(--panel-2); border:1px solid var(--border); border-radius:14px; padding:12px; display:flex; flex-direction:column; gap:12px; cursor:pointer; align-self:start; max-width:none}
+.lib-visual{aspect-ratio:20/9; max-height:192px; border:1px dashed var(--border);border-radius:12px;display:grid;place-items:center;color:var(--muted);position:relative;overflow:hidden}
 .card-title-overlay{position:absolute; left:8px; right:8px; bottom:8px; padding:6px 10px; border-radius:8px; background:rgba(0,0,0,.45); color:#fff; font-weight:600; backdrop-filter: blur(2px);}
 .lib-meta{display:flex; align-items:center; justify-content:space-between; color:var(--muted); font-size:12px}
 
@@ -129,6 +131,7 @@ body{margin:0; background:var(--bg); color:var(--text); font:14px/1.45 ui-sans-s
 
 /* ICONS */
 .icon{width:18px; height:18px; display:inline-block; vertical-align:middle}
+.card-icon{width:28px; height:28px}
 
 /* Responsive */
 @media (max-width: 1200px){

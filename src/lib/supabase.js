@@ -161,6 +161,25 @@ export async function db_deleteNote(id){
   if (error) throw error;
 }
 
+// Tags helpers (files/notes) — simple string array column `tags` on tables
+export async function db_updateFileTags(id, tags){
+  const sb = getSupabase();
+  const { data, error } = await sb.from('files').update({ tags }).eq('id', id).select('*').single();
+  if (error) throw error; return data;
+}
+export async function db_updateNoteTags(id, tags){
+  const sb = getSupabase();
+  const { data, error } = await sb.from('notes').update({ tags }).eq('id', id).select('*').single();
+  if (error) throw error; return data;
+}
+
+// FTS/BM25 search via RPC
+export async function fts_searchNotes(query, spaceId, limit=10){
+  const sb = getSupabase();
+  const { data, error } = await sb.rpc('fts_search_notes', { p_query: query, p_space: spaceId || null, p_limit: limit });
+  if (error) throw error; return data || [];
+}
+
 // Shares
 export async function db_shareSpace(spaceId, email){
   const sb = getSupabase();

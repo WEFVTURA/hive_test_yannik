@@ -1,4 +1,4 @@
-import { getSupabase, db_getSpace, db_listFiles, db_listNotes, db_updateSpace, db_createNote, db_updateNote, db_deleteNote } from '../lib/supabase.js';
+import { getSupabase, db_getSpace, db_listFiles, db_listNotes, db_updateSpace, db_createNote, db_updateNote, db_deleteNote, db_updateFileTags, db_updateNoteTags } from '../lib/supabase.js';
 import { ragIndex } from '../lib/rag.js';
 import { openModalWithExtractor } from './modals.js';
 import { marked } from 'https://cdn.jsdelivr.net/npm/marked@12/+esm';
@@ -32,7 +32,7 @@ export async function renderSpace(root, spaceId){
         <button class="button ghost" id="backBtn">Back</button>
       </div>
     </div>
-    <div class="card-grid" style="grid-template-columns:1fr 1fr">
+    <div class="card-grid space-2col">
       <section class="lib-card">
         <div style="font-weight:600; margin-bottom:6px">Files</div>
         <div style="display:flex; gap:8px; margin-bottom:6px">
@@ -80,48 +80,40 @@ export async function renderSpace(root, spaceId){
   filesList.innerHTML = files.map(f=>{
     const href = f.url || (f.storage_path ? `https://lmrnnfjuytygomdfujhs.supabase.co/storage/v1/object/public/hive-attachments/${f.storage_path}` : '#');
     const preview = (f.content_type||'').startsWith('image/') ? `<img src="${href}" alt="${f.name}" style="max-height:40px; border-radius:6px">` : `<svg class="icon"><use href="#box"></use></svg>`;
+    const tags = Array.isArray(f.tags) ? f.tags : [];
     return `<div style="display:flex; align-items:center; justify-content:space-between; border:1px solid var(--border); padding:8px; border-radius:10px">
       <div style="display:flex; align-items:center; gap:10px"><a href="${href}" target="_blank">${preview}</a><a href="${href}" target="_blank">${f.name}</a></div>
       <div style="display:flex; gap:8px; align-items:center; font-size:12px">
         <span class="muted">${f.content_type||''}</span>
+        <span class="muted" title="tags">${tags.map(t=>`#${t}`).join(' ')}</span>
         <button class="button sm" data-add-file-tag="${f.id}">Tags</button>
-        <button class="button sm" data-convert-file="${f.id}">Convert</button>
+        <button class="button sm" data-convert-jina="${f.id}">Convert to note</button>
         <button class="button sm red" data-delete-file="${f.id}">Delete</button>
       </div>
     </div>`;
   }).join('');
 
-  // File actions: convert to note, delete
+  // File actions: convert to note (Jina), delete
   const fileById = new Map(files.map(x=>[String(x.id), x]));
-  filesList.querySelectorAll('[data-convert-file]').forEach(btn=>{
+  filesList.querySelectorAll('[data-convert-jina]').forEach(btn=>{
     btn.addEventListener('click', async ()=>{
-      const id = btn.getAttribute('data-convert-file');
+      const id = btn.getAttribute('data-convert-jina');
       const f = fileById.get(id); if(!f) return;
       try{
         const href = f.url || (f.storage_path ? `https://lmrnnfjuytygomdfujhs.supabase.co/storage/v1/object/public/hive-attachments/${f.storage_path}` : '');
         if (!href){ window.showToast && window.showToast('File has no URL'); return; }
-        const res = await fetch(href, { mode:'cors' }).catch(()=>null);
-        if (!res || !res.ok){ window.showToast && window.showToast('Cannot fetch file'); return; }
-        const blob = await res.blob();
-        let textContent = '';
-        const nameLower = (f.name||'').toLowerCase();
-        const type = (f.content_type||blob.type||'').toLowerCase();
-        if (type.startsWith('text/') || nameLower.endsWith('.txt')){
-          textContent = await blob.text();
-        } else if (type.includes('pdf') || nameLower.endsWith('.pdf')){
-          textContent = await extractPdfText(new File([blob], f.name, { type: blob.type||'application/pdf' }));
-        } else if (nameLower.endsWith('.docx') || type.includes('officedocument.wordprocessingml.document')){
-          textContent = await extractDocxText(new File([blob], f.name, { type: blob.type||'application/vnd.openxmlformats-officedocument.wordprocessingml.document' }));
-        } else {
-          textContent = '';
-        }
+        const isHttps = href.startsWith('https://');
+        const noScheme = href.replace(/^https?:\/\//i, '');
+        const readerUrl = `https://r.jina.ai/${isHttps ? 'https' : 'http'}://${noScheme}`;
+        const r = await fetch(readerUrl);
+        const textContent = await r.text();
         const title = (f.name||'Document').replace(/\.[^/.]+$/,'');
         const n = await db_createNote(spaceId);
-        await db_updateNote(n.id, { title, content: (textContent||'').slice(0,50000) });
+        await db_updateNote(n.id, { title, content: (textContent||'(no extractable text)').slice(0,50000) });
         collapsedState.set(n.id, false);
-        window.showToast && window.showToast('Created note from file');
+        window.showToast && window.showToast('Created note via Jina Reader');
         renderSpace(root, spaceId);
-      }catch{ window.showToast && window.showToast('Failed to convert'); }
+      }catch{ window.showToast && window.showToast('Jina conversion failed'); }
     });
   });
   filesList.querySelectorAll('[data-delete-file]').forEach(btn=>{
@@ -138,9 +130,16 @@ export async function renderSpace(root, spaceId){
       }catch{ window.showToast && window.showToast('Delete failed'); }
     });
   });
-  // Placeholder for add tag (UI only for now)
+  // File tags add/edit
   filesList.querySelectorAll('[data-add-file-tag]').forEach(btn=>{
-    btn.addEventListener('click', ()=>{ window.showToast && window.showToast('Tagging coming soon'); });
+    btn.addEventListener('click', async ()=>{
+      const id = btn.getAttribute('data-add-file-tag');
+      const f = fileById.get(id); if(!f) return;
+      const current = Array.isArray(f.tags)? f.tags.join(', ') : '';
+      const next = prompt('Add tags (comma separated)', current) || '';
+      const tags = next.split(',').map(s=>s.trim()).filter(Boolean);
+      try{ await db_updateFileTags(f.id, tags); window.showToast && window.showToast('Tags updated'); renderSpace(root, spaceId); }catch{ window.showToast && window.showToast('Failed to update tags'); }
+    });
   });
 
   // Notes list
@@ -168,11 +167,13 @@ export async function renderSpace(root, spaceId){
       <div class="note-body edit" data-body>
         <textarea class="note-editor" data-content>${n.content||''}</textarea>
         <div class="note-preview" data-preview></div>
+        <div style="display:flex; gap:8px; align-items:center"><span class="muted" style="font-size:12px">Tags:</span><input data-note-tags placeholder="comma, tags" style="flex:1; background:transparent; border:1px solid var(--border); color:var(--text); padding:6px 8px; border-radius:8px"/></div>
       </div>`;
 
     const title = row.querySelector('[data-title]');
     const content = row.querySelector('[data-content]');
     const preview = row.querySelector('[data-preview]');
+    const tagsInput = row.querySelector('[data-note-tags]');
     const body = row.querySelector('[data-body]');
 
     const applyMode = (mode)=>{
@@ -183,6 +184,7 @@ export async function renderSpace(root, spaceId){
 
     const renderPrev = ()=>{ preview.innerHTML = marked.parse(content.value||''); };
     renderPrev();
+    tagsInput.value = Array.isArray(n.tags)? n.tags.join(', ') : '';
 
     const autosave = debounce(async()=>{
       await db_updateNote(n.id, { title: title.value||'', content: content.value||'', updated_at: new Date().toISOString() }).catch(console.error);
@@ -191,6 +193,10 @@ export async function renderSpace(root, spaceId){
 
     title.addEventListener('input', autosave);
     content.addEventListener('input', ()=>{ renderPrev(); autosave(); });
+    tagsInput.addEventListener('change', async ()=>{
+      const tags = tagsInput.value.split(',').map(s=>s.trim()).filter(Boolean);
+      try{ await db_updateNoteTags(n.id, tags); window.showToast && window.showToast('Note tags updated'); }catch{}
+    });
     row.querySelector('[data-mode="edit"]').addEventListener('click', ()=>applyMode('edit'));
     row.querySelector('[data-mode="preview"]').addEventListener('click', ()=>applyMode('preview'));
     row.querySelector('[data-mode="split"]').addEventListener('click', ()=>applyMode('split'));
