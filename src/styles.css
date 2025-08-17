@@ -1,0 +1,22 @@
+:root{--bg:#0f1115;--panel:#141821;--panel-2:#0d1016;--muted:#8b93a7;--text:#e7eaf3;--accent:#4f6af2;--accent-2:#7a8cff;--border:#1f2430;--shadow:0 10px 30px rgba(0,0,0,.35);--radius:14px}
+*{box-sizing:border-box}html,body{height:100%}body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Arial}
+.app{display:grid;grid-template-columns:260px 1fr 360px;gap:18px;height:100vh;padding:18px}
+.panel{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow)}
+.sidebar{display:flex;flex-direction:column;padding:14px}
+.button{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--border);background:var(--panel-2);color:var(--text);padding:10px 12px;border-radius:10px;cursor:pointer}
+.section{margin:10px 0 6px;font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
+.nav-group{border:1px solid var(--border);border-radius:12px;overflow:hidden}
+.nav-item{display:flex;align-items:center;justify-content:space-between;padding:10px 12px;gap:10px;border-top:1px solid var(--border);cursor:pointer}
+.main{display:grid;grid-template-rows:auto 1fr;padding:14px}
+.content{margin-top:14px;display:grid;grid-template-rows:auto 1fr}
+.title h2{margin:0}
+.card-grid{margin-top:12px;display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px;align-items:start}
+.lib-card{background:var(--panel-2);border:1px solid var(--border);border-radius:14px;padding:14px;display:grid;gap:16px}
+.input{display:flex;align-items:center;gap:10px;border:1px solid var(--border);background:var(--panel);border-radius:12px;padding:8px}
+.input input{flex:1;background:transparent;border:0;color:var(--text);outline:none;padding:8px}
+.pill{font-size:12px;padding:6px 10px;background:var(--panel-2);border:1px solid var(--border);border-radius:999px;white-space:nowrap}
+.muted{color:var(--muted)}
+.message{max-width:85%;padding:8px 10px;border-radius:10px;border:1px solid var(--border);word-wrap:break-word;white-space:pre-wrap}
+.message.user{justify-self:end;background:var(--accent);color:#fff;border-color:transparent}
+.message.assistant{justify-self:start;background:var(--panel-2)}
+#chatMessages{display:grid;align-content:start;gap:8px}
