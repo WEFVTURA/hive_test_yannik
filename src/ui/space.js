@@ -127,6 +127,8 @@ export async function renderSpace(root, spaceId){
       collapsedState.set(n.id, nowCollapsed);
       toggleBtn.textContent = nowCollapsed ? 'Expand' : 'Collapse';
     });
+    const snippet = row.querySelector('.note-snippet');
+    snippet.addEventListener('click', ()=>{ toggleBtn.click(); });
 
     const delBtn = row.querySelector('[data-delete]');
     delBtn.addEventListener('click', async ()=>{

@@ -67,6 +67,7 @@ app.innerHTML = `
       </div>
       <div class="content" id="content"></div>
     </main>
+    <div class="splitter" id="chatSplitter" aria-hidden="true"></div>
     <aside class="right panel" id="chatPanel">
       <div id="chatRoot"></div>
     </aside>
@@ -172,3 +173,10 @@ async function renderRoute(){
 
 window.addEventListener('hashchange', renderRoute);
 renderRoute();
+
+// Chat splitter drag
+const splitter = document.getElementById('chatSplitter');
+let dragging = false; let startX = 0; let startWidth = 360;
+splitter?.addEventListener('mousedown', (e)=>{ dragging=true; startX=e.clientX; const cs=getComputedStyle(document.documentElement).getPropertyValue('--chatWidth'); startWidth=parseInt(cs||'360'); document.body.style.userSelect='none'; });
+window.addEventListener('mousemove', (e)=>{ if(!dragging) return; const dx = e.clientX - startX; const next = Math.max(260, startWidth - dx); document.documentElement.style.setProperty('--chatWidth', next+'px'); });
+window.addEventListener('mouseup', ()=>{ dragging=false; document.body.style.userSelect=''; });

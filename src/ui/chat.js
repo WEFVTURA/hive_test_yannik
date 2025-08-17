@@ -2,32 +2,35 @@ import { ragSearch } from '../lib/rag.js';
 import { util_getEnv, db_listSpaces } from '../lib/supabase.js';
 import { getPrefs } from './settings.js';
 import { getSupabase } from '../lib/supabase.js';
+import { marked } from 'https://cdn.jsdelivr.net/npm/marked@12/+esm';
 
 export function renderChat(root){
   const prefs = getPrefs();
   root.innerHTML = `
-    <div class="panel" style="padding:12px; border-radius:12px; border:1px solid var(--border); background:var(--panel-2); height:340px; overflow:auto" id="chatMessages"></div>
-    <div class="rag-debug" id="ragDebug" style="margin-top:10px; padding:10px; background:var(--panel-2); border:1px dashed var(--border); border-radius:10px; color:var(--muted); font-size:12px; max-height:180px; overflow:auto; display:none"></div>
-    <div class="composer panel">
-      <div class="composer-head" style="padding:12px 14px; border-bottom:1px solid var(--border); background:var(--panel-2); display:flex; align-items:center; justify-content:space-between">
-        <div>Ask HIve assistant</div>
-        <div style="display:flex; gap:8px">
-          <button class="button ghost" id="editChatBtn" title="Edit">✎</button>
-          <button class="button ghost" id="clearChatBtn">Clear</button>
-          <button class="button ghost" id="hideChatBtn">Hide</button>
+    <div class="chat-root">
+      <div class="panel" style="padding:12px; border-radius:12px; border:1px solid var(--border); background:var(--panel-2); height:100%; overflow:auto" id="chatMessages"></div>
+      <div class="rag-debug" id="ragDebug" style="margin-top:10px; padding:10px; background:var(--panel-2); border:1px dashed var(--border); border-radius:10px; color:var(--muted); font-size:12px; max-height:180px; overflow:auto; display:none"></div>
+      <div class="composer panel">
+        <div class="composer-head" style="padding:12px 14px; border-bottom:1px solid var(--border); background:var(--panel-2); display:flex; align-items:center; justify-content:space-between">
+          <div>Ask HIve assistant</div>
+          <div style="display:flex; gap:8px">
+            <button class="button ghost" id="editChatBtn" title="Edit">✎</button>
+            <button class="button ghost" id="clearChatBtn">Clear</button>
+            <button class="button ghost" id="hideChatBtn">Hide</button>
+          </div>
         </div>
-      </div>
-      <div class="composer-body" style="padding:12px; display:grid; gap:8px">
-        <div class="muted">context: <span id="chatScopeLabel">All Libraries</span></div>
-        <div style="display:flex; gap:8px; align-items:center">
-          <label class="muted" style="font-size:12px">Search scope</label>
-          <select id="spaceScope" style="flex:1; background:transparent; color:var(--text); border:1px solid var(--border); border-radius:8px; padding:6px 8px">
-            <option value="ALL" ${prefs.defaultScope==='ALL'?'selected':''}>ALL</option>
-          </select>
-        </div>
-        <div class="input" style="display:flex; align-items:center; gap:10px; border:1px solid var(--border); background:var(--panel); border-radius:12px; padding:8px">
-          <input id="chatInput" placeholder="Type your question" style="flex:1; background:transparent; border:0; color:var(--text); outline:none; padding:8px"/>
-          <div class="pill" id="modelBtn">${prefs.defaultModel} ▾</div>
+        <div class="composer-body" style="padding:12px; display:grid; gap:8px">
+          <div class="muted">context: <span id="chatScopeLabel">All Libraries</span></div>
+          <div style="display:flex; gap:8px; align-items:center">
+            <label class="muted" style="font-size:12px">Search scope</label>
+            <select id="spaceScope" style="flex:1; background:transparent; color:var(--text); border:1px solid var(--border); border-radius:8px; padding:6px 8px">
+              <option value="ALL" ${prefs.defaultScope==='ALL'?'selected':''}>ALL</option>
+            </select>
+          </div>
+          <div class="input" style="display:flex; align-items:center; gap:10px; border:1px solid var(--border); background:var(--panel); border-radius:12px; padding:8px">
+            <input id="chatInput" placeholder="Type your question" style="flex:1; background:transparent; border:0; color:var(--text); outline:none; padding:8px"/>
+            <div class="pill" id="modelBtn">${prefs.defaultModel} ▾</div>
+          </div>
         </div>
       </div>
     </div>`;
@@ -49,13 +52,17 @@ export function renderChat(root){
   function renderMessages(){
     if (!history.length){ chatMessagesEl.innerHTML = '<div class="empty">No messages yet. Type below to start the conversation.</div>'; return; }
     chatMessagesEl.innerHTML = history.map(m=>{
-      if(m.role==='assistant' && Array.isArray(m.citations) && m.citations.length){
-        const cites = m.citations.map(c=>`<li><span class="muted">${(c.similarity??0).toFixed(2)}</span> ${c.content.substring(0,160)}...</li>`).join('');
-        return `<div class="message assistant">${m.content}<div style="margin-top:8px"><div class="muted" style="font-size:12px">Sources</div><ul style="margin:6px 0 0 18px; padding:0">${cites}</ul></div></div>`;
+      if(m.role==='assistant'){
+        const inner = marked.parse(m.content||'');
+        const cites = Array.isArray(m.citations) && m.citations.length
+          ? `<div style="margin-top:8px"><div class="muted" style="font-size:12px">Sources</div><ul style="margin:6px 0 0 18px; padding:0">${m.citations.map(c=>`<li><span class='muted'>${(c.similarity??0).toFixed(2)}</span> ${c.content.substring(0,160)}...</li>`).join('')}</ul></div>`
+          : '';
+        return `<div class="message assistant"><div class="md">${inner}</div>${cites}</div>`;
       }
       return `<div class="message ${m.role}">${m.content}</div>`;
     }).join(''); chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight;
   }
+
   clearBtn.addEventListener('click', ()=>{ history=[]; renderMessages(); });
   hideBtn.addEventListener('click', ()=>{ const appRoot=document.getElementById('appRoot'); const scrim=document.getElementById('scrim'); if(appRoot){ appRoot.classList.remove('chat-open'); appRoot.classList.add('chat-closed'); } if(scrim){ scrim.style.display='none'; }});
 
