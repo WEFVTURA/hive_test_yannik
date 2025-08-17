@@ -33,6 +33,7 @@ body{margin:0; background:var(--bg); color:var(--text); font:14px/1.45 ui-sans-s
 .brand{font-weight:700}
 .muted{color:var(--muted)}
 .button{display:inline-flex; align-items:center; gap:8px; border:1px solid var(--border); background:var(--panel-2); color:var(--text); padding:10px 12px; border-radius:10px; cursor:pointer}
+.button.sm{padding:6px 8px; font-size:12px}
 .button.ghost{background:transparent}
 .button.primary{background:var(--accent); border-color:transparent}
 .section{margin:10px 0 6px; font-size:12px; text-transform:uppercase; letter-spacing:.08em; color:var(--muted)}
@@ -67,9 +68,9 @@ body{margin:0; background:var(--bg); color:var(--text); font:14px/1.45 ui-sans-s
 .segmented button{padding:8px 12px; background:transparent; border:0; color:var(--text); cursor:pointer}
 .segmented button.active{background:var(--panel-2)}
 
-.card-grid{margin-top:12px;display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px;grid-auto-flow:row dense; align-items:start; align-content:start}
-.lib-card{background:var(--panel-2); border:1px solid var(--border); border-radius:14px; padding:14px; display:flex; flex-direction:column; gap:16px; cursor:pointer; align-self:start}
-.lib-visual{height:128px;border:1px dashed var(--border);border-radius:12px;display:grid;place-items:center;color:var(--muted);position:relative;overflow:hidden}
+.card-grid{margin-top:12px;display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,520px));gap:16px;grid-auto-flow:row dense; align-items:start; align-content:start; justify-content:start}
+.lib-card{background:var(--panel-2); border:1px solid var(--border); border-radius:14px; padding:14px; display:flex; flex-direction:column; gap:16px; cursor:pointer; align-self:start; max-width:520px}
+.lib-visual{aspect-ratio:16/6; max-height:180px; border:1px dashed var(--border);border-radius:12px;display:grid;place-items:center;color:var(--muted);position:relative;overflow:hidden}
 .card-title-overlay{position:absolute; left:8px; right:8px; bottom:8px; padding:6px 10px; border-radius:8px; background:rgba(0,0,0,.45); color:#fff; font-weight:600; backdrop-filter: blur(2px);}
 .lib-meta{display:flex; align-items:center; justify-content:space-between; color:var(--muted); font-size:12px}
 

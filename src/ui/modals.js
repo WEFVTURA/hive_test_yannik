@@ -30,6 +30,10 @@ export function openModalWithExtractor(title, bodyHtml, extractor){
   scrim.setAttribute('aria-hidden','false');
   return new Promise((resolve)=>{
     function cleanup(res){
+      // Move focus away before hiding (prevents aria-hidden warning)
+      const active = document.activeElement;
+      if (active && typeof active.blur === 'function') active.blur();
+      if (document.body && typeof document.body.focus === 'function') document.body.focus();
       scrim.classList.remove('modal-show');
       scrim.style.display = 'none';
       scrim.setAttribute('aria-hidden','true');

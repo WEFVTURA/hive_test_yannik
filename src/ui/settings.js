@@ -22,7 +22,7 @@ export function savePrefs(next){
 	localStorage.setItem(KEY, JSON.stringify(next));
 }
 
-export function openSettingsModal(){
+export async function openSettingsModal(){
 	const p = getPrefs();
 	const scrim = document.getElementById('modalScrim') || createScrim();
 	scrim.classList.add('modal-show'); scrim.setAttribute('aria-hidden','false'); scrim.style.display='flex';
@@ -75,24 +75,72 @@ export function openSettingsModal(){
 	};
 }
 
-export function openProfileModal(){
-	const p = getPrefs();
+export async function openProfileModal(){
+	const { auth_getUser, profile_get, profile_upsert, profile_uploadAvatar } = await import('../lib/supabase.js');
+	const me = await auth_getUser();
+	if (!me){ alert('Please sign in first'); return; }
+	const profile = await profile_get(me.id).catch(()=>null) || { email: me.email, full_name: '', avatar_url: '' };
 	const scrim = document.getElementById('modalScrim') || createScrim();
 	scrim.classList.add('modal-show'); scrim.setAttribute('aria-hidden','false'); scrim.style.display='flex';
 	scrim.innerHTML = `
 		<div class="modal" role="dialog" aria-modal="true">
 		  <div class="modal-head"><div>My profile</div><button class="button ghost" id="xClose">✕</button></div>
 		  <div class="modal-body">
-		    <div class="field"><label>Display name</label><input id="pName" value="${p.profileName}" /></div>
+		    <div style="display:flex; align-items:center; gap:12px">
+		      <div id="avatarPreview" style="width:56px; height:56px; border-radius:50%; background:${profile.avatar_url?'transparent':'linear-gradient(135deg,#5a83f2,#7b61ff)'}; border:1px solid var(--border); background-size:cover; background-position:center; ${profile.avatar_url?`background-image:url('${profile.avatar_url}')`:''}"></div>
+		      <div style="display:flex; gap:8px">
+		        <button class="button" id="uploadAvatarBtn">Upload photo</button>
+		        <button class="button ghost" id="removeAvatarBtn">Remove</button>
+		      </div>
+		    </div>
+		    <div class="field"><label>Full name</label><input id="pName" value="${profile.full_name||''}" /></div>
+		    <div class="field"><label>Email</label><input value="${profile.email||me.email||''}" disabled /></div>
 		  </div>
-		  <div class="modal-actions"><button class="button" id="cancelBtn">Cancel</button><button class="button primary" id="saveBtn">Save</button></div>
+		  <div class="modal-actions"><button class="button" id="cancelBtn">Close</button><button class="button primary" id="saveBtn">Save</button></div>
 		</div>`;
 	function close(){ scrim.classList.remove('modal-show'); scrim.setAttribute('aria-hidden','true'); scrim.style.display='none'; }
 	scrim.querySelector('#xClose').onclick = close;
 	scrim.querySelector('#cancelBtn').onclick = close;
-	scrim.querySelector('#saveBtn').onclick = ()=>{
-		const next = { ...p, profileName: scrim.querySelector('#pName').value || p.profileName };
-		savePrefs(next); close(); location.reload();
+
+	const avatarPreview = scrim.querySelector('#avatarPreview');
+	const uploadBtn = scrim.querySelector('#uploadAvatarBtn');
+	const removeBtn = scrim.querySelector('#removeAvatarBtn');
+
+	uploadBtn.addEventListener('click', async ()=>{
+		const inp = document.createElement('input'); inp.type='file'; inp.accept='image/*';
+		inp.onchange = async ()=>{
+			const f = inp.files?.[0]; if(!f) return;
+			try{
+				const url = await profile_uploadAvatar(f);
+				avatarPreview.style.backgroundImage = `url('${url}')`;
+				avatarPreview.style.background = 'transparent';
+				avatarPreview.style.backgroundSize = 'cover';
+				window.showToast && window.showToast('Avatar updated');
+				const av = document.querySelector('.avatar'); if (av){ av.style.backgroundImage = `url('${url}')`; av.style.backgroundSize='cover'; av.textContent=''; }
+			}catch(e){ window.showToast && window.showToast('Upload failed'); }
+		};
+		inp.click();
+	});
+
+	removeBtn.addEventListener('click', async ()=>{
+		try{
+			await profile_upsert(me.id, { avatar_url: null });
+			avatarPreview.style.backgroundImage = '';
+			avatarPreview.style.background = 'linear-gradient(135deg,#5a83f2,#7b61ff)';
+			window.showToast && window.showToast('Avatar removed');
+			const av = document.querySelector('.avatar'); if (av){ av.style.backgroundImage=''; av.textContent = (me.email||'U').slice(0,1).toUpperCase(); }
+		}catch(e){ window.showToast && window.showToast('Remove failed'); }
+	});
+
+	scrim.querySelector('#saveBtn').onclick = async ()=>{
+		const name = scrim.querySelector('#pName').value || '';
+		try{ 
+			await profile_upsert(me.id, { full_name: name });
+			// Update sidebar brand immediately
+			const brandEl = document.querySelector('.brand');
+			if (brandEl){ brandEl.textContent = name || brandEl.textContent; }
+		}catch{}
+		close();
 	};
 }
 

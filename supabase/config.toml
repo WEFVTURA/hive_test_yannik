@@ -1,0 +1,10 @@
+[functions]
+# Default for all functions (safe for public webhooks/proxies)
+verify_jwt = false
+
+[functions.recall-create-bot]
+verify_jwt = false
+
+[functions.assembly-webhook]
+verify_jwt = false
+

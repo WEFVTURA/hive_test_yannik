@@ -71,6 +71,7 @@ export async function renderSpace(root, spaceId){
     const res = await openModalWithExtractor('Share space', body, (root)=>({ email: root.querySelector('#inviteEmail')?.value?.trim()||'' }));
     if (!res.ok) return; const email = res.values?.email; if(!email) return;
     await (await import('../lib/supabase.js')).db_shareSpace(spaceId, email).catch(()=>alert('Share failed'));
+    window.showToast && window.showToast('Invite sent to '+email);
     renderSpace(root, spaceId);
   });
 
@@ -81,9 +82,66 @@ export async function renderSpace(root, spaceId){
     const preview = (f.content_type||'').startsWith('image/') ? `<img src="${href}" alt="${f.name}" style="max-height:40px; border-radius:6px">` : `<svg class="icon"><use href="#box"></use></svg>`;
     return `<div style="display:flex; align-items:center; justify-content:space-between; border:1px solid var(--border); padding:8px; border-radius:10px">
       <div style="display:flex; align-items:center; gap:10px"><a href="${href}" target="_blank">${preview}</a><a href="${href}" target="_blank">${f.name}</a></div>
-      <div style="display:flex; gap:10px; align-items:center"><span class="muted">${f.content_type||''}</span><button class="button ghost" data-add-file-tag="${f.id}">Add tag</button></div>
+      <div style="display:flex; gap:8px; align-items:center; font-size:12px">
+        <span class="muted">${f.content_type||''}</span>
+        <button class="button sm" data-add-file-tag="${f.id}">Tags</button>
+        <button class="button sm" data-convert-file="${f.id}">Convert</button>
+        <button class="button sm red" data-delete-file="${f.id}">Delete</button>
+      </div>
     </div>`;
   }).join('');
+
+  // File actions: convert to note, delete
+  const fileById = new Map(files.map(x=>[String(x.id), x]));
+  filesList.querySelectorAll('[data-convert-file]').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      const id = btn.getAttribute('data-convert-file');
+      const f = fileById.get(id); if(!f) return;
+      try{
+        const href = f.url || (f.storage_path ? `https://lmrnnfjuytygomdfujhs.supabase.co/storage/v1/object/public/hive-attachments/${f.storage_path}` : '');
+        if (!href){ window.showToast && window.showToast('File has no URL'); return; }
+        const res = await fetch(href, { mode:'cors' }).catch(()=>null);
+        if (!res || !res.ok){ window.showToast && window.showToast('Cannot fetch file'); return; }
+        const blob = await res.blob();
+        let textContent = '';
+        const nameLower = (f.name||'').toLowerCase();
+        const type = (f.content_type||blob.type||'').toLowerCase();
+        if (type.startsWith('text/') || nameLower.endsWith('.txt')){
+          textContent = await blob.text();
+        } else if (type.includes('pdf') || nameLower.endsWith('.pdf')){
+          textContent = await extractPdfText(new File([blob], f.name, { type: blob.type||'application/pdf' }));
+        } else if (nameLower.endsWith('.docx') || type.includes('officedocument.wordprocessingml.document')){
+          textContent = await extractDocxText(new File([blob], f.name, { type: blob.type||'application/vnd.openxmlformats-officedocument.wordprocessingml.document' }));
+        } else {
+          textContent = '';
+        }
+        const title = (f.name||'Document').replace(/\.[^/.]+$/,'');
+        const n = await db_createNote(spaceId);
+        await db_updateNote(n.id, { title, content: (textContent||'').slice(0,50000) });
+        collapsedState.set(n.id, false);
+        window.showToast && window.showToast('Created note from file');
+        renderSpace(root, spaceId);
+      }catch{ window.showToast && window.showToast('Failed to convert'); }
+    });
+  });
+  filesList.querySelectorAll('[data-delete-file]').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      const id = btn.getAttribute('data-delete-file');
+      const f = fileById.get(id); if(!f) return;
+      const ok = confirm('Delete this file?'); if(!ok) return;
+      try{
+        const sb = getSupabase();
+        if (f.storage_path){ await sb.storage.from('hive-attachments').remove([f.storage_path]); }
+        await sb.from('files').delete().eq('id', f.id);
+        window.showToast && window.showToast('File deleted');
+        renderSpace(root, spaceId);
+      }catch{ window.showToast && window.showToast('Delete failed'); }
+    });
+  });
+  // Placeholder for add tag (UI only for now)
+  filesList.querySelectorAll('[data-add-file-tag]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{ window.showToast && window.showToast('Tagging coming soon'); });
+  });
 
   // Notes list
   const notesList = root.querySelector('#notesList');
@@ -128,7 +186,7 @@ export async function renderSpace(root, spaceId){
 
     const autosave = debounce(async()=>{
       await db_updateNote(n.id, { title: title.value||'', content: content.value||'', updated_at: new Date().toISOString() }).catch(console.error);
-      try{ await ragIndex(spaceId, [{ source_type:'note', source_id:n.id, content: (title.value||'')+'\n'+(content.value||'') }]); } catch {}
+      try{ const { getPrefs } = await import('./settings.js'); const prefs = getPrefs(); await ragIndex(spaceId, [{ source_type:'note', source_id:n.id, content: (title.value||'')+'\n'+(content.value||'') }], prefs.searchProvider); } catch {}
     }, 800);
 
     title.addEventListener('input', autosave);
@@ -167,16 +225,18 @@ export async function renderSpace(root, spaceId){
   root.querySelector('#backBtn').addEventListener('click', ()=>{ window.location.hash=''; });
   root.querySelector('#addNoteBtn').addEventListener('click', async()=>{ const nn = await db_createNote(spaceId); collapsedState.set(nn.id, false); renderSpace(root, spaceId); });
   root.querySelector('#reindexBtn').addEventListener('click', async()=>{
+    const { getPrefs } = await import('./settings.js');
+    const prefs = getPrefs();
     const payload = notes.slice(0,50).map(n=>({ source_type:'note', source_id:n.id, content:(n.title||'')+'\n'+(n.content||'') }));
-    const res = await ragIndex(spaceId, payload).catch(()=>null);
-    alert('Reindex: '+JSON.stringify(res||{},null,2));
+    const res = await ragIndex(spaceId, payload, prefs.searchProvider).catch(()=>null);
+    window.showToast && window.showToast('Reindex completed');
   });
   root.querySelector('#addLinkBtn').addEventListener('click', async()=>{
     const res = await openModalWithExtractor('Add link', `<div class="field"><label>Name</label><input id="fName" placeholder="Link name"></div><div class="field"><label>URL</label><input id="fUrl" placeholder="https://..."></div>`, (root)=>({ name: root.querySelector('#fName')?.value?.trim()||'', url: root.querySelector('#fUrl')?.value?.trim()||'' }));
     if(!res.ok) return; let { name, url } = res.values || {}; if(!name||!url) return; if(!/^https?:\/\//i.test(url)) url='https://'+url;
     const sb = getSupabase();
     const { data, error } = await sb.from('files').insert([{ space_id: spaceId, name, kind: 'link', url, content_type: 'link' }]).select('*');
-    if (!error){ await ragIndex(spaceId, [{ source_type:'file', source_id:data?.[0]?.id, content:`${name} ${url}` }]); renderSpace(root, spaceId); }
+    if (!error){ const { getPrefs } = await import('./settings.js'); const prefs = getPrefs(); await ragIndex(spaceId, [{ source_type:'file', source_id:data?.[0]?.id, content:`${name} ${url}` }], prefs.searchProvider); renderSpace(root, spaceId); }
   });
   root.querySelector('#uploadBtn').addEventListener('click', async()=>{
     const res = await openModalWithExtractor('Upload file', `<div class="field"><label>File</label><input id="fInput" type="file"></div><div class="muted" style="font-size:12px">Uploads go to public bucket 'hive-attachments'</div>`, (root)=>({ file: root.querySelector('#fInput')?.files?.[0] || null }));
@@ -194,7 +254,15 @@ export async function renderSpace(root, spaceId){
         else if ((file.type||'').includes('pdf')) textContent = await extractPdfText(file);
         else if ((file.name||'').toLowerCase().endsWith('.docx')) textContent = await extractDocxText(file);
         const content = `${file.name} ${pub}\n` + (textContent || `(${file.type||'file'})`);
-        await ragIndex(spaceId, [{ source_type:'file', source_id:fRow.id, content }]);
+        const { getPrefs } = await import('./settings.js'); const prefs = getPrefs(); await ragIndex(spaceId, [{ source_type:'file', source_id:fRow.id, content }], prefs.searchProvider);
+        // Also create a note to visualize extracted text for verification
+        if ((textContent||'').trim()){
+          const title = (file.name||'Document').replace(/\.[^/.]+$/,'');
+          const n = await db_createNote(spaceId);
+          await db_updateNote(n.id, { title, content: textContent.slice(0, 50000) });
+          // Expand the freshly created note in UI
+          try{ collapsedState.set(n.id, false); }catch{}
+        }
       }catch{}
       renderSpace(root, spaceId);
     }

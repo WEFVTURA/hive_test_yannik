@@ -1,5 +1,5 @@
 import { initModals } from './ui/modals.js';
-import { db_listSpaces, db_createSpace, db_listNotes, db_listFiles } from './lib/supabase.js';
+import { db_listSpaces, db_createSpace, db_listNotes, db_listFiles, getSupabase, auth_getUser, auth_signIn, auth_signUp, auth_signOut, profile_get, auth_restoreFromCookies } from './lib/supabase.js';
 import { renderSpace } from './ui/space.js';
 import { renderChat } from './ui/chat.js';
 import { getPrefs, openSettingsModal, openProfileModal } from './ui/settings.js';
@@ -8,6 +8,16 @@ import { ragIndex } from './lib/rag.js';
 
 initModals();
 const prefs = getPrefs();
+
+// Toasts container and helper
+(function ensureToasts(){
+	if (!document.querySelector('.toasts')){
+		const t = document.createElement('div'); t.className='toasts'; document.body.appendChild(t);
+	}
+	window.showToast = function(msg){
+		const t = document.querySelector('.toasts'); const el = document.createElement('div'); el.className='toast'; el.textContent = msg; t.appendChild(el); setTimeout(()=>{ el.remove(); }, 3000);
+	};
+})();
 
 const app = document.getElementById('app');
 app.innerHTML = `
@@ -24,6 +34,7 @@ app.innerHTML = `
       </div>
 
       <button class="button primary" id="askHiveBtn" style="width:100%"><svg class="icon"><use href="#spark"></use></svg> Ask HIve</button>
+      <button class="button" id="meetingBtn" style="width:100%"><svg class="icon"><use href="#spark"></use></svg> Meeting Intelligence</button>
 
       <div class="section">Giannandrea's Library</div>
       <div class="nav-group" id="spacesList"></div>
@@ -100,31 +111,36 @@ openProfileBtn?.setAttribute('tabindex','0');
 openSettings2?.addEventListener('keydown', (e)=>{ if(e.key==='Enter' || e.key===' '){ e.preventDefault(); openSettingsModal(); } });
 openProfileBtn?.addEventListener('keydown', (e)=>{ if(e.key==='Enter' || e.key===' '){ e.preventDefault(); openProfileModal(); } });
 
-// Create Space
-const createSpaceBtn = document.getElementById('createSpaceBtn');
-createSpaceBtn?.addEventListener('click', async ()=>{
-  const res = await openModalWithExtractor('Create a new space', `<div class="field"><label>Space name</label><input id="spaceName" placeholder="e.g. Research Notes"></div>`, (root)=>({ name: root.querySelector('#spaceName')?.value?.trim()||'' }));
-  if (!res.ok) return; const name = res.values?.name; if(!name) return;
-  try{ const s = await db_createSpace(name); location.hash = 'space/'+s.id; }catch(e){ alert('Failed to create space'); }
+// Meeting Intelligence button -> modal
+const meetingBtn = document.getElementById('meetingBtn');
+meetingBtn?.addEventListener('click', async ()=>{
+  const res = await openModalWithExtractor('Send HIVE bot', `
+    <div class="field"><label>Meeting URL</label><input id="mUrl" placeholder="Paste Zoom/Meet/Teams URL"></div>
+    <div class="muted" style="font-size:12px">HIVE bot will join and record. Transcripts are available via Recall and saved in space "Calls Transcripts" when available.</div>
+  `, (root)=>({ url: root.querySelector('#mUrl')?.value?.trim()||'' }));
+  if (!res.ok) return; const url = res.values?.url; if(!url){ window.showToast && window.showToast('Add a meeting URL'); return; }
+  try{
+    const sb = getSupabase();
+    const { data, error } = await sb.functions.invoke('recall-create-bot', { body: { meeting_url: url } });
+    if (error) throw error;
+    window.showToast && window.showToast('HIVE bot joining meeting');
+  }catch(e){ window.showToast && window.showToast('Failed to send bot'); }
 });
 
-// Bulk Index All
-const bulkBtn = document.getElementById('bulkIndexAll');
-bulkBtn?.addEventListener('click', async ()=>{
-  bulkBtn.disabled = true; bulkBtn.textContent = 'Bulk indexing…';
+// Create Space button -> prompt name and create
+const createSpaceBtn = document.getElementById('createSpaceBtn');
+createSpaceBtn?.addEventListener('click', async ()=>{
+  const me = await ensureAuth(); if (!me) return;
+  const res = await openModalWithExtractor('Create a new space', `
+    <div class="field"><label>Space name</label><input id="sName" placeholder="e.g., Research, Projects, Journal"></div>
+  `, (root)=>({ name: root.querySelector('#sName')?.value?.trim()||'' }));
+  if (!res.ok) return; const name = res.values?.name||'';
+  if (!name){ window.showToast && window.showToast('Add a space name'); return; }
   try{
-    const spaces = await db_listSpaces().catch(()=>[]);
-    for (const sp of spaces){
-      const [notes, files] = await Promise.all([db_listNotes(sp.id).catch(()=>[]), db_listFiles(sp.id).catch(()=>[])]);
-      const items = [];
-      for(const n of notes){ items.push({ source_type:'note', source_id:n.id, content:`${n.title||''}\n${n.content||''}` }); }
-      for(const f of files){ items.push({ source_type:'file', source_id:f.id, content:`${f.name||''} ${f.url||''}` }); }
-      if(items.length) await ragIndex(sp.id, items);
-    }
-    bulkBtn.textContent = 'Bulk Index All (done)';
-  }catch(e){
-    bulkBtn.textContent = 'Bulk Index All (error)';
-  }finally{ bulkBtn.disabled = false; setTimeout(()=>{ bulkBtn.textContent='Bulk Index All'; }, 1500); }
+    const space = await db_createSpace(name);
+    window.showToast && window.showToast('Space created');
+    location.hash = 'space/'+space.id;
+  }catch(e){ window.showToast && window.showToast('Failed to create space'); }
 });
 
 async function renderLibrary(){
@@ -180,3 +196,55 @@ let dragging = false; let startX = 0; let startWidth = 360;
 splitter?.addEventListener('mousedown', (e)=>{ dragging=true; startX=e.clientX; const cs=getComputedStyle(document.documentElement).getPropertyValue('--chatWidth'); startWidth=parseInt(cs||'360'); document.body.style.userSelect='none'; });
 window.addEventListener('mousemove', (e)=>{ if(!dragging) return; const dx = e.clientX - startX; const next = Math.max(260, startWidth - dx); document.documentElement.style.setProperty('--chatWidth', next+'px'); });
 window.addEventListener('mouseup', ()=>{ dragging=false; document.body.style.userSelect=''; });
+
+async function ensureAuth(){
+  const user = await auth_getUser();
+  if (user) return user;
+  const res = await openModalWithExtractor('Sign in to HIve', `
+    <div class="field"><label>Email</label><input id="authEmail" placeholder="you@company.com" /></div>
+    <div class="field"><label>Password</label><input id="authPass" type="password" placeholder="********" /></div>
+    <div class="muted" style="font-size:12px">No email verification. Use a password you control.</div>
+    <div class="muted" id="authMsg" style="font-size:12px"></div>
+  `, (root)=>({ email: root.querySelector('#authEmail')?.value?.trim()||'', password: root.querySelector('#authPass')?.value||'' }));
+  if (!res.ok) return null;
+  const { email, password } = res.values || { email:'', password:'' };
+  if (!email || !password){ window.showToast && window.showToast('Enter email and password'); return await ensureAuth(); }
+  try{
+    try { await auth_signIn(email, password); }
+    catch { await auth_signUp(email, password); }
+  } catch(e){ window.showToast && window.showToast('Auth failed'); return await ensureAuth(); }
+  return await auth_getUser();
+}
+
+// Bootstrap auth early (restore from cookies first to avoid re-login on refresh)
+(async()=>{ await auth_restoreFromCookies(); await ensureAuth(); await hydrateProfileUI(); })();
+
+// Hydrates sidebar avatar and name from Supabase profile
+async function hydrateProfileUI(){
+	const me = await auth_getUser();
+	if (!me) return;
+	const brandEl = document.querySelector('.brand');
+	const avatarEl = document.querySelector('.avatar');
+	let fullName = '';
+	let avatarUrl = '';
+	try{
+		const p = await profile_get(me.id);
+		fullName = (p?.full_name||'').trim();
+		avatarUrl = p?.avatar_url||'';
+	}catch{}
+	if (brandEl){
+		const fallbackName = (me.email||'User');
+		brandEl.textContent = fullName || brandEl.textContent || fallbackName;
+	}
+	if (avatarEl){
+		if (avatarUrl){
+			avatarEl.style.backgroundImage = `url('${avatarUrl}')`;
+			avatarEl.style.backgroundSize = 'cover';
+			avatarEl.textContent = '';
+		}else{
+			avatarEl.style.backgroundImage = '';
+			const letterSource = fullName || me.email || 'U';
+			avatarEl.textContent = letterSource.slice(0,1).toUpperCase();
+		}
+	}
+}

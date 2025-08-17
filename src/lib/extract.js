@@ -1,6 +1,11 @@
 export async function extractPdfText(file){
   try{
-    const pdfjsLib = await import('https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.mjs');
+    // Load pdf.js and configure worker to avoid 404s loading pdf.worker
+    // Prefer jsDelivr +esm shim; fall back to esm.sh. Use minified worker to avoid 404
+    let pdfjsLib;
+    try{ pdfjsLib = await import(/* @vite-ignore */ 'https://esm.sh/pdfjs-dist@3.11.174?bundle'); }
+    catch{ pdfjsLib = await import(/* @vite-ignore */ 'https://cdn.skypack.dev/pin/pdfjs-dist@v3.11.174-kI0pw1V2I0sKQJQ3WQv7/mode=imports,min/optimized/pdfjs-dist.js'); }
+    try{ pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://esm.sh/pdfjs-dist@3.11.174/build/pdf.worker.min.js'; }catch{}
     const buf = await file.arrayBuffer();
     const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
     let text = '';
