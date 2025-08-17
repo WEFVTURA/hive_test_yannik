@@ -135,9 +135,9 @@ body{margin:0; background:var(--bg); color:var(--text); font:14px/1.45 ui-sans-s
 
 /* Responsive */
 @media (max-width: 1200px){
-  .app{grid-template-columns: 220px 1fr}
-  .app.chat-open .right{display:grid; position:fixed; right:18px; top:18px; bottom:18px; width:min(360px, calc(100vw - 60px)); z-index:40}
-  .app.chat-open #scrim{display:block}
+  .app{grid-template-columns: 220px 1fr 6px var(--chatWidth, 360px)}
+  .app.chat-open .right{display:grid; position:relative; right:auto; top:auto; bottom:auto; width:auto; z-index:20}
+  .app.chat-open #scrim{display:block; pointer-events:none}
 }
 @media (max-width: 780px){
   .app{grid-template-columns:1fr}

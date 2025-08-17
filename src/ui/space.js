@@ -38,6 +38,7 @@ export async function renderSpace(root, spaceId){
         <div style="display:flex; gap:8px; margin-bottom:6px">
           <button class="button" id="addLinkBtn">Add link</button>
           <button class="button" id="uploadBtn">Upload file</button>
+          <button class="button" id="uploadAudioBtn">Transcribe audio</button>
         </div>
         <div id="filesList" style="display:grid; gap:8px"></div>
       </section>
@@ -272,6 +273,37 @@ export async function renderSpace(root, spaceId){
       }catch{}
       renderSpace(root, spaceId);
     }
+  });
+  root.querySelector('#uploadAudioBtn').addEventListener('click', async()=>{
+    const res = await openModalWithExtractor('Transcribe audio', `<div class="field"><label>Audio file</label><input id="aInput" type="file" accept="audio/*"></div>`, (root)=>({ file: root.querySelector('#aInput')?.files?.[0] || null }));
+    if(!res.ok) return; const file = res.values?.file; if(!file) return;
+    const sb = getSupabase();
+    const path = `${spaceId}/${Date.now()}_${file.name}`;
+    const bucket = sb.storage.from('hive-attachments');
+    const up = await bucket.upload(path, file, { upsert:true }); if(up.error) return alert('Upload failed');
+    const pub = bucket.getPublicUrl(path).data.publicUrl;
+    const btn = document.getElementById('uploadAudioBtn');
+    const origText = btn.textContent;
+    btn.textContent = 'Transcribing…'; btn.setAttribute('disabled','true');
+    // Create a placeholder note and expand it so user sees progress
+    const tempTitle = (file.name||'Audio').replace(/\.[^/.]+$/,'');
+    const tempNote = await db_createNote(spaceId).catch(()=>null);
+    if (tempNote){ await db_updateNote(tempNote.id, { title: `${tempTitle} (transcribing…)`, content: 'Transcription in progress…' }).catch(()=>{}); try{ collapsedState.set(tempNote.id, false); }catch{} }
+    try{
+      let resp = await sb.functions.invoke('assembly', { body: { url: pub, space_id: spaceId, api_key: '808060f1237a4866ad46691bd4ea7153', title: file.name.replace(/\.[^/.]+$/,'') } });
+      if (resp.error){
+        // Fallback to alternate slug if the deployment name differs
+        resp = await sb.functions.invoke('assembly-transcribe', { body: { url: pub, space_id: spaceId, api_key: '808060f1237a4866ad46691bd4ea7153', title: file.name.replace(/\.[^/.]+$/,'') } });
+      }
+      const { data, error } = resp;
+      if (error) throw error; window.showToast && window.showToast('Transcription started');
+      // If immediate transcript returned, create a note if function didn’t already
+      if (typeof data?.transcript === 'string' && data.transcript){
+        if (tempNote){ await db_updateNote(tempNote.id, { title: tempTitle, content: data.transcript }).catch(()=>{}); }
+        else { const n = await db_createNote(spaceId); await db_updateNote(n.id, { title: tempTitle, content: data.transcript }); }
+      }
+    }catch{ window.showToast && window.showToast('Transcription failed'); }
+    finally{ btn.textContent = origText; btn.removeAttribute('disabled'); renderSpace(root, spaceId); }
   });
   root.querySelector('#coverBtn').addEventListener('click', async()=>{
     const res = await openModalWithExtractor('Change cover', `<div class="field"><label>Upload</label><input id="coverInput" type="file" accept="image/*"></div>`, (root)=>({ file: root.querySelector('#coverInput')?.files?.[0]||null }));
