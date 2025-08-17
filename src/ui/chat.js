@@ -31,7 +31,7 @@ export function renderChat(root){
               <option value="rag">RAG</option>
               <option value="direct">Direct (concat notes)</option>
               <option value="fts">FTS (BM25)</option>
-              <option value="sql">SQL (notes)</option>
+              <option value="sql" selected>SQL (notes)</option>
             </select>
           </div>
           <div style="display:flex; gap:8px; align-items:center">
