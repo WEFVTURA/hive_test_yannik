@@ -28,14 +28,14 @@ Deno.serve(async (req: Request) => {
 
 	let spaceId: string | null = null;
 	try{
-		const q = await fetch(`${SUPABASE_URL}/rest/v1/spaces?select=id&name=eq.Calls%20Transcripts`, { headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` } });
+		const q = await fetch(`${SUPABASE_URL}/rest/v1/spaces?select=id&name=eq.Meetings`, { headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` } });
 		const arr = await q.json();
 		if (Array.isArray(arr) && arr.length){ spaceId = arr[0].id; }
 		else {
 			const created = await fetchJson(`${SUPABASE_URL}/rest/v1/spaces`, {
 				method: 'POST',
 				headers: { 'Content-Type':'application/json', apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` },
-				body: JSON.stringify({ name: 'Calls Transcripts', visibility: 'private' })
+				body: JSON.stringify({ name: 'Meetings', visibility: 'private' })
 			});
 			spaceId = created?.[0]?.id || created?.id || null;
 		}
