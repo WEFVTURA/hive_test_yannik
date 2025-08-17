@@ -9,6 +9,27 @@
   </head>
   <body>
     <div id="app"></div>
+    <button class="chat-tab" id="openChat" style="display:none; position:fixed; right:6px; top:50%; transform:translateY(-50%); background:var(--panel); border:1px solid var(--border); border-right:0; color:var(--text); padding:10px 12px; border-radius:10px 0 0 10px; box-shadow:var(--shadow); align-items:center; gap:8px; cursor:pointer; z-index:30">Chat</button>
+    <div class="scrim" id="scrim" aria-hidden="true" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.35); z-index:10"></div>
+
+    <!-- Icon sprite (from legacy) -->
+    <svg width="0" height="0" style="position:absolute; visibility:hidden">
+      <symbol id="search" viewBox="0 0 24 24"><path fill="currentColor" d="M10 2a8 8 0 1 1 5.293 13.707l4 4-1.414 1.414-4-4A8 8 0 0 1 10 2m0 2a6 6 0 1 0 0 12 6 6 0 0 0 0-12"/></symbol>
+      <symbol id="arrow" viewBox="0 0 24 24"><path fill="currentColor" d="M4 11h12.586l-4.293-4.293L13 5l6 6-6 6-1.707-1.707L16.586 13H4z"/></symbol>
+      <symbol id="sun" viewBox="0 0 24 24"><path fill="currentColor" d="M6.76 4.84l-1.8-1.79L3.17 4.84l1.79 1.8L6.76 4.84zm10.48 0l1.8-1.79 1.79 1.79-1.79 1.8-1.8-1.8zM12 4V1h-0v3h0zm7 8h3v0h-3v0zM4 12H1v0h3v0zm8 8v3h0v-3h0zm7.24-1.84l1.79 1.8-1.79 1.79-1.8-1.79 1.8-1.8zM6.76 18.16l-1.8 1.8-1.79-1.8 1.79-1.79 1.8 1.79zM12 7a5 5 0 1 1 0 10 5 5 0 0 1 0-10z"/></symbol>
+      <symbol id="spark" viewBox="0 0 24 24"><path fill="currentColor" d="M12 2l1.8 5.2L19 9l-5.2 1.8L12 16l-1.8-5.2L5 9l5.2-1.8L12 2zm7 11l.9 2.6L23 17l-3.1 1.4L19 21l-.9-2.6L15 17l3.1-1.4L19 13zM3 13l.9 2.6L7 17l-3.1 1.4L3 21l-.9-2.6L-1 17l3.1-1.4L3 13z"/></symbol>
+      <symbol id="folder" viewBox="0 0 24 24"><path fill="currentColor" d="M10 4l2 2h6a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h4z"/></symbol>
+      <symbol id="book" viewBox="0 0 24 24"><path fill="currentColor" d="M6 3h11a2 2 0 0 1 2 2v14H7a2 2 0 0 0-2 2V5a2 2 0 0 1 1-2z"/></symbol>
+      <symbol id="chev-right" viewBox="0 0 24 24"><path fill="currentColor" d="M9 6l6 6-6 6-1.5-1.5L12 12 7.5 7.5z"/></symbol>
+      <symbol id="plus" viewBox="0 0 24 24"><path fill="currentColor" d="M11 11V5h2v6h6v2h-6v6h-2v-6H5v-2z"/></symbol>
+      <symbol id="user" viewBox="0 0 24 24"><path fill="currentColor" d="M12 12a5 5 0 1 0-5-5 5 5 0 0 0 5 5zm0 2c-4.418 0-8 2.239-8 5v1h16v-1c0-2.761-3.582-5-8-5z"/></symbol>
+      <symbol id="settings" viewBox="0 0 24 24"><path fill="currentColor" d="M12 8a4 4 0 1 1-4 4 4 4 0 0 1 4-4m8.94 4a7 7 0 0 0-.14-1l2.1-1.64-2-3.46-2.49 1a7.22 7.22 0 0 0-1.73-1l-.38-2.65h-4l-.38 2.65a7.22 7.22 0 0 0-1.73 1l-2.49-1-2 3.46L3.2 11a7 7 0 0 0 0 2l-2.1 1.64 2 3.46 2.49-1a7.22 7.22 0 0 0 1.73 1l.38 2.65h4l.38-2.65a7.22 7.22 0 0 0 1.73-1l2.49 1 2-3.46-2.1-1.64a7 7 0 0 0 .14-1Z"/></symbol>
+      <symbol id="chrome" viewBox="0 0 24 24"><path fill="currentColor" d="M12 2a10 10 0 0 1 8.66 5H12a5 5 0 0 0-4.33 2.5L4.1 4.27A10 10 0 0 1 12 2m0 20a10 10 0 0 1-8.66-5H12a5 5 0 0 0 4.33-2.5l3.57 5.23A10 10 0 0 1 12 22m0-14a4 4 0 1 1-4 4 4 4 0 0 1 4-4Z"/></symbol>
+      <symbol id="sliders" viewBox="0 0 24 24"><path fill="currentColor" d="M11 3h2v10h-2V3zm-6 6h2v12H5V9zm12 4h2v8h-2v-8z"/></symbol>
+      <symbol id="edit" viewBox="0 0 24 24"><path fill="currentColor" d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></symbol>
+      <symbol id="box" viewBox="0 0 24 24"><path fill="currentColor" d="M21 7l-9-5-9 5 9 5 9-5zm-9 7L3 9v8l9 5 9-5V9l-9 5z"/></symbol>
+    </svg>
+
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>
