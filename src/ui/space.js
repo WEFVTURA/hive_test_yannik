@@ -21,6 +21,12 @@ export async function renderSpace(root, spaceId){
         <span class="muted">Files & Notes</span>
       </div>
       <div class="view-controls">
+        <button class="button ghost" id="shareBtn" title="Share">Share</button>
+        <select id="visibilitySel" class="button ghost" style="background:transparent; border:1px solid var(--border); border-radius:8px; padding:6px 8px">
+          <option value="private">Private</option>
+          <option value="team">Team</option>
+          <option value="shared">Shared</option>
+        </select>
         <button class="button ghost" id="coverBtn" title="Change cover">Cover</button>
         <button class="button ghost" id="reindexBtn" title="Reindex for AI">Reindex</button>
         <button class="button ghost" id="backBtn">Back</button>
@@ -50,6 +56,22 @@ export async function renderSpace(root, spaceId){
   titleEl.addEventListener('blur', async ()=>{
     const newName = (titleEl.textContent||'').trim(); if(!newName || newName===space.name) return;
     await db_updateSpace(spaceId, { name: newName }).catch(alert);
+  });
+
+  // Visibility selector
+  const visSel = root.querySelector('#visibilitySel');
+  if (visSel){ visSel.value = space.visibility || 'private'; visSel.addEventListener('change', async ()=>{ await db_updateSpace(spaceId, { visibility: visSel.value }); }); }
+
+  // Share via email
+  root.querySelector('#shareBtn').addEventListener('click', async ()=>{
+    const { openModalWithExtractor } = await import('./modals.js');
+    const shares = await (await import('../lib/supabase.js')).db_listShares(spaceId).catch(()=>[]);
+    const body = `<div class="field"><label>Invite by email</label><input id="inviteEmail" placeholder="name@company.com"></div><div class="muted" style="font-size:12px">Existing shares</div>` +
+      `<div style="display:grid; gap:6px">${shares.map(s=>`<div style='border:1px solid var(--border); padding:6px; border-radius:8px'>${s.email}</div>`).join('')||'<div class=muted>None</div>'}</div>`;
+    const res = await openModalWithExtractor('Share space', body, (root)=>({ email: root.querySelector('#inviteEmail')?.value?.trim()||'' }));
+    if (!res.ok) return; const email = res.values?.email; if(!email) return;
+    await (await import('../lib/supabase.js')).db_shareSpace(spaceId, email).catch(()=>alert('Share failed'));
+    renderSpace(root, spaceId);
   });
 
   // Files list

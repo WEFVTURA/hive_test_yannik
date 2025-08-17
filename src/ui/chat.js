@@ -3,9 +3,12 @@ import { util_getEnv, db_listSpaces } from '../lib/supabase.js';
 import { getPrefs } from './settings.js';
 import { getSupabase } from '../lib/supabase.js';
 import { marked } from 'https://cdn.jsdelivr.net/npm/marked@12/+esm';
+import { listChats, saveChat, deleteChat, getChat } from '../lib/chatStore.js';
 
 export function renderChat(root){
   const prefs = getPrefs();
+  const savedWidth = localStorage.getItem('hive_chat_width');
+  if (savedWidth) document.documentElement.style.setProperty('--chatWidth', savedWidth+'px');
   root.innerHTML = `
     <div class="chat-root">
       <div class="panel" style="padding:12px; border-radius:12px; border:1px solid var(--border); background:var(--panel-2); height:100%; overflow:auto" id="chatMessages"></div>
@@ -14,9 +17,10 @@ export function renderChat(root){
         <div class="composer-head" style="padding:12px 14px; border-bottom:1px solid var(--border); background:var(--panel-2); display:flex; align-items:center; justify-content:space-between">
           <div>Ask HIve assistant</div>
           <div style="display:flex; gap:8px">
-            <button class="button ghost" id="editChatBtn" title="Edit">✎</button>
-            <button class="button ghost" id="clearChatBtn">Clear</button>
-            <button class="button ghost" id="hideChatBtn">Hide</button>
+            <button class="button ghost" id="saveChatBtn" title="Save"><svg class="icon"><use href="#sliders"></use></svg></button>
+            <button class="button ghost" id="openChatBtn" title="History"><svg class="icon"><use href="#folder"></use></svg></button>
+            <button class="button ghost" id="clearChatBtn" title="Clear"><svg class="icon"><use href="#edit"></use></svg></button>
+            <button class="button ghost" id="hideChatBtn" title="Hide">Hide</button>
           </div>
         </div>
         <div class="composer-body" style="padding:12px; display:grid; gap:8px">
@@ -41,8 +45,11 @@ export function renderChat(root){
   const hideBtn = root.querySelector('#hideChatBtn');
   const ragDebugEl = root.querySelector('#ragDebug');
   const scopeSel = root.querySelector('#spaceScope');
+  const saveBtn = root.querySelector('#saveChatBtn');
+  const openBtn = root.querySelector('#openChatBtn');
   let history = [];
   let model = prefs.defaultModel;
+  let currentChatId = null;
 
   (async()=>{
     const spaces = await db_listSpaces().catch(()=>[]);
@@ -55,16 +62,48 @@ export function renderChat(root){
       if(m.role==='assistant'){
         const inner = marked.parse(m.content||'');
         const cites = Array.isArray(m.citations) && m.citations.length
-          ? `<div style="margin-top:8px"><div class="muted" style="font-size:12px">Sources</div><ul style="margin:6px 0 0 18px; padding:0">${m.citations.map(c=>`<li><span class='muted'>${(c.similarity??0).toFixed(2)}</span> ${c.content.substring(0,160)}...</li>`).join('')}</ul></div>`
+          ? `<div style="margin-top:8px"><div class="muted" style="font-size:12px">Sources</div><ul style="margin:6px 0 0 18px; padding:0">${m.citations.map(c=>`<li><a href="#" data-cite="${c.source_type}:${c.source_id}"><span class='muted'>${(c.similarity??0).toFixed(2)}</span> ${c.content.substring(0,160)}...</a></li>`).join('')}</ul></div>`
           : '';
         return `<div class="message assistant"><div class="md">${inner}</div>${cites}</div>`;
       }
       return `<div class="message ${m.role}">${m.content}</div>`;
     }).join(''); chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight;
+    chatMessagesEl.querySelectorAll('[data-cite]').forEach(a=>{
+      a.addEventListener('click', (e)=>{ e.preventDefault(); const [t,id]=a.getAttribute('data-cite').split(':'); if(t==='note'){ location.hash='space/'+(scopeSel.value||'')+'#note-'+id; } });
+    });
   }
 
   clearBtn.addEventListener('click', ()=>{ history=[]; renderMessages(); });
   hideBtn.addEventListener('click', ()=>{ const appRoot=document.getElementById('appRoot'); const scrim=document.getElementById('scrim'); if(appRoot){ appRoot.classList.remove('chat-open'); appRoot.classList.add('chat-closed'); } if(scrim){ scrim.style.display='none'; }});
+
+  // Save/Open (Supabase)
+  saveBtn.addEventListener('click', async ()=>{
+    const title = prompt('Chat title?', 'Untitled chat');
+    const saved = await (await import('../lib/supabase.js')).db_saveChat({ id: currentChatId, title, scope: scopeSel.value||'ALL', model, messages: history }).catch(()=>null);
+    if(saved){ currentChatId = saved.id; }
+  });
+  openBtn.addEventListener('click', async ()=>{
+    const { db_listChats, db_deleteChat } = await import('../lib/supabase.js');
+    const list = await db_listChats().catch(()=>[]);
+    if(!list.length){ alert('No saved chats'); return; }
+    const { openListModal } = await import('./modals.js');
+    await openListModal('Chat history', list, (c)=>`<div style=\"display:flex; align-items:center; justify-content:space-between; border:1px solid var(--border); border-radius:8px; padding:8px\"><div><div style=\"font-weight:600\">${c.title}</div><div class=\"muted\" style=\"font-size:12px\">${c.scope} · ${new Date(c.updated_at||c.created_at).toLocaleString()}</div></div><div style=\"display:flex; gap:6px\"><button class=\"button\" data-open=\"${c.id}\">Open</button><button class=\"button ghost\" data-del=\"${c.id}\">Delete</button></div></div>`);
+    const scrim = document.getElementById('modalScrim');
+    scrim.querySelectorAll('[data-open]').forEach(btn=>btn.addEventListener('click', async ()=>{
+      const id = btn.getAttribute('data-open');
+      const row = list.find(x=>x.id===id); if(!row) return;
+      currentChatId = row.id; history = row.messages||[]; scrim.style.display='none'; scrim.setAttribute('aria-hidden','true'); renderMessages();
+    }));
+    scrim.querySelectorAll('[data-del]').forEach(btn=>btn.addEventListener('click', async ()=>{
+      const id = btn.getAttribute('data-del'); await db_deleteChat(id).catch(()=>{}); btn.closest('div[style]')?.remove();
+    }));
+  });
+
+  // Persist chat width when user resizes
+  window.addEventListener('mouseup', ()=>{
+    const cs = getComputedStyle(document.documentElement).getPropertyValue('--chatWidth');
+    const px = parseInt(cs||'0'); if(px>0) localStorage.setItem('hive_chat_width', px);
+  });
 
   async function callModel(prompt){
     const anon = util_getEnv('SUPABASE_ANON_KEY','SUPABASE_ANON_KEY');
@@ -86,11 +125,11 @@ export function renderChat(root){
     if (scopeVal==='ALL'){
       const spaces = await db_listSpaces().catch(()=>[]);
       for (const sp of spaces){
-        const { data } = await sb.from('notes').select('id,title,content,updated_at').eq('space_id', sp.id).order('updated_at', { ascending:false }).limit(100);
+        const { data } = await sb.from('notes').select('id,title,content,updated_at,space_id').eq('space_id', sp.id).order('updated_at', { ascending:false }).limit(100);
         notes = notes.concat(data||[]);
       }
     } else {
-      const { data } = await sb.from('notes').select('id,title,content,updated_at').eq('space_id', scopeVal).order('updated_at', { ascending:false }).limit(300);
+      const { data } = await sb.from('notes').select('id,title,content,updated_at,space_id').eq('space_id', scopeVal).order('updated_at', { ascending:false }).limit(300);
       notes = data||[];
     }
     const budget = Math.max(2000, prefs.contextBudget||16000);
@@ -115,8 +154,7 @@ export function renderChat(root){
         const ctx = await buildDirectContext(scopeVal);
         const sys = 'Use the following project notes as authoritative context. If insufficient, say: "Information not found, try a different query".';
         prompt = `${sys}\n\nContext:\n${ctx}\n\nQuestion: ${text}`;
-        if (ragDebugEl){ ragDebugEl.style.display='block'; ragDebugEl.textContent = `Direct mode | scope: ${scopeVal} | ctx chars: ${ctx.length}\n`;
-        }
+        if (ragDebugEl){ ragDebugEl.style.display='block'; ragDebugEl.textContent = `Direct mode | scope: ${scopeVal} | ctx chars: ${ctx.length}\n`; }
       } else {
         const started = performance.now();
         const useOpenAI = prefs.searchProvider === 'openai';

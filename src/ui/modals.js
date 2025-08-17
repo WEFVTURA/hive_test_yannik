@@ -41,3 +41,25 @@ export function openModalWithExtractor(title, bodyHtml, extractor){
     close.onclick = ()=>cleanup({ ok:false });
   });
 }
+
+export function openListModal(title, items, renderItem){
+  const scrim = document.getElementById('modalScrim');
+  const titleEl = document.getElementById('modalTitle');
+  const body = document.getElementById('modalBody');
+  const ok = document.getElementById('modalOk');
+  const cancel = document.getElementById('modalCancel');
+  const close = document.getElementById('modalClose');
+  titleEl.textContent = title;
+  body.innerHTML = `<div id="listContainer" style="display:grid; gap:8px"></div>`;
+  const listRoot = body.querySelector('#listContainer');
+  listRoot.innerHTML = items.map(renderItem).join('');
+  scrim.classList.add('modal-show');
+  scrim.style.display = 'flex';
+  scrim.setAttribute('aria-hidden','false');
+  return new Promise((resolve)=>{
+    function cleanup(res){ scrim.classList.remove('modal-show'); scrim.style.display='none'; scrim.setAttribute('aria-hidden','true'); ok.onclick = cancel.onclick = close.onclick = null; resolve(res); }
+    ok.onclick = ()=>cleanup({ ok:false });
+    cancel.onclick = ()=>cleanup({ ok:false });
+    close.onclick = ()=>cleanup({ ok:false });
+  });
+}

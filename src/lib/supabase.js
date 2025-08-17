@@ -41,6 +41,16 @@ export async function db_updateSpace(id, fields){
   const { data, error } = await sb.from('spaces').update({ ...fields }).eq('id', id).select('*').single();
   if (error) throw error; return data;
 }
+export async function db_shareSpace(spaceId, email){
+  const sb = getSupabase();
+  const { data, error } = await sb.from('space_shares').insert({ space_id: spaceId, email }).select('*').single();
+  if (error) throw error; return data;
+}
+export async function db_listShares(spaceId){
+  const sb = getSupabase();
+  const { data, error } = await sb.from('space_shares').select('*').eq('space_id', spaceId).order('created_at', { ascending:false });
+  if (error) throw error; return data||[];
+}
 export async function db_listFiles(spaceId){
   const sb = getSupabase();
   const { data, error } = await sb.from('files').select('*').eq('space_id', spaceId).order('created_at', { ascending: true });
@@ -64,5 +74,27 @@ export async function db_updateNote(id, fields){
 export async function db_deleteNote(id){
   const sb = getSupabase();
   const { error } = await sb.from('notes').delete().eq('id', id);
+  if (error) throw error;
+}
+
+// Chat history (Supabase)
+export async function db_listChats(){
+  const sb = getSupabase();
+  const { data, error } = await sb.from('chats').select('*').order('updated_at', { ascending:false });
+  if (error) throw error; return data||[];
+}
+export async function db_saveChat(row){
+  const sb = getSupabase();
+  const base = { title: row.title||'Untitled chat', scope: row.scope||'ALL', model: row.model||'Mistral', messages: row.messages||[] };
+  if (row.id){
+    const { data, error } = await sb.from('chats').update({ ...base, updated_at: new Date().toISOString() }).eq('id', row.id).select('*').single();
+    if (error) throw error; return data;
+  }
+  const { data, error } = await sb.from('chats').insert({ ...base }).select('*').single();
+  if (error) throw error; return data;
+}
+export async function db_deleteChat(id){
+  const sb = getSupabase();
+  const { error } = await sb.from('chats').delete().eq('id', id);
   if (error) throw error;
 }
