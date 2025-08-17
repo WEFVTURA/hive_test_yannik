@@ -1,0 +1,24 @@
+# Local secrets and environment
+config.local.js
+.env
+.env.*
+
+# Editor/IDE
+.cursor/
+.vscode/
+.idea/
+
+# OS artifacts
+.DS_Store
+Thumbs.db
+
+# Node/JS (future-proof)
+node_modules/
+dist/
+build/
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+**/*.log
