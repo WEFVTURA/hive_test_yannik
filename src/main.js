@@ -298,6 +298,9 @@ async function renderLibrary(){
 }
 
 async function renderRoute(){
+  // Do not fetch data until authenticated to avoid 401s
+  const me = await auth_getUser().catch(()=>null);
+  if (!me){ renderAuth(content); return; }
   const hash = location.hash.replace(/^#/, '');
   if (hash.startsWith('space/')){
     const sid = hash.split('/')[1];
