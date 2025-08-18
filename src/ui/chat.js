@@ -84,7 +84,14 @@ export function renderChat(root){
   }
 
   clearBtn.addEventListener('click', ()=>{ history=[]; renderMessages(); });
-  hideBtn.addEventListener('click', ()=>{ const appRoot=document.getElementById('appRoot'); const scrim=document.getElementById('scrim'); if(appRoot){ appRoot.classList.remove('chat-open'); appRoot.classList.add('chat-closed'); } if(scrim){ scrim.style.display='none'; }});
+  function hideChat(){ const appRoot=document.getElementById('appRoot'); const scrim=document.getElementById('scrim'); if(appRoot){ appRoot.classList.remove('chat-open'); appRoot.classList.add('chat-closed'); } if(scrim){ scrim.style.display='none'; } }
+  hideBtn.addEventListener('click', hideChat);
+  // Side hide button mounted on the right panel edge
+  const panel = root.closest('#chatPanel');
+  if (panel && !panel.querySelector('.chat-side-hide')){
+    const side = document.createElement('button'); side.className='chat-side-hide'; side.title='Hide chat'; side.textContent='Hide';
+    panel.appendChild(side); side.addEventListener('click', hideChat);
+  }
 
   // Save/Open (Supabase)
   saveBtn.addEventListener('click', async ()=>{
@@ -255,12 +262,12 @@ export async function renderChatsSpace(root){
       <div class="title"><h2>Chats</h2></div>
       <div class="view-controls"><button class="button" id="backBtn">Back</button><button class="button" id="newChatBtn">New chat</button></div>
     </div>
-    <ul id="chatsList" style="display:flex; flex-direction:column; gap:2px; padding:0; margin:0; list-style:none"></ul>`;
+    <ul id="chatsList" style="display:flex; flex-direction:column; gap:4px; padding:0; margin:0; list-style:none"></ul>`;
   const listEl = root.querySelector('#chatsList');
   if (!list.length){ listEl.innerHTML = '<div class="empty">No saved chats yet</div>'; return; }
   listEl.innerHTML = list.map(c=>`<li class='chat-row'>
     <div style='min-width:0'>
-      <div style='font-weight:600; font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis'>${c.title||'Untitled chat'}</div>
+      <div style='font-weight:600; font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis'>${c.title||'Untitled chat'}</div>
       <div class='muted' style='font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis'>${c.scope||'ALL'} · ${new Date(c.updated_at||c.created_at).toLocaleString()}</div>
     </div>
     <div style='display:flex; gap:6px'>

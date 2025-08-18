@@ -67,15 +67,15 @@ app.innerHTML = `
         <div class="pref-item" id="openProfile"><svg class="icon"><use href="#user"></use></svg> <span>My profile</span></div>
         <div class="pref-item" id="openSettings2"><svg class="icon"><use href="#settings"></use></svg> <span>Settings</span></div>
         <div class="pref-item" id="toggleTheme"><svg class="icon"><use href="#sun"></use></svg> <span>Light mode</span></div>
-        <div class="pref-item"><svg class="icon"><use href="#chrome"></use></svg> <span>Chrome extension</span></div>
       </div>
     </aside>
     <main class="main panel">
       <div class="topbar">
         <div class="search" role="search">
           <input placeholder="Search in space 'Giannandrea's Library'" id="globalSearch" />
+          <button class="go-btn" id="goBtn" title="Go">Go</button>
         </div>
-        <button class="go-btn" title="Go">Go</button>
+        <button class="button ghost" id="toggleChatBtn" title="Toggle side panel"><svg class="icon"><use href="#split"></use></svg></button>
       </div>
       <div class="content" id="content"></div>
     </main>
@@ -92,9 +92,19 @@ renderChat(chatRoot);
 let currentQuery = '';
 const globalSearchInput = document.getElementById('globalSearch');
 globalSearchInput?.addEventListener('input', ()=>{ currentQuery = (globalSearchInput.value||'').toLowerCase(); renderRoute(); });
+document.getElementById('goBtn')?.addEventListener('click', ()=>{ renderRoute(); });
 
 // Light/dark toggle
 const toggleTheme = document.getElementById('toggleTheme');
+// Toggle side panel button
+document.getElementById('toggleChatBtn')?.addEventListener('click', ()=>{
+  const appRoot = document.getElementById('appRoot');
+  if (!appRoot) return;
+  // Consider visible unless explicitly marked closed
+  const isVisible = !appRoot.classList.contains('chat-closed');
+  appRoot.classList.toggle('chat-closed', isVisible);
+  appRoot.classList.toggle('chat-open', !isVisible);
+});
 toggleTheme?.addEventListener('click', ()=>{
   const light = document.documentElement.getAttribute('data-theme') === 'light';
   document.documentElement.setAttribute('data-theme', light ? 'dark' : 'light');
@@ -116,9 +126,7 @@ openProfileBtn?.addEventListener('keydown', (e)=>{ if(e.key==='Enter' || e.key==
 const askBtn = document.getElementById('askHiveBtn');
 askBtn?.addEventListener('click', ()=>{
   const appRoot = document.getElementById('appRoot');
-  const scrim = document.getElementById('scrim');
   if (appRoot){ appRoot.classList.remove('chat-closed'); appRoot.classList.add('chat-open'); }
-  if (scrim){ scrim.style.display='block'; }
   setTimeout(()=>{ try{ document.getElementById('chatInput')?.focus(); }catch{} }, 0);
 });
 
@@ -184,7 +192,7 @@ async function renderLibrary(){
     </div>
     <div class="nav-items" id="navItems"></div>`;
   const navItems = document.getElementById('navItems');
-  navItems.innerHTML = spaces.map(s=>`<div class="nav-item" data-id="${s.id}"><div style="display:flex; align-items:center; gap:8px"><svg class="icon"><use href="#book"></use></svg><span>${s.name}</span></div><svg class="icon"><use href="#chev-right"></use></svg></div>`).join('');
+  navItems.innerHTML = spaces.slice(0,4).map(s=>`<div class="nav-item" data-id="${s.id}"><div style="display:flex; align-items:center; gap:8px"><svg class="icon"><use href="#book"></use></svg><span>${s.name}</span></div><svg class="icon"><use href="#chev-right"></use></svg></div>`).join('');
   navItems.querySelectorAll('[data-id]').forEach(el=>{ el.addEventListener('click', ()=>{ location.hash = 'space/'+el.getAttribute('data-id'); }); });
 
   const grid = document.getElementById('grid');

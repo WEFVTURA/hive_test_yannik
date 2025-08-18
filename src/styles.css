@@ -56,11 +56,11 @@ body{margin:0; background:var(--bg); color:var(--text); font:14px/1.45 ui-sans-s
 .main{display:grid; grid-template-rows:auto 1fr; padding:10px; min-height:0; overflow:auto}
 .topbar{display:flex; align-items:center; gap:10px}
 .search{position:relative; flex:1}
-.search input{width:100%; padding:12px 40px; border-radius:999px; background:var(--panel-2); border:1px solid var(--border); color:var(--text)}
+.search input{width:100%; padding:12px 40px 12px 40px; border-radius:999px; background:var(--panel-2); border:1px solid var(--border); color:var(--text)}
 .search svg{position:absolute; left:12px; top:50%; transform:translateY(-50%); width:18px; height:18px; opacity:.7}
-.go-btn{border-radius:999px; padding:10px; border:1px solid var(--border); background:var(--panel-2); cursor:pointer}
+.go-btn{position:absolute; right:8px; top:50%; transform:translateY(-50%); border-radius:999px; padding:8px 12px; border:1px solid var(--border); background:var(--panel-2); cursor:pointer}
 .content{margin-top:10px; display:grid; grid-template-rows:auto 1fr}
-.content-head{display:flex; align-items:center; justify-content:space-between}
+.content-head{display:flex; align-items:center; justify-content:space-between; margin-bottom:10px}
 .title{display:flex; align-items:baseline; gap:10px}
 .title h2{margin:0}
 .view-controls{display:flex; align-items:center; gap:8px}
@@ -83,7 +83,13 @@ body{margin:0; background:var(--bg); color:var(--text); font:14px/1.45 ui-sans-s
 
 /* RIGHT / CHAT */
 .right{display:grid; grid-template-rows: 1fr auto; padding:14px; position:relative; z-index:20; min-height:0; overflow:auto}
-.splitter{width:6px; cursor:col-resize; background:transparent; position:relative}
+.chat-side-hide{position:absolute; left:-52px; top:12px; transform:rotate(-90deg); transform-origin:left top; background:var(--panel); border:1px solid var(--border); color:var(--text); padding:6px 8px; border-radius:8px; cursor:pointer; opacity:.7}
+.chat-side-hide:hover{opacity:1}
+.chat-header{display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:6px}
+.chat-title{font-weight:700; color:var(--muted)}
+.chat-header .button.sm{opacity:.7}
+.chat-header .button.sm:hover{opacity:1}
+.splitter{width:6px; cursor:col-resize; background:transparent; position:relative; z-index:35}
 .splitter:after{content:""; position:absolute; left:2px; top:0; bottom:0; width:2px; background:var(--border)}
 .app.chat-closed .splitter{display:none}
 .stage{display:block; color:var(--muted); border:1px dashed var(--border); border-radius:14px}
@@ -127,14 +133,14 @@ body{margin:0; background:var(--bg); color:var(--text); font:14px/1.45 ui-sans-s
   .app.chat-open #scrim{z-index:30}
   .app.chat-open .scrim{display:none}
 }
-.app.chat-open .scrim{display:block}
+.app.chat-open .scrim{display:none}
 
 /* ICONS */
 .icon{width:18px; height:18px; display:inline-block; vertical-align:middle}
 .card-icon{width:28px; height:28px}
 
 /* Chats list rows */
-.chat-row{display:flex; align-items:center; justify-content:space-between; border:1px solid var(--border); padding:4px 8px; border-radius:8px; height:36px; overflow:hidden; background:var(--panel)}
+.chat-row{display:flex; align-items:center; justify-content:space-between; border:1px solid var(--border); padding:4px 8px; border-radius:8px; height:34px; overflow:hidden; background:var(--panel)}
 .chat-row:hover{background:var(--panel-2)}
 .chat-row > div:first-child{min-width:0}
 .chat-row .muted{font-size:11px}
