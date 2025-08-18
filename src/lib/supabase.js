@@ -37,7 +37,10 @@ export function getSupabase(){
   if (cachedClient) return cachedClient;
   const url = util_getEnv('SUPABASE_URL', 'SUPABASE_URL');
   const anon = util_getEnv('SUPABASE_ANON_KEY', 'SUPABASE_ANON_KEY');
-  if (!url || !anon) throw new Error('Supabase URL/ANON KEY missing');
+  if (!url || !anon){
+    console.error('Supabase URL/ANON KEY missing. Configure VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY or provide window.SUPABASE_*');
+    throw new Error('Supabase URL/ANON KEY missing');
+  }
   cachedClient = createClient(url, anon, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true } });
 
   // Sync auth to cookies so refreshes stay logged in across tabs and reloads

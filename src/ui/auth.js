@@ -22,8 +22,21 @@ export function renderAuth(root){
 	    const email = (emailEl?.value||'').trim();
 	    const password = passEl?.value||'';
 	    if (!email || !password){ msg.textContent='Enter email and password'; return; }
-	    try{ if (kind==='login') await auth_signIn(email,password); else await auth_signUp(email,password); location.reload(); }
-	    catch(e){ msg.textContent = 'Auth failed'; }
+	    try{
+	      if (kind==='login'){
+	        await auth_signIn(email,password);
+	        location.reload();
+	      } else {
+	        const res = await auth_signUp(email,password);
+	        msg.textContent = 'Account created. If email confirmation is required, please check your inbox.';
+	      }
+	    }catch(e){
+	      const errMsg = (e && (e.message||e.error_description||e.error)) || 'Auth failed';
+	      msg.textContent = errMsg;
+	      if (/confirm/i.test(errMsg) || /SMTP/i.test(errMsg) || /signups.*disabled/i.test(errMsg)){
+	        msg.textContent = errMsg + ' — Owner: in Supabase, enable email/password signups and either configure SMTP or disable email confirmations.';
+	      }
+	    }
 	  }
 	  root.querySelector('#loginBtn')?.addEventListener('click', ()=>doAuth('login'));
 	  root.querySelector('#signupBtn')?.addEventListener('click', ()=>doAuth('signup'));

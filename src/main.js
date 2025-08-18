@@ -307,7 +307,7 @@ async function ensureAuth(){
   try{
     await auth_restoreFromCookies();
   }catch{}
-  let user=null; try{ user = await auth_getUser(); }catch{}
+  let user=null; try{ user = await auth_getUser(); }catch(e){ console.warn('auth_getUser failed', e); }
   if (!user){
     // Ensure non-auth users always see the login/signup surface
     try{ renderAuth(content); }catch{}
