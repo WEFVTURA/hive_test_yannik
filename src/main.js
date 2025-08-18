@@ -43,9 +43,9 @@ app.innerHTML = `
 
       <div class="promo panel" style="border-radius:12px; position:relative">
         <strong>Upgrade to HIve Pro</strong>
-        <div class="muted">Unlimited savings & co‑pilot, 30 h/month YouTube transcription, Claude 3.5 Sonnet</div>
-        <button class="button" style="justify-self:start">Learn more</button>
-        <button class="button" id="startTourBtn" style="position:absolute; right:12px; top:12px">Guide</button>
+        <div class="muted">Up to 1800 minutes of audio transcriptions and meetings</div>
+        <div class="muted">Unlimited research requests (with Mistral Large)</div>
+        <button class="button" id="learnMoreBtn" style="justify-self:start">Learn more</button>
       </div>
 
       <div class="muted" style="font-size:12px">Database: Connected</div>
@@ -67,6 +67,7 @@ app.innerHTML = `
         <div class="pref-item" id="openProfile"><svg class="icon"><use href="#user"></use></svg> <span>My profile</span></div>
         <div class="pref-item" id="openSettings2"><svg class="icon"><use href="#settings"></use></svg> <span>Settings</span></div>
         <div class="pref-item" id="toggleTheme"><svg class="icon"><use href="#sun"></use></svg> <span>Light mode</span></div>
+        <div class="pref-item" id="openGuide"><svg class="icon"><use href="#sliders"></use></svg> <span>Guide</span></div>
       </div>
     </aside>
     <main class="main panel">
@@ -122,6 +123,29 @@ openProfileBtn?.setAttribute('tabindex','0');
 openSettings2?.addEventListener('keydown', (e)=>{ if(e.key==='Enter' || e.key===' '){ e.preventDefault(); openSettingsModal(); } });
 openProfileBtn?.addEventListener('keydown', (e)=>{ if(e.key==='Enter' || e.key===' '){ e.preventDefault(); openProfileModal(); } });
 
+// Learn more modal
+document.getElementById('learnMoreBtn')?.addEventListener('click', async()=>{
+  const { openModalWithExtractor } = await import('./ui/modals.js');
+  const body = `
+    <div class='muted' style='font-size:12px; margin-bottom:6px'>Choose a plan</div>
+    <div class='pricing'>
+      <div class='price-card price-free'>
+        <div style='font-weight:700; margin-bottom:4px'>Free</div>
+        <div class='muted' style='font-size:12px'>300 minutes<br>100 requests<br>Shared spaces up to 5 people</div>
+      </div>
+      <div class='price-card price-premium'>
+        <div style='font-weight:700; margin-bottom:4px'>Premium · $19/month</div>
+        <div class='muted' style='font-size:12px'>Up to 1800 minutes of audio + meetings<br>Unlimited research requests (Mistral Large)<br>Share spaces with up to 100 people</div>
+      </div>
+      <div class='price-card price-enterprise'>
+        <div style='font-weight:700; margin-bottom:4px'>Enterprise</div>
+        <div class='muted' style='font-size:12px'>Get in touch: <a href='mailto:info@fvtura.com'>info@fvtura.com</a></div>
+      </div>
+    </div>
+  `;
+  await openModalWithExtractor('HIve Pro', body, ()=>({}));
+});
+
 // Open chat side panel
 const askBtn = document.getElementById('askHiveBtn');
 askBtn?.addEventListener('click', ()=>{
@@ -131,7 +155,7 @@ askBtn?.addEventListener('click', ()=>{
 });
 
 // Tour trigger
-document.getElementById('startTourBtn')?.addEventListener('click', async()=>{
+document.getElementById('openGuide')?.addEventListener('click', async()=>{
   const { startDefaultTour } = await import('./ui/tour.js');
   startDefaultTour();
 });
@@ -141,7 +165,7 @@ const meetingBtn = document.getElementById('meetingBtn');
 meetingBtn?.addEventListener('click', async ()=>{
   const res = await openModalWithExtractor('Send HIVE bot', `
     <div class="field"><label>Meeting URL</label><input id="mUrl" placeholder="Paste Zoom/Meet/Teams URL"></div>
-    <div class="muted" style="font-size:12px">HIVE bot will join and record. Transcripts are available via Recall and saved in space "Calls Transcripts" when available.</div>
+    <div class="muted" style="font-size:12px">HIVE bot will join and record. Transcripts are available in the <strong>Meetings</strong> space in your dashboard. <em>(It can take a few minutes for transcripts to appear there after the call.)</em></div>
   `, (root)=>({ url: root.querySelector('#mUrl')?.value?.trim()||'' }));
   if (!res.ok) return; const url = res.values?.url; if(!url){ window.showToast && window.showToast('Add a meeting URL'); return; }
   try{
