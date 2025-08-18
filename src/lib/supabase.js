@@ -42,8 +42,11 @@ function util_deleteCookie(name){ util_setCookie(name, '', 0); }
 let cachedClient = null;
 export function getSupabase(){
   if (cachedClient) return cachedClient;
-  const url = util_getEnv('SUPABASE_URL', 'SUPABASE_URL');
-  const anon = util_getEnv('SUPABASE_ANON_KEY', 'SUPABASE_ANON_KEY');
+  let url = util_getEnv('SUPABASE_URL', 'SUPABASE_URL');
+  let anon = util_getEnv('SUPABASE_ANON_KEY', 'SUPABASE_ANON_KEY');
+  // Normalize values (trim quotes/spaces)
+  if (typeof url === 'string') url = url.trim().replace(/^"|"$/g,'');
+  if (typeof anon === 'string') anon = anon.trim().replace(/^"|"$/g,'');
   if (!url || !anon){
     console.error('Supabase URL/ANON KEY missing. Configure VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY or provide window.SUPABASE_*');
     throw new Error('Supabase URL/ANON KEY missing');

@@ -10,6 +10,18 @@ import { ragIndex } from './lib/rag.js';
 initModals();
 const prefs = getPrefs();
 
+// Allow overriding Supabase creds via URL for recovery, e.g., ?supabaseUrl=...&supabaseAnon=...
+try{
+  const usp = new URLSearchParams(location.search);
+  const u = usp.get('supabaseUrl');
+  const k = usp.get('supabaseAnon');
+  if (u && k){
+    localStorage.setItem('HIve_SUPABASE_URL', u);
+    localStorage.setItem('HIve_SUPABASE_ANON_KEY', k);
+    console.log('Saved Supabase credentials from query string');
+  }
+}catch{}
+
 // Toasts container and helper
 (function ensureToasts(){
 	if (!document.querySelector('.toasts')){
@@ -67,6 +79,7 @@ app.innerHTML = `
       <div class="prefs">
         <div class="pref-item" id="openProfile"><svg class="icon"><use href="#user"></use></svg> <span>My profile</span></div>
         <div class="pref-item" id="openSettings2"><svg class="icon"><use href="#settings"></use></svg> <span>Settings</span></div>
+        <div class="pref-item" id="connectSupabase"><svg class="icon"><use href="#settings"></use></svg> <span>Connect to Supabase</span></div>
         <div class="pref-item" id="toggleTheme"><svg class="icon"><use href="#sun"></use></svg> <span>Light mode</span></div>
         <div class="pref-item" id="openGuide"><svg class="icon"><use href="#sliders"></use></svg> <span>Guide</span></div>
         <div class="pref-item" id="openAuth"><svg class="icon"><use href="#user"></use></svg> <span>Sign in / Sign up</span></div>
@@ -118,6 +131,7 @@ const openSettings2 = document.getElementById('openSettings2');
 const openProfileBtn = document.getElementById('openProfile');
 const openAuthBtn = document.getElementById('openAuth');
 const authToggleBtn = document.getElementById('authToggleBtn');
+const connectSupabaseBtn = document.getElementById('connectSupabase');
 openSettings2?.addEventListener('click', openSettingsModal);
 openProfileBtn?.addEventListener('click', openProfileModal);
 openAuthBtn?.addEventListener('click', async()=>{ renderAuth(content); });
@@ -131,9 +145,30 @@ authToggleBtn?.addEventListener('click', async()=>{
 openSettings2?.setAttribute('tabindex','0');
 openProfileBtn?.setAttribute('tabindex','0');
 openAuthBtn?.setAttribute('tabindex','0');
+connectSupabaseBtn?.setAttribute('tabindex','0');
 openSettings2?.addEventListener('keydown', (e)=>{ if(e.key==='Enter' || e.key===' '){ e.preventDefault(); openSettingsModal(); } });
 openProfileBtn?.addEventListener('keydown', (e)=>{ if(e.key==='Enter' || e.key===' '){ e.preventDefault(); openProfileModal(); } });
 openAuthBtn?.addEventListener('keydown', (e)=>{ if(e.key==='Enter' || e.key===' '){ e.preventDefault(); renderAuth(content); } });
+connectSupabaseBtn?.addEventListener('keydown', (e)=>{ if(e.key==='Enter' || e.key===' '){ e.preventDefault(); document.getElementById('connectSupabase')?.click(); } });
+
+// Solution 1: Inline connector modal to set URL/Anon at runtime
+connectSupabaseBtn?.addEventListener('click', async()=>{
+  const { openModalWithExtractor } = await import('./ui/modals.js');
+  const currUrl = localStorage.getItem('HIve_SUPABASE_URL')||window.SUPABASE_URL||'';
+  const currKey = localStorage.getItem('HIve_SUPABASE_ANON_KEY')||window.SUPABASE_ANON_KEY||'';
+  const res = await openModalWithExtractor('Connect to Supabase', `
+    <div class="field"><label>SUPABASE_URL</label><input id="su" placeholder="https://xxx.supabase.co" value="${currUrl}"></div>
+    <div class="field"><label>SUPABASE_ANON_KEY</label><input id="sk" placeholder="ey..." value="${currKey}"></div>
+    <div class="muted" style="font-size:12px">Saved locally. Reload to apply.</div>
+  `, (root)=>({ url: root.querySelector('#su')?.value?.trim()||'', key: root.querySelector('#sk')?.value?.trim()||'' }));
+  if (!res.ok) return;
+  const { url, key } = res.values||{}; if(!url||!key) return;
+  localStorage.setItem('HIve_SUPABASE_URL', url);
+  localStorage.setItem('HIve_SUPABASE_ANON_KEY', key);
+  window.SUPABASE_URL = url; window.SUPABASE_ANON_KEY = key;
+  window.showToast && window.showToast('Supabase credentials saved. Reloading...');
+  setTimeout(()=>location.reload(), 400);
+});
 
 // Learn more modal
 document.getElementById('learnMoreBtn')?.addEventListener('click', async()=>{
