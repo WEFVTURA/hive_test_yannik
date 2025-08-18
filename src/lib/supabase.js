@@ -3,6 +3,17 @@ import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js
 export function util_getEnv(key, promptLabel){
   const winVal = window[key];
   if (winVal) return winVal;
+  // Vite build-time envs (public) – prefer VITE_ prefix
+  try {
+    // eslint-disable-next-line no-undef
+    const viteEnv = (typeof import !== 'undefined' && typeof import.meta !== 'undefined') ? import.meta.env : undefined;
+    if (viteEnv){
+      const viaVitePrefixed = viteEnv['VITE_'+key];
+      if (viaVitePrefixed) return viaVitePrefixed;
+      const viaViteDirect = viteEnv[key];
+      if (viaViteDirect) return viaViteDirect;
+    }
+  } catch {}
   const lsKey = `HIve_${key}`;
   const fromLs = localStorage.getItem(lsKey);
   if (fromLs) return fromLs;

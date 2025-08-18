@@ -31,7 +31,7 @@ app.innerHTML = `
           <div class="muted" style="font-size:12px">Ask HIve</div>
         </div>
         <div class="spacer"></div>
-        <button class="button ghost" id="openSettings" title="settings"><svg class="icon"><use href="#settings"></use></svg></button>
+        <button class="button ghost" id="authToggleBtn" title="Sign in / Sign out"></button>
       </div>
 
       <button class="button primary" id="askHiveBtn" style="width:100%"><svg class="icon"><use href="#spark"></use></svg> Ask HIve</button>
@@ -69,6 +69,7 @@ app.innerHTML = `
         <div class="pref-item" id="openSettings2"><svg class="icon"><use href="#settings"></use></svg> <span>Settings</span></div>
         <div class="pref-item" id="toggleTheme"><svg class="icon"><use href="#sun"></use></svg> <span>Light mode</span></div>
         <div class="pref-item" id="openGuide"><svg class="icon"><use href="#sliders"></use></svg> <span>Guide</span></div>
+        <div class="pref-item" id="openAuth"><svg class="icon"><use href="#user"></use></svg> <span>Sign in / Sign up</span></div>
       </div>
     </aside>
     <main class="main panel">
@@ -112,17 +113,27 @@ toggleTheme?.addEventListener('click', ()=>{
   document.documentElement.setAttribute('data-theme', light ? 'dark' : 'light');
 });
 
-// Settings/Profile actions
-const openSettingsBtn = document.getElementById('openSettings');
+// Settings/Profile/Auth actions
 const openSettings2 = document.getElementById('openSettings2');
 const openProfileBtn = document.getElementById('openProfile');
-openSettingsBtn?.addEventListener('click', openSettingsModal);
+const openAuthBtn = document.getElementById('openAuth');
+const authToggleBtn = document.getElementById('authToggleBtn');
 openSettings2?.addEventListener('click', openSettingsModal);
 openProfileBtn?.addEventListener('click', openProfileModal);
+openAuthBtn?.addEventListener('click', async()=>{ renderAuth(content); });
+authToggleBtn?.addEventListener('click', async()=>{
+  try{
+    const me = await auth_getUser();
+    if (me){ await auth_signOut(); location.reload(); }
+    else { renderAuth(content); }
+  }catch{ renderAuth(content); }
+});
 openSettings2?.setAttribute('tabindex','0');
 openProfileBtn?.setAttribute('tabindex','0');
+openAuthBtn?.setAttribute('tabindex','0');
 openSettings2?.addEventListener('keydown', (e)=>{ if(e.key==='Enter' || e.key===' '){ e.preventDefault(); openSettingsModal(); } });
 openProfileBtn?.addEventListener('keydown', (e)=>{ if(e.key==='Enter' || e.key===' '){ e.preventDefault(); openProfileModal(); } });
+openAuthBtn?.addEventListener('keydown', (e)=>{ if(e.key==='Enter' || e.key===' '){ e.preventDefault(); renderAuth(content); } });
 
 // Learn more modal
 document.getElementById('learnMoreBtn')?.addEventListener('click', async()=>{
@@ -292,7 +303,23 @@ async function ensureAuth(){
 }
 
 // Bootstrap auth early (restore from cookies first to avoid re-login on refresh)
-(async()=>{ await auth_restoreFromCookies(); const user = await auth_getUser(); if (!user){ renderAuth(content); return; } await ensureBaselineSpaces(); await hydrateProfileUI(); })();
+(async()=>{
+  try{
+    await auth_restoreFromCookies();
+  }catch{}
+  let user=null; try{ user = await auth_getUser(); }catch{}
+  if (!user){
+    // Ensure non-auth users always see the login/signup surface
+    try{ renderAuth(content); }catch{}
+    // Also label the auth toggle button accordingly
+    const btn = document.getElementById('authToggleBtn'); if (btn){ btn.textContent = 'Sign in'; }
+    return;
+  }
+  const btn = document.getElementById('authToggleBtn'); if (btn){ btn.textContent = 'Log out'; }
+  await ensureBaselineSpaces();
+  await hydrateProfileUI();
+  await maybeRunOnboardingTour();
+})();
 // Load stats
 (async()=>{
   try{
@@ -345,5 +372,18 @@ async function ensureBaselineSpaces(){
     else { localStorage.setItem('hive_meetings_space_id', hasMeetings.id); }
     if (!hasChats){ const s2 = await db_createSpace('Chats'); localStorage.setItem('hive_chats_space_id', s2.id); }
     else { localStorage.setItem('hive_chats_space_id', hasChats.id); }
+  }catch{}
+}
+
+// Onboarding: auto-run the tour in a user's first 3 sessions
+async function maybeRunOnboardingTour(){
+  try{
+    const me = await auth_getUser(); if(!me) return;
+    const key = `hive_onboard_${me.id}`;
+    const count = parseInt(localStorage.getItem(key)||'0',10)||0;
+    if (count >= 3) return;
+    const { startDefaultTour } = await import('./ui/tour.js');
+    setTimeout(()=>{ startDefaultTour(); }, 300);
+    localStorage.setItem(key, String(count+1));
   }catch{}
 }
