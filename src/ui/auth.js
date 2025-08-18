@@ -1,22 +1,23 @@
 export function renderAuth(root){
 	root.innerHTML = `
 	  <div style="display:grid; place-items:center; min-height:60vh">
-	    <div class="panel" style="width:min(420px,92vw); padding:18px; border-radius:12px; display:grid; gap:12px">
+	    <form id="authForm" class="panel" style="width:min(420px,92vw); padding:18px; border-radius:12px; display:grid; gap:12px" novalidate>
 	      <div style="font-weight:700; font-size:18px">Welcome to HIve</div>
-	      <div class="field"><label>Email</label><input id="authEmail" placeholder="you@company.com" /></div>
-	      <div class="field"><label>Password</label><input id="authPass" type="password" placeholder="********" /></div>
+	      <div class="field"><label>Email</label><input id="authEmail" type="email" autocomplete="email" placeholder="you@company.com" required /></div>
+	      <div class="field"><label>Password</label><input id="authPass" type="password" autocomplete="current-password" placeholder="********" required /></div>
 	      <div class="muted" id="authMsg" style="font-size:12px"></div>
 	      <div style="display:flex; gap:8px; justify-content:flex-end">
-	        <button class="button" id="loginBtn">Log in</button>
-	        <button class="button primary" id="signupBtn">Create account</button>
+	        <button class="button" id="loginBtn" type="submit">Log in</button>
+	        <button class="button primary" id="signupBtn" type="button">Create account</button>
 	      </div>
-	    </div>
+	    </form>
 	  </div>
 	`;
 	(async()=>{
 	  const { auth_signIn, auth_signUp } = await import('../lib/supabase.js');
 	  const emailEl = root.querySelector('#authEmail');
 	  const passEl = root.querySelector('#authPass');
+	  const formEl = root.querySelector('#authForm');
 	  const msg = root.querySelector('#authMsg');
 	  async function doAuth(kind){
 	    const email = (emailEl?.value||'').trim();
@@ -38,7 +39,7 @@ export function renderAuth(root){
 	      }
 	    }
 	  }
-	  root.querySelector('#loginBtn')?.addEventListener('click', ()=>doAuth('login'));
+	  formEl?.addEventListener('submit', (e)=>{ e.preventDefault(); doAuth('login'); });
 	  root.querySelector('#signupBtn')?.addEventListener('click', ()=>doAuth('signup'));
 	})();
 }
