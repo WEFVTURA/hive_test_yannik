@@ -27,23 +27,22 @@ export function renderChat(root){
           <div class="muted">context: <span id="chatScopeLabel">All Libraries</span></div>
           <div style="display:flex; gap:8px; align-items:center">
             <label class="muted" style="font-size:12px">Mode</label>
-            <select id="queryMode" style="background:transparent; color:var(--text); border:1px solid var(--border); border-radius:8px; padding:6px 8px">
+            <span class="select-wrap"><select id="queryMode" class="select">
               <option value="rag">RAG</option>
               <option value="direct">Direct (concat notes)</option>
               <option value="fts">FTS (BM25)</option>
               <option value="sql" selected>SQL (notes)</option>
-            </select>
+            </select></span>
           </div>
           <div style="display:flex; gap:8px; align-items:center">
             <label class="muted" style="font-size:12px">Search scope</label>
-            <select id="spaceScope" style="flex:1; background:transparent; color:var(--text); border:1px solid var(--border); border-radius:8px; padding:6px 8px">
+            <span class="select-wrap" style="flex:1"><select id="spaceScope" class="select" style="width:100%">
               <option value="ALL" ${prefs.defaultScope==='ALL'?'selected':''}>ALL</option>
-            </select>
+            </select></span>
           </div>
           <div class="input" style="display:flex; align-items:center; gap:10px; border:1px solid var(--border); background:var(--panel); border-radius:12px; padding:8px">
             <input id="chatInput" placeholder="Type your question" style="flex:1; background:transparent; border:0; color:var(--text); outline:none; padding:8px"/>
             <button class="button" id="askBtn">Ask</button>
-            <div class="pill" id="modelBtn">${prefs.defaultModel} ▾</div>
           </div>
         </div>
       </div>

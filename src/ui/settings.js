@@ -4,7 +4,7 @@ export function getPrefs(){
 	let p = {};
 	try{ p = JSON.parse(localStorage.getItem(KEY)||'{}'); }catch{}
 	return {
-		profileName: p.profileName || 'Giannandrea G.',
+		profileName: p.profileName || 'User',
 		defaultModel: p.defaultModel || 'Mistral',
 		searchProvider: p.searchProvider || 'mistral',
 		topK: Number.isFinite(p.topK) ? p.topK : 6,
@@ -105,6 +105,10 @@ export async function openProfileModal(){
 	const avatarPreview = scrim.querySelector('#avatarPreview');
 	const uploadBtn = scrim.querySelector('#uploadAvatarBtn');
 	const removeBtn = scrim.querySelector('#removeAvatarBtn');
+	// Logout
+	const logoutBtn = document.createElement('button'); logoutBtn.className='button ghost'; logoutBtn.textContent='Log out';
+	scrim.querySelector('.modal-actions').prepend(logoutBtn);
+	logoutBtn.addEventListener('click', async()=>{ try{ (await import('../lib/supabase.js')).auth_signOut(); location.reload(); }catch{} });
 
 	uploadBtn.addEventListener('click', async ()=>{
 		const inp = document.createElement('input'); inp.type='file'; inp.accept='image/*';

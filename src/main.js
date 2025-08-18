@@ -1,6 +1,7 @@
 import { initModals } from './ui/modals.js';
 import { db_listSpaces, db_createSpace, db_listNotes, db_listFiles, getSupabase, auth_getUser, auth_signIn, auth_signUp, auth_signOut, profile_get, auth_restoreFromCookies } from './lib/supabase.js';
 import { renderSpace } from './ui/space.js';
+import { renderAuth } from './ui/auth.js';
 import { renderChat } from './ui/chat.js';
 import { getPrefs, openSettingsModal, openProfileModal } from './ui/settings.js';
 import { openModalWithExtractor } from './ui/modals.js';
@@ -143,7 +144,16 @@ document.getElementById('learnMoreBtn')?.addEventListener('click', async()=>{
       </div>
     </div>
   `;
-  await openModalWithExtractor('HIve Pro', body, ()=>({}));
+  const scrim = document.getElementById('modalScrim') || (function(){ const s=document.createElement('div'); s.className='modal-scrim'; s.id='modalScrim'; document.body.appendChild(s); return s; })();
+  scrim.classList.add('modal-show'); scrim.setAttribute('aria-hidden','false'); scrim.style.display='flex';
+  scrim.innerHTML = `
+    <div class="modal pricing-modal" role="dialog" aria-modal="true">
+      <div class="modal-head"><div>HIve Pro</div><button class="button ghost" id="xClose">✕</button></div>
+      <div class="modal-body">${body}</div>
+      <div class="modal-actions"><button class="button" id="closeBtn">Close</button></div>
+    </div>`;
+  const close=()=>{ scrim.classList.remove('modal-show'); scrim.setAttribute('aria-hidden','true'); scrim.style.display='none'; };
+  scrim.querySelector('#xClose').onclick=close; scrim.querySelector('#closeBtn').onclick=close; scrim.addEventListener('click',(e)=>{ if(e.target===scrim) close(); });
 });
 
 // Open chat side panel
@@ -282,7 +292,7 @@ async function ensureAuth(){
 }
 
 // Bootstrap auth early (restore from cookies first to avoid re-login on refresh)
-(async()=>{ await auth_restoreFromCookies(); await ensureAuth(); await ensureBaselineSpaces(); await hydrateProfileUI(); })();
+(async()=>{ await auth_restoreFromCookies(); const user = await auth_getUser(); if (!user){ renderAuth(content); return; } await ensureBaselineSpaces(); await hydrateProfileUI(); })();
 // Load stats
 (async()=>{
   try{
@@ -309,7 +319,7 @@ async function hydrateProfileUI(){
 		avatarUrl = p?.avatar_url||'';
 	}catch{}
 	if (brandEl){
-		const fallbackName = (me.email||'User');
+		const fallbackName = (me?.email||'User');
 		brandEl.textContent = fullName || brandEl.textContent || fallbackName;
 	}
 	if (avatarEl){

@@ -68,6 +68,11 @@ body{margin:0; background:var(--bg); color:var(--text); font:14px/1.45 ui-sans-s
 .segmented button{padding:8px 12px; background:transparent; border:0; color:var(--text); cursor:pointer}
 .segmented button.active{background:var(--panel-2)}
 
+/* Styled selects for chat controls */
+.select{appearance:none; -webkit-appearance:none; -moz-appearance:none; background:var(--panel); color:var(--text); border:1px solid var(--border); border-radius:10px; padding:8px 34px 8px 10px; position:relative}
+.select-wrap{position:relative; display:inline-block}
+.select-wrap:after{content:"▾"; position:absolute; right:10px; top:50%; transform:translateY(-50%); color:var(--muted); pointer-events:none}
+
 .card-grid{margin-top:12px;display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;grid-auto-flow:row dense; align-items:start; align-content:start; justify-content:stretch}
 .space-2col{grid-template-columns:1fr 1fr}
 .space-2col .lib-card{max-width:none}
@@ -162,13 +167,14 @@ a { color: inherit; text-decoration: none; }
 /* Simple modal */
 .modal-scrim{position:fixed; inset:0; display:none; align-items:center; justify-content:center; background:rgba(0,0,0,.5); z-index:100}
 .modal{width:min(520px, 92vw); background:var(--panel); border:1px solid var(--border); border-radius:12px; box-shadow:var(--shadow); overflow:hidden}
+/* Glassy, wider modal for pricing */
+.pricing-modal{width:min(920px, 96vw); background:rgba(20,24,33,.6); border:1px solid rgba(231,234,243,.08); backdrop-filter: blur(14px) saturate(1.2); box-shadow:0 20px 50px rgba(0,0,0,.45)}
 .modal-head{display:flex; align-items:center; justify-content:space-between; padding:12px 14px; background:var(--panel-2); border-bottom:1px solid var(--border)}
 .modal-body{padding:14px; display:grid; gap:10px}
-.pricing{display:grid; grid-template-columns: repeat(3, 1fr); gap:10px}
-.price-card{padding:12px; border:1px solid var(--border); border-radius:12px; background:var(--panel-2)}
-.price-free{box-shadow: inset 0 0 0 2px rgba(122,140,255,.15)}
-.price-premium{box-shadow: inset 0 0 0 2px rgba(79,106,242,.25)}
-.price-enterprise{box-shadow: inset 0 0 0 2px rgba(30,194,139,.25)}
+.pricing{display:grid; grid-template-columns: repeat(3, 1fr); gap:12px}
+.price-card{padding:14px; border:1px solid rgba(231,234,243,.08); border-radius:14px; background:rgba(13,16,22,.55); backdrop-filter: blur(10px); box-shadow: inset 0 0 0 1px rgba(231,234,243,.04)}
+/* Neutralize colored accents */
+.price-free,.price-premium,.price-enterprise{box-shadow: inset 0 0 0 1px rgba(231,234,243,.04)}
 .field{display:grid; gap:6px}
 .field label{font-size:12px; color:var(--muted)}
 .field input, .field textarea{background:transparent; border:1px solid var(--border); color:var(--text); padding:8px 10px; border-radius:8px}
