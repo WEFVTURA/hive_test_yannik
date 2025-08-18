@@ -20,9 +20,6 @@ export function util_getEnv(key, promptLabel){
   const lsKey = `HIve_${key}`;
   const fromLs = localStorage.getItem(lsKey);
   if (fromLs) return fromLs;
-  // Final fallback for production safety
-  if (key === 'SUPABASE_URL') return DEFAULT_SUPABASE_URL;
-  if (key === 'SUPABASE_ANON_KEY') return DEFAULT_SUPABASE_ANON_KEY;
   // No prompt in modular app; return empty string
   return '';
 }
@@ -42,15 +39,13 @@ function util_deleteCookie(name){ util_setCookie(name, '', 0); }
 let cachedClient = null;
 export function getSupabase(){
   if (cachedClient) return cachedClient;
-  let url = util_getEnv('SUPABASE_URL', 'SUPABASE_URL');
-  let anon = util_getEnv('SUPABASE_ANON_KEY', 'SUPABASE_ANON_KEY');
+  let url = util_getEnv('SUPABASE_URL', 'SUPABASE_URL') || DEFAULT_SUPABASE_URL;
+  let anon = util_getEnv('SUPABASE_ANON_KEY', 'SUPABASE_ANON_KEY') || DEFAULT_SUPABASE_ANON_KEY;
   // Normalize values (trim quotes/spaces)
-  if (typeof url === 'string') url = url.trim().replace(/^"|"$/g,'');
-  if (typeof anon === 'string') anon = anon.trim().replace(/^"|"$/g,'');
-  if (!url || !anon){
-    console.error('Supabase URL/ANON KEY missing. Configure VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY or provide window.SUPABASE_*');
-    throw new Error('Supabase URL/ANON KEY missing');
-  }
+  if (typeof url === 'string') url = url.trim().replace(/^"|"$/g,'').replace(/^'|'$/g,'');
+  if (typeof anon === 'string') anon = anon.trim().replace(/^"|"$/g,'').replace(/^'|'$/g,'');
+  try { new URL(url); } catch { url = DEFAULT_SUPABASE_URL; }
+  if (!url || !anon){ throw new Error('Supabase URL/ANON KEY missing'); }
   cachedClient = createClient(url, anon, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true } });
 
   // Sync auth to cookies so refreshes stay logged in across tabs and reloads
