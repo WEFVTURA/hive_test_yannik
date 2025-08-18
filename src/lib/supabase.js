@@ -41,6 +41,19 @@ export function getSupabase(){
   if (typeof anon === 'string') anon = anon.trim().replace(/^"|"$/g,'').replace(/^'|'$/g,'');
   try { new URL(url); } catch { url = DEFAULT_SUPABASE_URL; }
   if (!url || !anon){ throw new Error('Supabase URL/ANON KEY missing'); }
+
+  // Debug: detect ref mismatch to explain "Invalid API key"
+  try{
+    const hostRef = new URL(url).hostname.split('.')[0];
+    const mid = (anon.split?.('.')||[])[1] || '';
+    const payloadJson = mid ? JSON.parse(atob(mid.replace(/-/g,'+').replace(/_/g,'/'))) : null;
+    const keyRef = payloadJson?.ref || payloadJson?.project_id || '';
+    if (hostRef && keyRef && hostRef !== keyRef){
+      console.error(`Supabase ref mismatch: URL ref=${hostRef}, anon ref=${keyRef}. Use the anon key from the same project as ${url}.`);
+      throw new Error('Supabase anon key does not belong to the configured project URL');
+    }
+    console.log('[Supabase]', { url, anon_prefix: String(anon).slice(0,6) });
+  }catch{}
   cachedClient = createClient(url, anon, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true } });
 
   // Sync auth to cookies so refreshes stay logged in across tabs and reloads
