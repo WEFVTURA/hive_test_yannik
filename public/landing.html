@@ -13,11 +13,12 @@
       *{box-sizing:border-box}
       html,body{margin:0;padding:0;background:linear-gradient(180deg,#0d1017 0%, #0f1219 30%, #0d1017 100%);color:var(--text);font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;}
       a{color:inherit;text-decoration:none}
+      canvas#bg{position:fixed;inset:0;z-index:-1;display:block}
       .container{max-width:1120px;margin:0 auto;padding:24px}
       .nav{position:sticky;top:0;backdrop-filter: blur(10px);background:rgba(10,12,18,.55);border-bottom:1px solid var(--border);z-index:10}
       .nav-inner{display:flex;align-items:center;gap:18px;}
       .brand{display:flex;align-items:center;gap:10px;font-weight:800}
-      .brand .logo{width:28px;height:28px;border-radius:8px;background:linear-gradient(135deg,#5a83f2,#7b61ff);display:grid;place-items:center;color:#fff;font-weight:800}
+      .brand .logo{width:28px;height:28px;border-radius:8px;background:linear-gradient(135deg,#5a83f2,#7b61ff);display:grid;place-items:center;color:#fff;font-weight:800;box-shadow:0 0 0 1px rgba(255,255,255,.12) inset}
       .nav-links{display:flex;gap:16px;margin-left:auto}
       .button{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--border);color:var(--text);background:var(--panel);padding:10px 14px;border-radius:10px;cursor:pointer}
       .button.primary{background:linear-gradient(135deg, var(--primary-2), var(--primary));border-color:transparent;color:#fff}
@@ -27,7 +28,7 @@
       .subtitle{color:var(--muted);font-size:18px;max-width:54ch}
       .cta{display:flex;gap:12px;margin-top:18px}
       .panel{background:var(--panel);border:1px solid var(--border);border-radius:16px;padding:18px}
-      .hero-demo{aspect-ratio:16/10;border-radius:16px;border:1px dashed var(--border);display:grid;place-items:center;color:var(--muted);}
+      .hero-demo{aspect-ratio:16/10;border-radius:16px;border:1px dashed var(--border);display:grid;place-items:center;color:var(--muted);animation:floaty 6s ease-in-out infinite}
       .section{padding:44px 0}
       .section h2{margin:0 0 10px;font-size:28px}
       .muted{color:var(--muted)}
@@ -43,10 +44,24 @@
       .price .strike{color:var(--muted);text-decoration:line-through;margin-right:8px}
       .list{display:grid;gap:6px;margin:12px 0 16px}
       .foot{padding:28px 0 40px;color:var(--muted);border-top:1px solid var(--border)}
+      /* Mockup */
+      .mock{padding:16px;background:rgba(20,24,33,.6);border:1px solid var(--border);border-radius:14px;box-shadow:0 10px 30px rgba(0,0,0,.25);animation:floaty 7s ease-in-out infinite .5s}
+      .mock .winbar{display:flex;gap:6px;padding:8px}
+      .dot{width:9px;height:9px;border-radius:50%;background:#2b2f3b}
+      .mock-grid{display:grid;grid-template-columns:260px 1fr;gap:12px;padding:12px}
+      .sb{border:1px solid var(--border);border-radius:12px;min-height:240px;background:linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,.02))}
+      .main{border:1px solid var(--border);border-radius:12px;min-height:240px;padding:10px;display:grid;grid-template-columns: repeat(3,1fr);gap:10px;background:linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,.01))}
+      .card{height:80px;border:1px solid var(--border);border-radius:10px;background:rgba(255,255,255,.04)}
+      /* Animations */
+      @keyframes floaty{0%{transform:translateY(0)}50%{transform:translateY(-6px)}100%{transform:translateY(0)}}
+      .fade-in{opacity:0;transform:translateY(10px);transition:opacity .6s ease, transform .6s ease}
+      .fade-in.visible{opacity:1;transform:none}
       @media (max-width: 960px){ .hero .grid{grid-template-columns:1fr} .features,.how,.pricing{grid-template-columns:1fr} .title{font-size:32px} }
     </style>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.157.0/build/three.min.js"></script>
   </head>
   <body>
+    <canvas id="bg"></canvas>
     <nav class="nav">
       <div class="container nav-inner">
         <div class="brand"><div class="logo">H</div><div>HIve Spaces</div></div>
@@ -75,6 +90,24 @@
         </div>
       </div>
     </header>
+
+    <section class="section">
+      <div class="container">
+        <h2 class="fade-in">What the app looks like</h2>
+        <div class="muted fade-in" style="margin-bottom:16px">A compact layout with a left Library and a right AI side panel.</div>
+        <div class="mock fade-in">
+          <div class="winbar"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+          <div class="mock-grid">
+            <div class="sb"></div>
+            <div class="main">
+              <div class="card"></div><div class="card"></div><div class="card"></div>
+              <div class="card"></div><div class="card"></div><div class="card"></div>
+              <div class="card"></div><div class="card"></div><div class="card"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
 
     <section id="features" class="section">
       <div class="container">
@@ -170,6 +203,41 @@
 
     <script>
       document.getElementById('y').textContent = new Date().getFullYear();
+      // Fade-in on scroll
+      const io = new IntersectionObserver((entries)=>{
+        for(const e of entries){ if(e.isIntersecting) e.target.classList.add('visible'); }
+      }, { threshold:.12 });
+      document.querySelectorAll('.fade-in').forEach(el=>io.observe(el));
+
+      // Minimal Three.js particles background (inspired by techniques like those showcased at particle-love) 
+      // Ref: http://particle-love.com/
+      const canvas = document.getElementById('bg');
+      const scene = new THREE.Scene();
+      const camera = new THREE.PerspectiveCamera(60, innerWidth/innerHeight, 0.1, 1000);
+      camera.position.z = 42;
+      const renderer = new THREE.WebGLRenderer({ canvas, antialias:true, alpha:true });
+      renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+      renderer.setSize(innerWidth, innerHeight);
+      const geometry = new THREE.BufferGeometry();
+      const COUNT = 900;
+      const positions = new Float32Array(COUNT * 3);
+      for (let i=0;i<COUNT;i++){
+        const r = 48 * Math.random();
+        const a = Math.random()*Math.PI*2;
+        const b = Math.random()*Math.PI;
+        positions[i*3+0] = r * Math.cos(a) * Math.sin(b);
+        positions[i*3+1] = r * Math.sin(a) * Math.sin(b);
+        positions[i*3+2] = r * Math.cos(b);
+      }
+      geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+      const material = new THREE.PointsMaterial({ color: 0x7a8cff, size: 0.06, transparent:true, opacity:0.8, depthWrite:false });
+      const points = new THREE.Points(geometry, material);
+      scene.add(points);
+      let t = 0; let mx = 0, my = 0;
+      window.addEventListener('mousemove', (e)=>{ mx = (e.clientX/innerWidth - .5) * 2; my = (e.clientY/innerHeight - .5) * 2; });
+      function onResize(){ camera.aspect = innerWidth/innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); }
+      addEventListener('resize', onResize);
+      (function animate(){ t+=0.0016; points.rotation.y = t*2; points.rotation.x = t*.8; camera.position.x = mx*2; camera.position.y = -my*1.5; renderer.render(scene, camera); requestAnimationFrame(animate); })();
     </script>
   </body>
   </html>
