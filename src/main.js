@@ -75,7 +75,7 @@ app.innerHTML = `
     <main class="main panel">
       <div class="topbar">
         <div class="search" role="search">
-          <input placeholder="Search in space 'Giannandrea's Library'" id="globalSearch" />
+          <input placeholder="Search in your library" id="globalSearch" />
           <button class="go-btn" id="goBtn" title="Go">Go</button>
         </div>
         <button class="button ghost" id="toggleChatBtn" title="Toggle side panel"><svg class="icon"><use href="#split"></use></svg></button>
