@@ -5,8 +5,7 @@ export function util_getEnv(key, promptLabel){
   if (winVal) return winVal;
   // Vite build-time envs (public) – prefer VITE_ prefix
   try {
-    // eslint-disable-next-line no-undef
-    const viteEnv = (typeof import !== 'undefined' && typeof import.meta !== 'undefined') ? import.meta.env : undefined;
+    const viteEnv = (typeof import.meta !== 'undefined' && import.meta && import.meta.env) ? import.meta.env : undefined;
     if (viteEnv){
       const viaVitePrefixed = viteEnv['VITE_'+key];
       if (viaVitePrefixed) return viaVitePrefixed;
