@@ -41,10 +41,11 @@ app.innerHTML = `
 
       <button class="button" id="createSpaceBtn" style="width:100%"><svg class="icon"><use href="#plus"></use></svg> Create a new space</button>
 
-      <div class="promo panel" style="border-radius:12px">
+      <div class="promo panel" style="border-radius:12px; position:relative">
         <strong>Upgrade to HIve Pro</strong>
         <div class="muted">Unlimited savings & co‑pilot, 30 h/month YouTube transcription, Claude 3.5 Sonnet</div>
         <button class="button" style="justify-self:start">Learn more</button>
+        <button class="button" id="startTourBtn" style="position:absolute; right:12px; top:12px">Guide</button>
       </div>
 
       <div class="muted" style="font-size:12px">Database: Connected</div>
@@ -119,6 +120,12 @@ askBtn?.addEventListener('click', ()=>{
   if (appRoot){ appRoot.classList.remove('chat-closed'); appRoot.classList.add('chat-open'); }
   if (scrim){ scrim.style.display='block'; }
   setTimeout(()=>{ try{ document.getElementById('chatInput')?.focus(); }catch{} }, 0);
+});
+
+// Tour trigger
+document.getElementById('startTourBtn')?.addEventListener('click', async()=>{
+  const { startDefaultTour } = await import('./ui/tour.js');
+  startDefaultTour();
 });
 
 // Meeting Intelligence button -> modal

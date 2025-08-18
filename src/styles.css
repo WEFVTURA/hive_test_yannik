@@ -168,6 +168,22 @@ a { color: inherit; text-decoration: none; }
 .toasts{position:fixed; right:18px; bottom:18px; display:grid; gap:8px; z-index:200}
 .toast{background:var(--panel); border:1px solid var(--border); color:var(--text); padding:10px 12px; border-radius:10px; box-shadow:var(--shadow)}
 
+/* Tour */
+.tour-scrim{position:fixed; inset:0; background:rgba(0,0,0,.35); z-index:300}
+.tour-pop{position:absolute; display:grid; gap:8px; width:min(320px, 92vw); background:var(--panel); border:1px solid var(--border); border-radius:12px; box-shadow:var(--shadow); padding:12px; z-index:310}
+.tour-pop::after{content:""; position:absolute; width:0; height:0}
+.tour-pop.pos-right::after{left:-8px; top:14px; border-top:8px solid transparent; border-bottom:8px solid transparent; border-right:8px solid var(--panel)}
+.tour-pop.pos-left::after{right:-8px; top:14px; border-top:8px solid transparent; border-bottom:8px solid transparent; border-left:8px solid var(--panel)}
+.tour-pop.pos-top::after{left:14px; bottom:-8px; border-left:8px solid transparent; border-right:8px solid transparent; border-top:8px solid var(--panel)}
+.tour-pop.pos-bottom::after{left:14px; top:-8px; border-left:8px solid transparent; border-right:8px solid transparent; border-bottom:8px solid var(--panel)}
+.tour-head{display:flex; align-items:center; gap:8px; font-weight:700}
+.tour-title{font-weight:700}
+.tour-actions{display:flex; justify-content:flex-end; gap:8px}
+
+/* Spotlight pulse */
+@keyframes pulseRing{0%{box-shadow:0 0 0 0 rgba(122,140,255,.6)}70%{box-shadow:0 0 0 10px rgba(122,140,255,0)}100%{box-shadow:0 0 0 0 rgba(122,140,255,0)}}
+.tour-spot{position:absolute; pointer-events:none; border:2px solid var(--accent); border-radius:12px; z-index:305; animation:pulseRing 1.6s ease-out infinite}
+
 /* Notes editor */
 .note-row{border:1px solid var(--border); border-radius:10px; padding:10px; background:var(--panel); display:grid; gap:8px}
 .note-head{display:flex; align-items:center; justify-content:space-between; gap:10px}
