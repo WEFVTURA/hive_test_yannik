@@ -32,11 +32,15 @@ app.innerHTML = `
           <div class="muted" style="font-size:12px">Ask HIve</div>
         </div>
         <div class="spacer"></div>
-        <button class="button ghost" id="authToggleBtn" title="Sign in / Sign out"></button>
+        <button class="button ghost" id="authToggleBtn" title="Sign out" aria-label="Sign out" style="position:relative">
+          <svg class="icon"><use href="#exit"></use></svg>
+          <span id="logoutHint" style="display:none; position:absolute; top:100%; right:0; margin-top:6px; background:var(--panel-2); border:1px solid var(--border); padding:6px 8px; border-radius:8px; font-size:12px; color:var(--text)">Log out</span>
+        </button>
       </div>
 
       <button class="button primary" id="askHiveBtn" style="width:100%"><svg class="icon"><use href="#spark"></use></svg> Ask HIve</button>
       <button class="button" id="meetingBtn" style="width:100%"><svg class="icon"><use href="#spark"></use></svg> Meeting Intelligence</button>
+      <button class="button" id="deepResearchBtn" style="width:100%"><svg class="icon"><use href="#search"></use></svg> Deep Research</button>
 
       <div class="section">Giannandrea's Library</div>
       <div class="nav-group" id="spacesList"></div>
@@ -131,6 +135,9 @@ authToggleBtn?.addEventListener('click', async()=>{
     else { renderAuth(content); }
   }catch{ renderAuth(content); }
 });
+// Hover hint for logout icon
+authToggleBtn?.addEventListener('mouseenter', ()=>{ const h=document.getElementById('logoutHint'); if(h) h.style.display='block'; });
+authToggleBtn?.addEventListener('mouseleave', ()=>{ const h=document.getElementById('logoutHint'); if(h) h.style.display='none'; });
 openSettings2?.setAttribute('tabindex','0');
 openProfileBtn?.setAttribute('tabindex','0');
 openAuthBtn?.setAttribute('tabindex','0');
@@ -199,6 +206,20 @@ meetingBtn?.addEventListener('click', async ()=>{
     if (error) throw error;
     window.showToast && window.showToast('HIVE bot joining meeting');
   }catch(e){ window.showToast && window.showToast('Failed to send bot'); }
+});
+
+// Deep Research button -> open chat side panel in Perplexity mode
+const deepResearchBtn = document.getElementById('deepResearchBtn');
+deepResearchBtn?.addEventListener('click', ()=>{
+  const appRoot = document.getElementById('appRoot');
+  if (appRoot){ appRoot.classList.remove('chat-closed'); appRoot.classList.add('chat-open'); }
+  setTimeout(()=>{
+    try{
+      const modeSel = document.querySelector('#chatRoot #queryMode');
+      if (modeSel){ modeSel.value = 'pplx'; modeSel.dispatchEvent(new Event('change')); }
+      document.getElementById('chatInput')?.focus();
+    }catch{}
+  }, 0);
 });
 
 // Create Space button -> prompt name and create
@@ -322,7 +343,7 @@ async function ensureAuth(){
     const btn = document.getElementById('authToggleBtn'); if (btn){ btn.textContent = 'Sign in'; }
     return;
   }
-  const btn = document.getElementById('authToggleBtn'); if (btn){ btn.textContent = 'Log out'; }
+  const btn = document.getElementById('authToggleBtn'); if (btn){ btn.setAttribute('title','Sign out'); }
   await ensureBaselineSpaces();
   await hydrateProfileUI();
   await maybeRunOnboardingTour();

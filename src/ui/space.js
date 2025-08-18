@@ -13,6 +13,7 @@ export async function renderSpace(root, spaceId){
     db_listNotes(spaceId).catch(()=>[]),
   ]);
 
+  const isDeepResearch = /deep research/i.test(space.name||'');
   root.innerHTML = `
     <div class="content-head">
       <div class="title" style="display:flex; align-items:center; gap:10px">
@@ -25,6 +26,11 @@ export async function renderSpace(root, spaceId){
         <select id="visibilitySel" class="button ghost" style="background:transparent; border:1px solid var(--border); border-radius:8px; padding:6px 8px">
           <option value="private">Private</option>
           <option value="team">Team</option>
+          <option value="public">Public</option>
+        </select>
+        <select id="visibilitySel" class="button ghost" style="background:transparent; border:1px solid var(--border); border-radius:8px; padding:6px 8px">
+          <option value="private">Private</option>
+          <option value="team">Team</option>
           <option value="shared">Shared</option>
         </select>
         <button class="button ghost" id="coverBtn" title="Change cover">Cover</button>
@@ -33,6 +39,7 @@ export async function renderSpace(root, spaceId){
       </div>
     </div>
     <div class="card-grid space-2col">
+      ${isDeepResearch ? '' : `
       <section class="lib-card">
         <div style="font-weight:600; margin-bottom:6px">Files</div>
         <div style="display:flex; gap:8px; margin-bottom:6px">
@@ -41,7 +48,7 @@ export async function renderSpace(root, spaceId){
           <button class="button" id="uploadAudioBtn">Transcribe audio</button>
         </div>
         <div id="filesList" style="display:grid; gap:8px"></div>
-      </section>
+      </section>`}
       <section class="lib-card">
         <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px">
           <div style="font-weight:600">Notes</div>
@@ -61,7 +68,13 @@ export async function renderSpace(root, spaceId){
 
   // Visibility selector
   const visSel = root.querySelector('#visibilitySel');
-  if (visSel){ visSel.value = space.visibility || 'private'; visSel.addEventListener('change', async ()=>{ await db_updateSpace(spaceId, { visibility: visSel.value }); }); }
+  if (visSel){
+    visSel.value = (space.visibility||'private');
+    visSel.addEventListener('change', async ()=>{
+      await db_updateSpace(spaceId, { visibility: visSel.value });
+      // TODO: if visibility === 'public', ensure content is included in global public search index
+    });
+  }
 
   // Share via email
   root.querySelector('#shareBtn').addEventListener('click', async ()=>{

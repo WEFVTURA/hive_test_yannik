@@ -13,7 +13,7 @@
       *{box-sizing:border-box}
       html,body{margin:0;padding:0;background:linear-gradient(180deg,#0d1017 0%, #0f1219 30%, #0d1017 100%);color:var(--text);font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;}
       a{color:inherit;text-decoration:none}
-      canvas#bg{position:fixed;inset:0;z-index:-1;display:block}
+      canvas#bg{position:fixed;inset:0;z-index:0;display:block;pointer-events:none}
       .container{max-width:1120px;margin:0 auto;padding:24px}
       .nav{position:sticky;top:0;backdrop-filter: blur(10px);background:rgba(10,12,18,.55);border-bottom:1px solid var(--border);z-index:10}
       .nav-inner{display:flex;align-items:center;gap:18px;}
@@ -52,6 +52,7 @@
       .sb{border:1px solid var(--border);border-radius:12px;min-height:240px;background:linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,.02))}
       .main{border:1px solid var(--border);border-radius:12px;min-height:240px;padding:10px;display:grid;grid-template-columns: repeat(3,1fr);gap:10px;background:linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,.01))}
       .card{height:80px;border:1px solid var(--border);border-radius:10px;background:rgba(255,255,255,.04)}
+      .mock-img{width:100%;height:100%;object-fit:cover;border-radius:10px;border:1px solid var(--border)}
       /* Animations */
       @keyframes floaty{0%{transform:translateY(0)}50%{transform:translateY(-6px)}100%{transform:translateY(0)}}
       .fade-in{opacity:0;transform:translateY(10px);transition:opacity .6s ease, transform .6s ease}
@@ -95,11 +96,11 @@
       <div class="container">
         <h2 class="fade-in">What the app looks like</h2>
         <div class="muted fade-in" style="margin-bottom:16px">A compact layout with a left Library and a right AI side panel.</div>
-        <div class="mock fade-in">
+        <div class="mock fade-in" id="mock">
           <div class="winbar"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
           <div class="mock-grid">
             <div class="sb"></div>
-            <div class="main">
+            <div class="main" id="mockMain">
               <div class="card"></div><div class="card"></div><div class="card"></div>
               <div class="card"></div><div class="card"></div><div class="card"></div>
               <div class="card"></div><div class="card"></div><div class="card"></div>
@@ -209,7 +210,7 @@
       }, { threshold:.12 });
       document.querySelectorAll('.fade-in').forEach(el=>io.observe(el));
 
-      // Minimal Three.js particles background (inspired by techniques like those showcased at particle-love) 
+      // Minimal Three.js particles background (inspired by techniques like those showcased at particle-love)
       // Ref: http://particle-love.com/
       const canvas = document.getElementById('bg');
       const scene = new THREE.Scene();
@@ -238,6 +239,15 @@
       function onResize(){ camera.aspect = innerWidth/innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); }
       addEventListener('resize', onResize);
       (function animate(){ t+=0.0016; points.rotation.y = t*2; points.rotation.x = t*.8; camera.position.x = mx*2; camera.position.y = -my*1.5; renderer.render(scene, camera); requestAnimationFrame(animate); })();
+
+      // Optional: replace mock grid with your screenshot via ?mock=<img_url>
+      try{
+        const u = new URLSearchParams(location.search).get('mock');
+        if (u){
+          const main = document.getElementById('mockMain');
+          main.innerHTML = `<img class="mock-img" src="${decodeURIComponent(u)}" alt="App screenshot" />`;
+        }
+      }catch{}
     </script>
   </body>
   </html>

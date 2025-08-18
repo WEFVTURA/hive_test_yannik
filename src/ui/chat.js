@@ -32,6 +32,7 @@ export function renderChat(root){
               <option value="direct">Direct (concat notes)</option>
               <option value="fts">FTS (BM25)</option>
               <option value="sql" selected>SQL (notes)</option>
+              <option value="pplx">Perplexity (deep research)</option>
             </select></span>
           </div>
           <div style="display:flex; gap:8px; align-items:center">
@@ -126,7 +127,7 @@ export function renderChat(root){
     const started = performance.now();
     try{
       if (model === 'Mistral'){
-        const r = await fetch('https://lmrnnfjuytygomdfujhs.supabase.co/functions/v1/mistral-chat', { method:'POST', headers:{ 'Content-Type':'application/json', 'Authorization': `Bearer ${anon}`, 'apikey': anon }, body: JSON.stringify({ prompt, model:'mistral-medium-latest' }) });
+        const r = await fetch('/api/mistral-chat', { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ prompt, model:'mistral-medium-latest' }) });
         const j = await r.json(); if(!r.ok){ throw new Error(j?.error||'mistral error'); } if(ragDebugEl){ ragDebugEl.textContent += `\nModel latency: ${Math.round(performance.now()-started)}ms`; } return j.reply||'';
       } else {
         const r = await fetch('https://lmrnnfjuytygomdfujhs.supabase.co/functions/v1/openai-chat', { method:'POST', headers:{ 'Content-Type':'application/json', 'Authorization': `Bearer ${anon}`, 'apikey': anon }, body: JSON.stringify({ prompt, model:'gpt-4o-mini', openai_api_key: (window.OPENAI_API_KEY||'') }) });
@@ -206,6 +207,46 @@ export function renderChat(root){
         const sqlPrompt = await queryViaSQL(scopeVal, text);
         prompt = sqlPrompt;
         if (ragDebugEl){ ragDebugEl.style.display='block'; ragDebugEl.textContent = `SQL mode | scope: ${scopeVal} | length: ${sqlPrompt.length}`; }
+      } else if (qMode==='pplx'){
+        if (ragDebugEl){ ragDebugEl.style.display='block'; ragDebugEl.textContent = 'Perplexity deep research…'; }
+        // Dev fallback (localhost): call Perplexity directly using env from .env.local (VITE_PERPLEXITY)
+        let reply = 'Error contacting Perplexity';
+        const host = location.hostname||''; const isLocal = /localhost|127\.|\.local$/i.test(host);
+        if (isLocal){
+          try{
+            const apiKey = util_getEnv('PERPLEXITY','PERPLEXITY');
+            if (apiKey){
+              const sys = 'You are a research assistant. Do a deep, multi-step investigation with sources and a concise report.';
+              const rr = await fetch('https://api.perplexity.ai/chat/completions', { method:'POST', headers:{ 'Authorization': `Bearer ${apiKey}`, 'Content-Type':'application/json' }, body: JSON.stringify({ model:'pplx-70b-online', temperature:0.3, messages:[{role:'system',content:sys},{role:'user',content:text}] }) });
+              const jj = await rr.json().catch(()=>({})); if (rr.ok) reply = (jj?.choices?.[0]?.message?.content)||reply;
+            }
+          }catch{}
+        }
+        if (reply==='Error contacting Perplexity'){
+          const r = await fetch('/api/pplx-research', { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ question: text }) }).catch(()=>null);
+          if (r && r.ok){ const j = await r.json().catch(()=>({})); reply = j.reply||reply; }
+        }
+        const sb = getSupabase();
+        // Choose space: current scope or default to private user scratch space (create if missing)
+        let targetSpaceId = scopeSel?.value || 'ALL';
+        if (!targetSpaceId || targetSpaceId==='ALL'){
+          const spaces = await db_listSpaces().catch(()=>[]);
+          let priv = spaces.find(s=>/deep research/i.test(s.name||''));
+          if(!priv){ priv = await (await import('../lib/supabase.js')).db_createSpace('Deep Researches').catch(()=>null); }
+          targetSpaceId = priv?.id || spaces?.[0]?.id || null;
+        }
+        if (targetSpaceId){
+          const { db_createNote, db_updateNote } = await import('../lib/supabase.js');
+          const n = await db_createNote(targetSpaceId).catch(()=>null);
+          if (n){
+            await db_updateNote(n.id, { title: `Research: ${text.slice(0,64)}`, content: reply });
+            // Trigger RAG index for immediate discoverability
+            try{ const { getPrefs } = await import('./settings.js'); const prefs = getPrefs(); await (await import('../lib/rag.js')).ragIndex(targetSpaceId, [{ source_type:'note', source_id:n.id, content:`Research: ${text}\n${reply}` }], prefs.searchProvider); }catch{}
+          }
+        }
+        history = history.concat([{ role:'assistant', content: reply }]); renderMessages();
+        try{ const c = parseInt(localStorage.getItem('hive_reqs')||'0',10)||0; localStorage.setItem('hive_reqs', String(c+1)); }catch{}
+        return;
       } else {
         const started = performance.now();
         const useOpenAI = prefs.searchProvider === 'openai';
