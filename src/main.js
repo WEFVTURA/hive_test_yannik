@@ -345,6 +345,7 @@ async function ensureAuth(){
   }
   const btn = document.getElementById('authToggleBtn'); if (btn){ btn.setAttribute('title','Sign out'); }
   await ensureBaselineSpaces();
+  await migrateResearchSpaces();
   await hydrateProfileUI();
   await maybeRunOnboardingTour();
 })();
@@ -400,6 +401,17 @@ async function ensureBaselineSpaces(){
     else { localStorage.setItem('hive_meetings_space_id', hasMeetings.id); }
     if (!hasChats){ const s2 = await db_createSpace('Chats'); localStorage.setItem('hive_chats_space_id', s2.id); }
     else { localStorage.setItem('hive_chats_space_id', hasChats.id); }
+  }catch{}
+}
+
+// One-off migration: rename legacy "Private Research" to "Deep Researches"
+async function migrateResearchSpaces(){
+  try{
+    const spaces = await db_listSpaces().catch(()=>[]);
+    const legacy = spaces.find(s=> /private\s+research/i.test(s.name||''));
+    if (legacy && legacy.name !== 'Deep Researches'){
+      await db_updateSpace(legacy.id, { name: 'Deep Researches' }).catch(()=>{});
+    }
   }catch{}
 }
 
