@@ -145,6 +145,19 @@ export async function db_listNotes(spaceId){
   const { data, error } = await sb.from('notes').select('*').eq('space_id', spaceId).order('updated_at', { ascending: false });
   if (error) throw error; return data;
 }
+
+// Stats helpers (simple, last 30 days)
+export async function stats_summary(){
+  const sb = getSupabase();
+  const since = new Date(Date.now() - 30*24*3600*1000).toISOString();
+  const files = (await sb.from('files').select('id, created_at').gte('created_at', since)).data || [];
+  const notes = (await sb.from('notes').select('id, created_at').gte('created_at', since)).data || [];
+  // Heuristic: notes with titles containing '(transcribing…)' or titles like 'Call ...' likely from transcripts.
+  const transcriptNotes = notes.filter(n=>/call|transcrib/i.test(n.title||''));
+  // Minutes: estimate by 140 words/min if note has word count; fallback 0. (Simple client-side calc)
+  const minutes = transcriptNotes.reduce((acc,n)=>{ const words=(n.content||'').split(/\s+/).filter(Boolean).length; return acc + Math.round(words/140); }, 0);
+  return { filesUploaded: files.length, notesCreated: notes.length, transcribedMinutes: minutes, researchRequests: (parseInt(localStorage.getItem('hive_reqs')||'0',10)||0) };
+}
 export async function db_createNote(spaceId){
   const sb = getSupabase();
   const { data, error } = await sb.from('notes').insert({ space_id: spaceId, title: 'Untitled', content: '' }).select('*').single();

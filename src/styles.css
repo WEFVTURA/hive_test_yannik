@@ -133,6 +133,12 @@ body{margin:0; background:var(--bg); color:var(--text); font:14px/1.45 ui-sans-s
 .icon{width:18px; height:18px; display:inline-block; vertical-align:middle}
 .card-icon{width:28px; height:28px}
 
+/* Chats list rows */
+.chat-row{display:flex; align-items:center; justify-content:space-between; border:1px solid var(--border); padding:4px 8px; border-radius:8px; height:36px; overflow:hidden; background:var(--panel)}
+.chat-row:hover{background:var(--panel-2)}
+.chat-row > div:first-child{min-width:0}
+.chat-row .muted{font-size:11px}
+
 /* Responsive */
 @media (max-width: 1200px){
   .app{grid-template-columns: 220px 1fr 6px var(--chatWidth, 360px)}

@@ -42,6 +42,7 @@ export function renderChat(root){
           </div>
           <div class="input" style="display:flex; align-items:center; gap:10px; border:1px solid var(--border); background:var(--panel); border-radius:12px; padding:8px">
             <input id="chatInput" placeholder="Type your question" style="flex:1; background:transparent; border:0; color:var(--text); outline:none; padding:8px"/>
+            <button class="button" id="askBtn">Ask</button>
             <div class="pill" id="modelBtn">${prefs.defaultModel} ▾</div>
           </div>
         </div>
@@ -180,9 +181,7 @@ export function renderChat(root){
     return `${sys}\n\nNotes:\n${hay}\n\nQuestion: ${question}`;
   }
 
-  chatInput.addEventListener('keydown', async (e)=>{
-    if (e.key==='Enter' && !e.shiftKey){
-      e.preventDefault();
+  async function submitQuestion(){
       const text = (chatInput.value||'').trim(); if(!text) return; chatInput.value='';
       history = history.concat([{ role:'user', content:text }]); renderMessages();
       const scopeVal = scopeSel ? scopeSel.value : 'ALL';
@@ -222,8 +221,11 @@ export function renderChat(root){
       const msg = { role:'assistant', content: reply };
       history = history.concat([msg]);
       renderMessages();
-    }
-  });
+      try{ const c = parseInt(localStorage.getItem('hive_reqs')||'0',10)||0; localStorage.setItem('hive_reqs', String(c+1)); }catch{}
+  }
+
+  chatInput.addEventListener('keydown', async (e)=>{ if (e.key==='Enter' && !e.shiftKey){ e.preventDefault(); await submitQuestion(); } });
+  root.querySelector('#askBtn').addEventListener('click', submitQuestion);
 
   renderMessages();
 
@@ -251,18 +253,22 @@ export async function renderChatsSpace(root){
   root.innerHTML = `
     <div class="content-head">
       <div class="title"><h2>Chats</h2></div>
-      <div class="view-controls"><button class="button" id="newChatBtn">New chat</button></div>
+      <div class="view-controls"><button class="button" id="backBtn">Back</button><button class="button" id="newChatBtn">New chat</button></div>
     </div>
-    <div id="chatsList" style="display:grid; gap:8px"></div>`;
+    <ul id="chatsList" style="display:flex; flex-direction:column; gap:2px; padding:0; margin:0; list-style:none"></ul>`;
   const listEl = root.querySelector('#chatsList');
   if (!list.length){ listEl.innerHTML = '<div class="empty">No saved chats yet</div>'; return; }
-  listEl.innerHTML = list.map(c=>`<div style='display:flex; align-items:center; justify-content:space-between; border:1px solid var(--border); padding:10px; border-radius:10px'>
-    <div><div style='font-weight:600'>${c.title||'Untitled chat'}</div><div class='muted' style='font-size:12px'>${c.scope||'ALL'} · ${new Date(c.updated_at||c.created_at).toLocaleString()}</div></div>
-    <div style='display:flex; gap:8px'>
-      <button class='button' data-open='${c.id}'>Open</button>
-      <button class='button ghost' data-del='${c.id}'>Delete</button>
+  listEl.innerHTML = list.map(c=>`<li class='chat-row'>
+    <div style='min-width:0'>
+      <div style='font-weight:600; font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis'>${c.title||'Untitled chat'}</div>
+      <div class='muted' style='font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis'>${c.scope||'ALL'} · ${new Date(c.updated_at||c.created_at).toLocaleString()}</div>
     </div>
-  </div>`).join('');
+    <div style='display:flex; gap:6px'>
+      <button class='button sm' data-open='${c.id}'>Open</button>
+      <button class='button sm ghost' data-del='${c.id}'>Delete</button>
+    </div>
+  </li>`).join('');
+  root.querySelector('#backBtn').addEventListener('click', ()=>{ window.location.hash=''; });
   listEl.querySelectorAll('[data-open]').forEach(btn=>btn.addEventListener('click', ()=>{ window.hiveOpenChatById && window.hiveOpenChatById(btn.getAttribute('data-open')); }));
   listEl.querySelectorAll('[data-del]').forEach(btn=>btn.addEventListener('click', async ()=>{
     const id = btn.getAttribute('data-del');

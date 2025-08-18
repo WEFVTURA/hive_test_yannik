@@ -51,13 +51,13 @@ app.innerHTML = `
       <button class="button" id="bulkIndexAll" style="width:100%">Bulk Index All</button>
 
       <div class="meter">
-        <div class="row"><span>YT transcript</span><span class="muted">0m / 2h</span></div>
-        <div class="bar" data-val="15"><span></span></div>
-        <div class="row"><span>Materials upload</span><span class="muted">0 / 30</span></div>
+        <div class="row"><span>Transcribed minutes</span><span class="muted" id="statMinutes">0</span></div>
         <div class="bar" data-val="0"><span></span></div>
-        <div class="row"><span>Assistant requests</span><span class="muted">0 / 50</span></div>
+        <div class="row"><span>Files uploaded</span><span class="muted" id="statFiles">0</span></div>
         <div class="bar" data-val="0"><span></span></div>
-        <div class="row"><span>Research requests</span><span class="muted">0 / 0</span></div>
+        <div class="row"><span>Notes created</span><span class="muted" id="statNotes">0</span></div>
+        <div class="bar" data-val="0"><span></span></div>
+        <div class="row"><span>Research requests</span><span class="muted" id="statRequests">0</span></div>
         <div class="bar" data-val="0"><span></span></div>
       </div>
 
@@ -244,6 +244,17 @@ async function ensureAuth(){
 
 // Bootstrap auth early (restore from cookies first to avoid re-login on refresh)
 (async()=>{ await auth_restoreFromCookies(); await ensureAuth(); await ensureBaselineSpaces(); await hydrateProfileUI(); })();
+// Load stats
+(async()=>{
+  try{
+    const { stats_summary } = await import('./lib/supabase.js');
+    const s = await stats_summary();
+    const mEl = document.getElementById('statMinutes'); if(mEl) mEl.textContent = `${s.transcribedMinutes}m`;
+    const fEl = document.getElementById('statFiles'); if(fEl) fEl.textContent = String(s.filesUploaded);
+    const nEl = document.getElementById('statNotes'); if(nEl) nEl.textContent = String(s.notesCreated);
+    const rEl = document.getElementById('statRequests'); if(rEl) rEl.textContent = String(s.researchRequests);
+  }catch{}
+})();
 
 // Hydrates sidebar avatar and name from Supabase profile
 async function hydrateProfileUI(){
