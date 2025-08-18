@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>HIve Spaces — A Shared Brain for Organizations</title>
+    <meta name="description" content="Spaces helps teams and communities build a real-time shared brain across docs, meetings, and files. Ask HIve to query your live knowledge base." />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=2" />
+    <style>
+      :root{
+        --bg:#0f1219; --text:#e8ebf7; --muted:#9aa3b2; --panel:rgba(20,24,33,.6); --border:rgba(255,255,255,.08); --primary:#7a8cff; --primary-2:#4f6af2;
+      }
+      *{box-sizing:border-box}
+      html,body{margin:0;padding:0;background:linear-gradient(180deg,#0d1017 0%, #0f1219 30%, #0d1017 100%);color:var(--text);font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;}
+      a{color:inherit;text-decoration:none}
+      .container{max-width:1120px;margin:0 auto;padding:24px}
+      .nav{position:sticky;top:0;backdrop-filter: blur(10px);background:rgba(10,12,18,.55);border-bottom:1px solid var(--border);z-index:10}
+      .nav-inner{display:flex;align-items:center;gap:18px;}
+      .brand{display:flex;align-items:center;gap:10px;font-weight:800}
+      .brand .logo{width:28px;height:28px;border-radius:8px;background:linear-gradient(135deg,#5a83f2,#7b61ff);display:grid;place-items:center;color:#fff;font-weight:800}
+      .nav-links{display:flex;gap:16px;margin-left:auto}
+      .button{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--border);color:var(--text);background:var(--panel);padding:10px 14px;border-radius:10px;cursor:pointer}
+      .button.primary{background:linear-gradient(135deg, var(--primary-2), var(--primary));border-color:transparent;color:#fff}
+      .hero{padding:72px 0 36px;}
+      .hero .grid{display:grid;grid-template-columns: 1.1fr .9fr;gap:28px;align-items:center}
+      .title{font-size:40px;line-height:1.15;font-weight:800;margin:0 0 12px}
+      .subtitle{color:var(--muted);font-size:18px;max-width:54ch}
+      .cta{display:flex;gap:12px;margin-top:18px}
+      .panel{background:var(--panel);border:1px solid var(--border);border-radius:16px;padding:18px}
+      .hero-demo{aspect-ratio:16/10;border-radius:16px;border:1px dashed var(--border);display:grid;place-items:center;color:var(--muted);}
+      .section{padding:44px 0}
+      .section h2{margin:0 0 10px;font-size:28px}
+      .muted{color:var(--muted)}
+      .features{display:grid;grid-template-columns: repeat(3,1fr);gap:16px}
+      .feature{padding:16px;border:1px solid var(--border);border-radius:14px;background:rgba(20,24,33,.6)}
+      .feature h3{margin:0 0 6px;font-size:18px}
+      .how{display:grid;grid-template-columns: repeat(3,1fr);gap:16px}
+      .step{position:relative;padding:16px;border:1px solid var(--border);border-radius:14px;background:rgba(20,24,33,.6)}
+      .step .num{position:absolute;top:10px;right:12px;color:var(--muted)}
+      .pricing{display:grid;grid-template-columns: repeat(3,1fr);gap:16px}
+      .price{padding:18px;border:1px solid var(--border);border-radius:14px;background:rgba(20,24,33,.6)}
+      .price .big{font-size:34px;font-weight:900}
+      .price .strike{color:var(--muted);text-decoration:line-through;margin-right:8px}
+      .list{display:grid;gap:6px;margin:12px 0 16px}
+      .foot{padding:28px 0 40px;color:var(--muted);border-top:1px solid var(--border)}
+      @media (max-width: 960px){ .hero .grid{grid-template-columns:1fr} .features,.how,.pricing{grid-template-columns:1fr} .title{font-size:32px} }
+    </style>
+  </head>
+  <body>
+    <nav class="nav">
+      <div class="container nav-inner">
+        <div class="brand"><div class="logo">H</div><div>HIve Spaces</div></div>
+        <div class="nav-links">
+          <a href="#features" class="muted">Features</a>
+          <a href="#use" class="muted">Use cases</a>
+          <a href="#pricing" class="muted">Pricing</a>
+          <a href="/" class="button">Sign in</a>
+          <a href="/" class="button primary">Open the app</a>
+        </div>
+      </div>
+    </nav>
+
+    <header class="hero">
+      <div class="container">
+        <div class="grid">
+          <div>
+            <h1 class="title">A shared, real‑time brain for your organization</h1>
+            <div class="subtitle">Spaces unifies documentation, meetings, and files into a scalable repository of knowledge. Your team can ask HIve and get answers grounded in your live data.</div>
+            <div class="cta">
+              <a href="/" class="button primary">Start now</a>
+              <a href="#pricing" class="button">See pricing</a>
+            </div>
+          </div>
+          <div class="panel hero-demo">Live knowledge graph • RAG + FTS • Ask HIve</div>
+        </div>
+      </div>
+    </header>
+
+    <section id="features" class="section">
+      <div class="container">
+        <h2>Why Spaces</h2>
+        <div class="muted" style="margin-bottom:16px">Built for teams, research groups, communities, and networks.</div>
+        <div class="features">
+          <div class="feature">
+            <h3>One place for everything</h3>
+            <div class="muted">Docs, uploads, links, audio transcripts and meeting notes—organized by Spaces with tags and sharing.</div>
+          </div>
+          <div class="feature">
+            <h3>Ask HIve with confidence</h3>
+            <div class="muted">Hybrid retrieval (RAG + BM25 FTS) returns cited context from your content so answers are explainable.</div>
+          </div>
+          <div class="feature">
+            <h3>Scales across orgs</h3>
+            <div class="muted">Works for a single team or across multiple organizations to evolve a shared brain and speed up decisions.</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="container">
+        <h2>How it works</h2>
+        <div class="how">
+          <div class="step"><div class="num">1</div><strong>Capture</strong><div class="muted">Drag & drop files, connect meetings, add links and notes. Automatic transcription and extraction included.</div></div>
+          <div class="step"><div class="num">2</div><strong>Organize</strong><div class="muted">Spaces, tags, and sharing keep knowledge tidy. Indexing powers fast semantic and full‑text search.</div></div>
+          <div class="step"><div class="num">3</div><strong>Ask HIve</strong><div class="muted">Use chat to query your knowledge in real time. Answers include relevant snippets and sources.</div></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="use" class="section">
+      <div class="container">
+        <h2>Use cases</h2>
+        <div class="features">
+          <div class="feature"><h3>Organizations</h3><div class="muted">Unify onboarding, policies, specs, and meeting intel. Fewer repeated questions, faster execution.</div></div>
+          <div class="feature"><h3>Scientific research</h3><div class="muted">Share datasets and literature across labs. Build living reviews and query across teams.</div></div>
+          <div class="feature"><h3>Communities & networks</h3><div class="muted">Aggregate collective knowledge and distribute it at incredible speed to members.</div></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="pricing" class="section">
+      <div class="container">
+        <h2>Simple pricing</h2>
+        <div class="muted" style="margin-bottom:16px">Premium is <strong>50% off</strong> during beta.</div>
+        <div class="pricing">
+          <div class="price">
+            <div style="font-weight:800;margin-bottom:6px">Free</div>
+            <div class="big">$0</div>
+            <div class="list muted">
+              <div>• 300 minutes transcription</div>
+              <div>• 100 research requests</div>
+              <div>• Shared spaces up to 5 people</div>
+            </div>
+            <a href="/" class="button" style="width:100%">Get started</a>
+          </div>
+          <div class="price" style="box-shadow:0 0 0 2px rgba(122,140,255,.15) inset">
+            <div style="display:flex;align-items:center;justify-content:space-between">
+              <div style="font-weight:800;margin-bottom:6px">Premium</div>
+              <div class="muted" style="font-size:12px">Beta 50% off</div>
+            </div>
+            <div style="display:flex;align-items:baseline;gap:6px"><span class="strike">$38</span><div class="big">$19</div><div class="muted">/month</div></div>
+            <div class="list muted">
+              <div>• 1800 minutes of audio + meetings</div>
+              <div>• Unlimited research requests (Mistral Large)</div>
+              <div>• Share Spaces with up to 100 people</div>
+            </div>
+            <a href="/" class="button primary" style="width:100%">Try Premium</a>
+          </div>
+          <div class="price">
+            <div style="font-weight:800;margin-bottom:6px">Enterprise</div>
+            <div class="big">Custom</div>
+            <div class="list muted">
+              <div>• SSO, audit logs, custom retention</div>
+              <div>• Private models / on‑prem options</div>
+              <div>• Priority support</div>
+            </div>
+            <a href="mailto:info@fvtura.com" class="button" style="width:100%">Contact sales</a>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <footer class="foot">
+      <div class="container" style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
+        <div class="muted">© <span id="y"></span> HIve Spaces</div>
+        <div class="muted">Built for thoughtful teams.</div>
+      </div>
+    </footer>
+
+    <script>
+      document.getElementById('y').textContent = new Date().getFullYear();
+    </script>
+  </body>
+  </html>
+
+
