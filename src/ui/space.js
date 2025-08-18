@@ -13,7 +13,8 @@ export async function renderSpace(root, spaceId){
     db_listNotes(spaceId).catch(()=>[]),
   ]);
 
-  const isDeepResearch = /deep research/i.test(space.name||'');
+  const researchId = (typeof localStorage!=='undefined') ? localStorage.getItem('hive_research_space_id') : '';
+  const isDeepResearch = (researchId && space.id===researchId) || /deep research/i.test(space.name||'');
   root.innerHTML = `
     <div class="content-head">
       <div class="title" style="display:flex; align-items:center; gap:10px">
@@ -23,22 +24,12 @@ export async function renderSpace(root, spaceId){
       </div>
       <div class="view-controls">
         <button class="button ghost" id="shareBtn" title="Share">Share</button>
-        <select id="visibilitySel" class="button ghost" style="background:transparent; border:1px solid var(--border); border-radius:8px; padding:6px 8px">
-          <option value="private">Private</option>
-          <option value="team">Team</option>
-          <option value="public">Public</option>
-        </select>
-        <select id="visibilitySel" class="button ghost" style="background:transparent; border:1px solid var(--border); border-radius:8px; padding:6px 8px">
-          <option value="private">Private</option>
-          <option value="team">Team</option>
-          <option value="shared">Shared</option>
-        </select>
         <button class="button ghost" id="coverBtn" title="Change cover">Cover</button>
         <button class="button ghost" id="reindexBtn" title="Reindex for AI">Reindex</button>
         <button class="button ghost" id="backBtn">Back</button>
       </div>
     </div>
-    <div class="card-grid space-2col">
+    <div class="card-grid ${isDeepResearch ? '' : 'space-2col'}">
       ${isDeepResearch ? '' : `
       <section class="lib-card">
         <div style="font-weight:600; margin-bottom:6px">Files</div>
@@ -49,7 +40,7 @@ export async function renderSpace(root, spaceId){
         </div>
         <div id="filesList" style="display:grid; gap:8px"></div>
       </section>`}
-      <section class="lib-card">
+      <section class="lib-card" style="${isDeepResearch ? 'grid-column:1/-1' : ''}">
         <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px">
           <div style="font-weight:600">Notes</div>
           <button class="button" id="addNoteBtn">New note</button>
@@ -66,15 +57,7 @@ export async function renderSpace(root, spaceId){
     await db_updateSpace(spaceId, { name: newName }).catch(alert);
   });
 
-  // Visibility selector
-  const visSel = root.querySelector('#visibilitySel');
-  if (visSel){
-    visSel.value = (space.visibility||'private');
-    visSel.addEventListener('change', async ()=>{
-      await db_updateSpace(spaceId, { visibility: visSel.value });
-      // TODO: if visibility === 'public', ensure content is included in global public search index
-    });
-  }
+  // Visibility selector removed from header; managed via card/menu elsewhere
 
   // Share via email
   root.querySelector('#shareBtn').addEventListener('click', async ()=>{
@@ -242,7 +225,12 @@ export async function renderSpace(root, spaceId){
   }
 
   // Buttons
-  root.querySelector('#backBtn').addEventListener('click', ()=>{ window.location.hash=''; });
+  root.querySelector('#backBtn').addEventListener('click', ()=>{
+    try{ const inp = document.getElementById('globalSearch'); if (inp){ inp.value=''; inp.dispatchEvent(new Event('input')); } }catch{}
+    if (location.hash !== ''){ location.hash=''; }
+    else { try{ window.dispatchEvent(new HashChangeEvent('hashchange')); }catch{} }
+    window.scrollTo({ top:0, behavior:'smooth' });
+  });
   root.querySelector('#addNoteBtn').addEventListener('click', async()=>{ const nn = await db_createNote(spaceId); collapsedState.set(nn.id, false); renderSpace(root, spaceId); });
   root.querySelector('#reindexBtn').addEventListener('click', async()=>{
     const { getPrefs } = await import('./settings.js');

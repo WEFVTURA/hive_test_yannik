@@ -262,8 +262,38 @@ async function renderLibrary(){
     </div>
     <div class="nav-items" id="navItems"></div>`;
   const navItems = document.getElementById('navItems');
-  navItems.innerHTML = spaces.slice(0,4).map(s=>`<div class="nav-item" data-id="${s.id}"><div style="display:flex; align-items:center; gap:8px"><svg class="icon"><use href="#book"></use></svg><span>${s.name}</span></div><svg class="icon"><use href="#chev-right"></use></svg></div>`).join('');
+  navItems.innerHTML = spaces.slice(0,4).map(s=>`<div class="nav-item" data-id="${s.id}"><div style="display:flex; align-items:center; gap:8px"><svg class="icon"><use href="#book"></use></svg><span>${s.name}</span></div><button class="button ghost sm" data-space-menu="${s.id}" title="Options">⋯</button></div>`).join('');
   navItems.querySelectorAll('[data-id]').forEach(el=>{ el.addEventListener('click', ()=>{ location.hash = 'space/'+el.getAttribute('data-id'); }); });
+  // Prevent row navigation when clicking the options button
+  navItems.querySelectorAll('[data-space-menu]').forEach(btn=>{
+    btn.addEventListener('click', async (e)=>{
+      e.stopPropagation();
+      const id = btn.getAttribute('data-space-menu');
+      const space = spaces.find(s=>s.id===id);
+      if (!space) return;
+      const { openModalWithExtractor } = await import('./ui/modals.js');
+      const body = `
+        <div class='field'><label>Name</label><input id='spName' value='${space.name||''}' /></div>
+        <div class='field'><label>Visibility</label>
+          <select id='spVis'>
+            <option value='private' ${space.visibility==='private'?'selected':''}>Private</option>
+            <option value='team' ${space.visibility==='team'?'selected':''}>Team</option>
+            <option value='public' ${space.visibility==='public'?'selected':''}>Public</option>
+          </select>
+        </div>
+        <div class='muted' style='font-size:12px'>Danger zone</div>
+        <button class='button red' id='spDelete'>Delete space</button>`;
+      const res = await openModalWithExtractor('Space options', body, (root)=>({ name: root.querySelector('#spName')?.value||'', vis: root.querySelector('#spVis')?.value||space.visibility||'private', del: root.querySelector('#spDelete')?.dataset?.clicked==='1' }));
+      const scrim = document.getElementById('modalScrim');
+      scrim?.querySelector('#spDelete')?.addEventListener('click', ()=>{ scrim.querySelector('#spDelete').dataset.clicked='1'; });
+      if (!res.ok) return;
+      const { name, vis, del } = res.values || {};
+      const sb = await import('./lib/supabase.js');
+      if (del){ await (await import('./lib/supabase.js')).db_updateSpace(id, { deleted_at: new Date().toISOString() }).catch(()=>{}); }
+      else { if (name && name!==space.name) await sb.db_updateSpace(id, { name }); if (vis && vis!==space.visibility) await sb.db_updateSpace(id, { visibility: vis }); }
+      renderRoute();
+    });
+  });
 
   const grid = document.getElementById('grid');
   // Promote baseline spaces first
@@ -348,6 +378,8 @@ async function ensureAuth(){
   await migrateResearchSpaces();
   await hydrateProfileUI();
   await maybeRunOnboardingTour();
+  // Re-render route to reflect possible space renames (e.g., Private Research -> Deep Researches)
+  try{ await renderRoute(); }catch{}
 })();
 // Load stats
 (async()=>{
@@ -397,10 +429,13 @@ async function ensureBaselineSpaces(){
     const spaces = await db_listSpaces().catch(()=>[]);
     const hasMeetings = spaces.find(s=> (s.name||'').toLowerCase()==='meetings');
     const hasChats = spaces.find(s=> (s.name||'').toLowerCase()==='chats');
+    const hasResearch = spaces.find(s=> /deep research/i.test(s.name||''));
     if (!hasMeetings){ const s = await db_createSpace('Meetings'); localStorage.setItem('hive_meetings_space_id', s.id); }
     else { localStorage.setItem('hive_meetings_space_id', hasMeetings.id); }
     if (!hasChats){ const s2 = await db_createSpace('Chats'); localStorage.setItem('hive_chats_space_id', s2.id); }
     else { localStorage.setItem('hive_chats_space_id', hasChats.id); }
+    if (!hasResearch){ const s3 = await db_createSpace('Deep Researches'); localStorage.setItem('hive_research_space_id', s3.id); }
+    else { localStorage.setItem('hive_research_space_id', hasResearch.id); }
   }catch{}
 }
 
@@ -411,6 +446,7 @@ async function migrateResearchSpaces(){
     const legacy = spaces.find(s=> /private\s+research/i.test(s.name||''));
     if (legacy && legacy.name !== 'Deep Researches'){
       await db_updateSpace(legacy.id, { name: 'Deep Researches' }).catch(()=>{});
+      try{ localStorage.setItem('hive_research_space_id', legacy.id); }catch{}
     }
   }catch{}
 }
