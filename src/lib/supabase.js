@@ -5,9 +5,7 @@ const DEFAULT_SUPABASE_URL = 'https://lmrnnfjuytygomdfujhs.supabase.co';
 const DEFAULT_SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imxtcm5uZmp1eXR5Z29tZGZ1amhzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTE3MjQ3NTMsImV4cCI6MjA2NzMwMDc1M30.BFj_fQyHX-vAwd65RQrZpq0TU2B87BfdRVrIcXuAv10';
 
 export function util_getEnv(key, promptLabel){
-  const winVal = window[key];
-  if (winVal) return winVal;
-  // Vite build-time envs (public) – prefer VITE_ prefix
+  // Production-safe: only trust build-time envs so we don't accidentally use stale window/localStorage
   try {
     const viteEnv = (typeof import.meta !== 'undefined' && import.meta && import.meta.env) ? import.meta.env : undefined;
     if (viteEnv){
@@ -17,10 +15,7 @@ export function util_getEnv(key, promptLabel){
       if (viaViteDirect) return viaViteDirect;
     }
   } catch {}
-  const lsKey = `HIve_${key}`;
-  const fromLs = localStorage.getItem(lsKey);
-  if (fromLs) return fromLs;
-  // No prompt in modular app; return empty string
+  // No dynamic overrides
   return '';
 }
 

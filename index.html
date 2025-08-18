@@ -7,11 +7,7 @@
     <link rel="stylesheet" href="/src/styles.css" />
     <link rel="icon" type="image/svg+xml" sizes="any" href="/favicon.svg?v=2" />
     <link rel="mask-icon" href="/favicon.svg?v=2" color="#7a8cff" />
-    <script type="module">
-      // Bridge Vite envs into runtime window for client code
-      window.SUPABASE_URL = import.meta.env?.VITE_SUPABASE_URL || window.SUPABASE_URL || '';
-      window.SUPABASE_ANON_KEY = import.meta.env?.VITE_SUPABASE_ANON_KEY || window.SUPABASE_ANON_KEY || '';
-    </script>
+    <!-- No client-side overrides for Supabase credentials in production -->
   </head>
   <body>
     <div id="app"></div>
