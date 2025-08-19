@@ -40,6 +40,14 @@ const prefs = getPrefs();
 const app = document.getElementById('app');
 app.innerHTML = `
   <div class="app" id="appRoot">
+    <div class="mobile-header">
+      <button class="button mobile-only" id="mobileMenuBtn" style="display:none"><svg class="icon"><use href="#folder"></use></svg></button>
+      <div class="brand">${prefs.profileName}</div>
+      <div style="display:flex; gap:6px">
+        <button class="button mobile-only" id="openChatMobile" style="display:none"><svg class="icon"><use href="#chat"></use></svg> Chat</button>
+        <button class="button mobile-only" id="openSettingsMobile" style="display:none"><svg class="icon"><use href="#settings"></use></svg></button>
+      </div>
+    </div>
     <aside class="sidebar panel">
       <div class="profile">
         <div class="avatar">G</div>
@@ -111,6 +119,8 @@ app.innerHTML = `
     <aside class="right panel" id="chatPanel">
       <div id="chatRoot"></div>
     </aside>
+    <div class="mobile-drawer" id="mobileDrawer" aria-hidden="true"></div>
+    <div class="mobile-scrim" id="mobileScrim" aria-hidden="true"></div>
   </div>`;
 
 const content = document.getElementById('content');
@@ -274,6 +284,26 @@ document.getElementById('openChatMobile')?.addEventListener('click', ()=>{
   const appRoot = document.getElementById('appRoot');
   if (appRoot){ appRoot.classList.add('chat-open'); appRoot.classList.remove('chat-closed'); }
 });
+
+// Mobile drawer with spaces
+const mobileMenuBtn = document.getElementById('mobileMenuBtn');
+const mobileDrawer = document.getElementById('mobileDrawer');
+const mobileScrim = document.getElementById('mobileScrim');
+function closeDrawer(){ mobileDrawer.classList.remove('open'); mobileScrim.classList.remove('show'); mobileDrawer.setAttribute('aria-hidden','true'); mobileScrim.setAttribute('aria-hidden','true'); }
+function openDrawer(){ mobileDrawer.classList.add('open'); mobileScrim.classList.add('show'); mobileDrawer.setAttribute('aria-hidden','false'); mobileScrim.setAttribute('aria-hidden','false'); }
+mobileMenuBtn?.addEventListener('click', async()=>{
+  // Populate drawer with spaces list on open
+  try{
+    mobileDrawer.innerHTML = '<div class="muted" style="font-size:12px">Spaces</div><div id="drawerSpaces" style="display:grid; gap:8px"></div>';
+    const spaces = await db_listSpaces().catch(()=>[]);
+    const container = mobileDrawer.querySelector('#drawerSpaces');
+    container.innerHTML = spaces.map(s=>`<button class='button' data-go='${s.id}' style='justify-content:flex-start'>${s.name}</button>`).join('');
+    container.querySelectorAll('[data-go]').forEach(btn=>btn.addEventListener('click', ()=>{ location.hash='space/'+btn.getAttribute('data-go'); closeDrawer(); }));
+  }catch{}
+  openDrawer();
+});
+mobileScrim?.addEventListener('click', closeDrawer);
+document.getElementById('openSettingsMobile')?.addEventListener('click', ()=>{ closeDrawer(); openSettingsModal(); });
 
 // Create Space button -> prompt name and create
 const createSpaceBtn = document.getElementById('createSpaceBtn');

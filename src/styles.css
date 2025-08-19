@@ -41,6 +41,9 @@ body{margin:0; background:var(--bg); color:var(--text); font:14px/1.45 ui-sans-s
 
 .app{display:grid; grid-template-columns: 260px 1fr 6px var(--chatWidth, 360px); gap:12px; height:100vh; padding:12px}
 .app.chat-closed{grid-template-columns: 260px 1fr}
+.mobile-header{display:none; align-items:center; justify-content:space-between; gap:8px; position:sticky; top:0; z-index:50; padding:10px 12px; background:var(--panel); border-bottom:1px solid var(--border)}
+.mobile-header .brand{font-weight:700}
+.mobile-header .button{padding:8px 10px}
 .panel{background:var(--panel); border:1px solid var(--border); border-radius:var(--radius); box-shadow:var(--shadow)}
 .sidebar{display:flex; flex-direction:column; padding:14px; gap:12px}
 .prefs{display:grid; gap:8px}
@@ -211,7 +214,14 @@ body{margin:0; background:var(--bg); color:var(--text); font:14px/1.45 ui-sans-s
   .app.chat-open .main{display:none}
   .app.chat-open .right{display:grid}
   .mobile-only{display:inline-flex !important}
+  .mobile-header{display:flex}
 }
+
+/* Mobile drawer */
+.mobile-drawer{position:fixed; inset:0 30% 0 0; transform:translateX(-100%); background:var(--panel); border-right:1px solid var(--border); z-index:80; display:flex; flex-direction:column; padding:12px; gap:8px; transition:transform .2s ease}
+.mobile-drawer.open{transform:translateX(0)}
+.mobile-scrim{position:fixed; inset:0; background:rgba(0,0,0,.35); z-index:70; display:none}
+.mobile-scrim.show{display:block}
 
 a { color: inherit; text-decoration: none; }
 .kbd{font: 12px/1.2 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; background: var(--panel-2); border:1px solid var(--border); padding:2px 6px; border-radius:6px}
