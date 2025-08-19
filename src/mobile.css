@@ -1,0 +1,29 @@
+.app{grid-template-columns:1fr; padding:8px}
+.sidebar{display:none}
+.splitter{display:none}
+.right{display:grid}
+.mobile-header{display:flex; padding:4px 8px}
+.mobile-header .brand{font-size:14px}
+.mobile-header .button{padding:6px 8px; border-radius:8px}
+.mobile-header .icon{width:16px; height:16px}
+.mobile-only{display:inline-flex !important}
+.hide-mobile,.mobile-hidden{display:none !important}
+
+/* Chat-first layout */
+.main{display:none}
+.app.chat-closed .right{display:none}
+.app.chat-closed .main{display:grid}
+
+/* Space view: single panel with tabs */
+#spaceTabs{display:flex; gap:8px; padding:8px 0}
+#spaceTabs .button{flex:1; justify-content:center}
+.card-grid{grid-template-columns:1fr}
+.lib-card{display:none}
+.lib-card.mobile-open{display:flex; max-height:calc(100vh - 180px); overflow:auto}
+.lib-card.mobile-open .note-editor,.lib-card.mobile-open .note-rich,.lib-card.mobile-open #filesList{min-height:calc(100vh - 240px)}
+
+/* Typography tweaks for mobile */
+body{font-size:15px}
+.button{padding:10px 12px}
+.icon{width:18px; height:18px}
+

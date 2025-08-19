@@ -41,11 +41,12 @@ const app = document.getElementById('app');
 app.innerHTML = `
   <div class="app" id="appRoot">
     <div class="mobile-header">
-      <button class="button mobile-only" id="mobileMenuBtn" style="display:none"><svg class="icon"><use href="#folder"></use></svg></button>
+      <button class="button mobile-only" id="mobileMenuBtn"><i data-lucide="menu" class="icon" aria-hidden="true"></i></button>
       <div class="brand">${prefs.profileName}</div>
-      <div style="display:flex; gap:6px">
-        <button class="button mobile-only" id="openChatMobile" style="display:none"><svg class="icon"><use href="#chat"></use></svg> Chat</button>
-        <button class="button mobile-only" id="openSettingsMobile" style="display:none"><svg class="icon"><use href="#settings"></use></svg></button>
+      <div style="display:flex; gap:6px; align-items:center">
+        <span id="layoutBadge" class="badge mobile-only" style="display:inline-block">Web</span>
+        <button class="button mobile-only" id="openChatMobile"><i data-lucide="message-square" class="icon" aria-hidden="true"></i> Chat</button>
+        <button class="button mobile-only" id="openSettingsMobile"><i data-lucide="settings" class="icon" aria-hidden="true"></i></button>
       </div>
     </div>
     <aside class="sidebar panel">
@@ -53,7 +54,7 @@ app.innerHTML = `
         <div class="avatar">G</div>
         <div>
           <div class="brand">${prefs.profileName}</div>
-          <div class="muted" style="font-size:12px">Ask HIve</div>
+          <div class="muted" style="font-size:12px">Ask Hive</div>
         </div>
         <div class="spacer"></div>
         <button class="button ghost" id="authToggleBtn" title="Sign out" aria-label="Sign out" style="position:relative">
@@ -62,11 +63,12 @@ app.innerHTML = `
         </button>
       </div>
 
-      <button class="button primary" id="askHiveBtn" style="width:100%"><svg class="icon"><use href="#spark"></use></svg> Ask HIve</button>
+      <button class="button primary" id="askHiveBtn" style="width:100%"><svg class="icon"><use href="#spark"></use></svg> Ask Hive</button>
       <button class="button" id="meetingBtn" style="width:100%"><svg class="icon"><use href="#spark"></use></svg> Meeting Intelligence</button>
       <button class="button" id="deepResearchBtn" style="width:100%"><svg class="icon"><use href="#search"></use></svg> Deep Research</button>
       <button class="button" id="quickNewNoteBtn" style="width:100%"><svg class="icon"><use href="#edit"></use></svg> New Note</button>
-      <button class="button mobile-only" id="openChatMobile" style="display:none; width:100%"><svg class="icon"><use href="#chat"></use></svg> Open Chat</button>
+      <button class="button" id="simplifiedViewBtn" style="width:100%"><i data-lucide="smartphone" class="icon" aria-hidden="true"></i> Simplified view</button>
+      
 
       <div class="section">Giannandrea's Library</div>
       <div class="nav-group" id="spacesList"></div>
@@ -74,7 +76,7 @@ app.innerHTML = `
       <button class="button" id="createSpaceBtn" style="width:100%"><svg class="icon"><use href="#plus"></use></svg> Create a new space</button>
 
       <div class="promo panel" style="border-radius:12px; position:relative">
-        <strong>Upgrade to HIve Pro</strong>
+        <strong>Upgrade to Hive Pro</strong>
         <div class="muted">Up to 1800 minutes of audio transcriptions and meetings</div>
         <div class="muted">Unlimited research requests (with Mistral Large)</div>
         <button class="button" id="learnMoreBtn" style="justify-self:start">Learn more</button>
@@ -101,7 +103,6 @@ app.innerHTML = `
         
         <div class="pref-item" id="toggleTheme"><svg class="icon"><use href="#sun"></use></svg> <span>Light mode</span></div>
         <div class="pref-item" id="openGuide"><svg class="icon"><use href="#sliders"></use></svg> <span>Guide</span></div>
-        <div class="pref-item" id="resetApp"><svg class="icon"><use href="#edit"></use></svg> <span>Reset app state</span></div>
         <div class="pref-item" id="openAuth"><svg class="icon"><use href="#user"></use></svg> <span>Sign in / Sign up</span></div>
       </div>
     </aside>
@@ -121,7 +122,15 @@ app.innerHTML = `
     </aside>
     <div class="mobile-drawer" id="mobileDrawer" aria-hidden="true"></div>
     <div class="mobile-scrim" id="mobileScrim" aria-hidden="true"></div>
+    <div class="simplified-dock" id="simplifiedDock" style="display:none">
+      <button class="button" id="dockMenuBtn"><i data-lucide="menu" class="icon" aria-hidden="true"></i></button>
+      <button class="button" id="dockLibraryBtn"><i data-lucide="book" class="icon" aria-hidden="true"></i></button>
+      <button class="button" id="dockSettingsBtn"><i data-lucide="settings" class="icon" aria-hidden="true"></i></button>
+    </div>
   </div>`;
+try{ window.lucide && window.lucide.createIcons(); }catch{}
+// Disable legacy mobile stylesheet; Simplified view will handle mobile
+try{ const m=document.getElementById('mobileCss'); if(m){ m.setAttribute('media','not all'); m.disabled=true; m.setAttribute('data-forced','0'); } }catch{}
 
 const content = document.getElementById('content');
 const chatRoot = document.getElementById('chatRoot');
@@ -171,15 +180,11 @@ authToggleBtn?.addEventListener('mouseleave', ()=>{ const h=document.getElementB
 openSettings2?.setAttribute('tabindex','0');
 openProfileBtn?.setAttribute('tabindex','0');
 openAuthBtn?.setAttribute('tabindex','0');
-resetAppBtn?.setAttribute('tabindex','0');
+// resetApp removed from UI; keep no-op to avoid errors if present
 openSettings2?.addEventListener('keydown', (e)=>{ if(e.key==='Enter' || e.key===' '){ e.preventDefault(); openSettingsModal(); } });
 openProfileBtn?.addEventListener('keydown', (e)=>{ if(e.key==='Enter' || e.key===' '){ e.preventDefault(); openProfileModal(); } });
 openAuthBtn?.addEventListener('keydown', (e)=>{ if(e.key==='Enter' || e.key===' '){ e.preventDefault(); renderAuth(content); } });
-resetAppBtn?.addEventListener('click', ()=>{
-  try{ localStorage.clear(); sessionStorage.clear(); }catch{}
-  try{ document.cookie = 'sb_access_token=; Max-Age=0; Path=/'; document.cookie = 'sb_refresh_token=; Max-Age=0; Path=/'; }catch{}
-  location.reload();
-});
+resetAppBtn && resetAppBtn.remove();
  
 
 // Learn more modal
@@ -279,10 +284,10 @@ quickNewNoteBtn?.addEventListener('click', async ()=>{
   }catch{}
 });
 
-// Mobile: open chat quickly
+// Mobile: open chat quickly (removed if not used)
 document.getElementById('openChatMobile')?.addEventListener('click', ()=>{
-  const appRoot = document.getElementById('appRoot');
-  if (appRoot){ appRoot.classList.add('chat-open'); appRoot.classList.remove('chat-closed'); }
+  const appRoot = document.getElementById('appRoot'); if (!appRoot) return;
+  appRoot.classList.add('chat-open'); appRoot.classList.remove('chat-closed');
 });
 
 // Mobile drawer with spaces
@@ -291,19 +296,196 @@ const mobileDrawer = document.getElementById('mobileDrawer');
 const mobileScrim = document.getElementById('mobileScrim');
 function closeDrawer(){ mobileDrawer.classList.remove('open'); mobileScrim.classList.remove('show'); mobileDrawer.setAttribute('aria-hidden','true'); mobileScrim.setAttribute('aria-hidden','true'); }
 function openDrawer(){ mobileDrawer.classList.add('open'); mobileScrim.classList.add('show'); mobileDrawer.setAttribute('aria-hidden','false'); mobileScrim.setAttribute('aria-hidden','false'); }
-mobileMenuBtn?.addEventListener('click', async()=>{
-  // Populate drawer with spaces list on open
+async function populateSpacesDrawer(){
   try{
     mobileDrawer.innerHTML = '<div class="muted" style="font-size:12px">Spaces</div><div id="drawerSpaces" style="display:grid; gap:8px"></div>';
     const spaces = await db_listSpaces().catch(()=>[]);
     const container = mobileDrawer.querySelector('#drawerSpaces');
     container.innerHTML = spaces.map(s=>`<button class='button' data-go='${s.id}' style='justify-content:flex-start'>${s.name}</button>`).join('');
-    container.querySelectorAll('[data-go]').forEach(btn=>btn.addEventListener('click', ()=>{ location.hash='space/'+btn.getAttribute('data-go'); closeDrawer(); }));
+    container.querySelectorAll('[data-go]').forEach(btn=>btn.addEventListener('click', ()=>{
+      const sid = btn.getAttribute('data-go');
+      const chatsId = localStorage.getItem('hive_chats_space_id')||'';
+      const appRoot = document.getElementById('appRoot');
+      if (appRoot){
+        const isChatSpace = sid===chatsId;
+        appRoot.classList.toggle('chat-open', isChatSpace);
+        appRoot.classList.toggle('chat-closed', !isChatSpace);
+      }
+      location.hash='space/'+sid; closeDrawer();
+    }));
   }catch{}
-  openDrawer();
-});
+}
+mobileMenuBtn?.addEventListener('click', async()=>{ await populateSpacesDrawer(); openDrawer(); });
 mobileScrim?.addEventListener('click', closeDrawer);
 document.getElementById('openSettingsMobile')?.addEventListener('click', ()=>{ closeDrawer(); openSettingsModal(); });
+
+// Simplified dock: appears in simplified view as a bottom/upper tab for menu/library/settings
+const simplifiedDock = document.getElementById('simplifiedDock');
+const dockMenuBtn = document.getElementById('dockMenuBtn');
+const dockLibraryBtn = document.getElementById('dockLibraryBtn');
+const dockSettingsBtn = document.getElementById('dockSettingsBtn');
+dockMenuBtn?.addEventListener('click', async()=>{ 
+  // In simplified view, overlay the full sidebar instead of the small drawer
+  const isSimplified = document.documentElement.getAttribute('data-simplified')==='1';
+  const appRoot = document.getElementById('appRoot');
+  if (isSimplified && appRoot){
+    appRoot.classList.add('sidebar-overlay-open');
+    mobileScrim.classList.add('show');
+    mobileScrim.setAttribute('aria-hidden','false');
+  } else {
+    await populateSpacesDrawer(); openDrawer();
+  }
+});
+// Clicking scrim in overlay mode closes sidebar overlay
+mobileScrim?.addEventListener('click', ()=>{
+  const appRoot = document.getElementById('appRoot');
+  if (appRoot){ appRoot.classList.remove('sidebar-overlay-open'); }
+});
+dockLibraryBtn?.addEventListener('click', ()=>{ const appRoot=document.getElementById('appRoot'); if(appRoot){ appRoot.classList.add('chat-closed'); appRoot.classList.remove('chat-open'); } location.hash=''; if(typeof window.hiveRenderRoute==='function') window.hiveRenderRoute(); });
+dockSettingsBtn?.addEventListener('click', ()=>{ openSettingsModal(); });
+
+// Toggle explicit Mobile/Web view
+document.getElementById('toggleMobileView')?.addEventListener('click', ()=>{
+  const link = document.getElementById('mobileCss');
+  if (!link) return;
+  const isForced = link.getAttribute('data-forced')==='1';
+  if (isForced){
+    // Return to responsive-only
+    link.setAttribute('media','(max-width: 780px)');
+    link.setAttribute('data-forced','0');
+    try{ link.disabled = true; }catch{}
+    try{ document.documentElement.removeAttribute('data-mobile-forced'); }catch{}
+    try{ removeForceMobileStyles(); }catch{}
+    const b = document.getElementById('layoutBadge'); if (b) b.textContent = 'Web';
+    window.showToast && window.showToast('Web view');
+  } else {
+    // Force mobile stylesheet
+    link.setAttribute('media','all');
+    link.setAttribute('data-forced','1');
+    try{ link.disabled = false; }catch{}
+    try{ document.documentElement.setAttribute('data-mobile-forced','1'); }catch{}
+    try{ applyForceMobileStyles(); }catch{}
+    const b = document.getElementById('layoutBadge'); if (b) b.textContent = 'Mobile';
+    window.showToast && window.showToast('Mobile view');
+  }
+});
+
+// Simplified view toggle (also used for mobile). Applies a hard override scoped to [data-simplified="1"]
+const simplifiedBtn = document.getElementById('simplifiedViewBtn');
+simplifiedBtn?.addEventListener('click', ()=>{
+  const isOn = document.documentElement.getAttribute('data-simplified')==='1';
+  if (isOn){ removeSimplifiedStyles(); window.showToast && window.showToast('Simplified view off'); }
+  else { applySimplifiedStyles(); window.showToast && window.showToast('Simplified view on'); }
+});
+
+// Initialize badge based on current state
+(function initLayoutBadge(){
+  const b = document.getElementById('layoutBadge'); if(!b) return;
+  const isSimplified = document.documentElement.getAttribute('data-simplified')==='1';
+  if (isSimplified){ b.textContent = 'Simplified'; return; }
+  b.textContent = 'Web';
+})();
+
+// Auto-enable Simplified on small screens; disable on wide screens
+function autoSimplifiedByViewport(){
+  const isSmall = window.matchMedia('(max-width: 820px)').matches;
+  const enabled = document.documentElement.getAttribute('data-simplified')==='1';
+  if (isSmall && !enabled) applySimplifiedStyles();
+}
+window.addEventListener('resize', ()=>{ try{ autoSimplifiedByViewport(); }catch{} });
+try{ autoSimplifiedByViewport(); }catch{}
+
+// HARD OVERRIDE: Inject inline styles with highest precedence when mobile is forced
+function applyForceMobileStyles(){
+  let el = document.getElementById('forceMobileStyle');
+  if (el) return; // already applied
+  el = document.createElement('style');
+  el.id = 'forceMobileStyle';
+  el.textContent = `
+    /* Hard mobile overrides */
+    .mobile-header{display:flex !important; padding:6px 8px !important}
+    .mobile-header .brand{font-size:14px !important}
+    .mobile-header .button{padding:6px 8px !important; border-radius:8px !important}
+    .mobile-header .icon{width:16px !important; height:16px !important}
+    .sidebar{display:none !important}
+    .splitter{display:none !important}
+    .content-head{display:none !important}
+    .mobile-only{display:inline-flex !important}
+    .hide-mobile,.mobile-hidden{display:none !important}
+    .segmented{display:none !important}
+    .card-grid{grid-template-columns:1fr !important}
+    /* Chat-first on mobile */
+    .main{display:none !important}
+    .right{display:grid !important}
+    .app.chat-closed .main{display:grid !important}
+    .app.chat-closed .right{display:none !important}
+    /* Space view panels */
+    #spaceTabs{display:flex !important; gap:8px !important; padding:8px 0 !important}
+    #spaceTabs .button{flex:1 !important; justify-content:center !important}
+    #filesSection{display:none !important}
+    #notesSection{display:flex !important}
+  `;
+  document.head.appendChild(el);
+}
+function removeForceMobileStyles(){
+  const el = document.getElementById('forceMobileStyle');
+  if (el && el.parentNode) el.parentNode.removeChild(el);
+}
+
+// Applies simplified layout styles using a high-specificity attribute selector and !important rules
+function applySimplifiedStyles(){
+	let el = document.getElementById('simplifiedStyle');
+	if (!el){
+		el = document.createElement('style');
+		el.id = 'simplifiedStyle';
+		document.head.appendChild(el);
+	}
+	el.textContent = `
+		html[data-simplified="1"] .app{ grid-template-columns:1fr !important; padding:6px !important }
+		html[data-simplified="1"] .mobile-only{ display:inline-flex !important }
+		html[data-simplified="1"] .mobile-header{ display:flex !important; height:44px !important; padding:4px 8px !important; align-items:center !important; justify-content:space-between !important; background: var(--panel) !important; border-bottom:1px solid var(--border) !important }
+		html[data-simplified="1"] .mobile-header .brand{ font-size:14px !important }
+		html[data-simplified="1"] .mobile-header .button{ padding:6px 8px !important; border-radius:8px !important }
+		html[data-simplified="1"] .mobile-header .icon{ width:16px !important; height:16px !important }
+		html[data-simplified="1"] .sidebar{ display:none !important }
+		html[data-simplified="1"] .splitter{ display:none !important }
+		/* Library header visible, space header hidden */
+		html[data-simplified="1"] #content[data-view="library"] .content-head{ display:flex !important }
+		html[data-simplified="1"] #content[data-view="space"] .content-head{ display:none !important }
+		html[data-simplified="1"] .card-grid{ grid-template-columns:1fr !important }
+		html[data-simplified="1"] .right{ display:grid !important; position:fixed !important; inset:0 !important; width:100% !important; height:100% !important; padding:0 !important; border-radius:0 !important; z-index:50 !important }
+		html[data-simplified="1"] .main{ display:none !important }
+		html[data-simplified="1"] .app.chat-closed .main{ display:grid !important }
+		html[data-simplified="1"] .app.chat-closed .right{ display:none !important }
+		/* Space view panels */
+		html[data-simplified="1"] #spaceTabs{ display:flex !important; gap:8px !important; padding:8px 0 !important }
+		html[data-simplified="1"] #spaceTabs .button{ flex:1 !important; justify-content:center !important }
+		/* Keep library cards visible */
+		html[data-simplified="1"] .lib-card.mobile-open{ display:flex !important; max-height:calc(100vh - 140px) !important; overflow:auto !important }
+		html[data-simplified="1"] .lib-card.mobile-open .note-editor,
+		html[data-simplified="1"] .lib-card.mobile-open .note-rich,
+		html[data-simplified="1"] .lib-card.mobile-open #filesList{ min-height:calc(100vh - 200px) !important }
+		/* Dock: show persistent access to menu/library/settings */
+		html[data-simplified="1"] .simplified-dock{ display:flex !important; position:fixed !important; left:0 !important; right:0 !important; bottom:0 !important; z-index:90 !important; padding:8px !important; gap:8px !important; justify-content:center !important; background:var(--panel) !important; border-top:1px solid var(--border) !important }
+		/* Overlay sidebar when requested */
+		html[data-simplified="1"] .app.sidebar-overlay-open .sidebar{ display:block !important; position:fixed !important; inset:0 40% 0 0 !important; z-index:95 !important; overflow:auto !important }
+		html[data-simplified="1"] .app.sidebar-overlay-open .mobile-scrim{ display:block !important }
+	`;
+	try{ document.documentElement.setAttribute('data-simplified','1'); }catch{}
+	try{ const b=document.getElementById('layoutBadge'); if(b) b.textContent='Simplified'; }catch{}
+	try{ window.lucide && window.lucide.createIcons(); }catch{}
+	try{ localStorage.setItem('hive_simplified','1'); }catch{}
+    try{ const d=document.getElementById('simplifiedDock'); if(d) d.style.display='flex'; }catch{}
+}
+
+// Removes simplified layout styles and attribute
+function removeSimplifiedStyles(){
+	try{ document.documentElement.removeAttribute('data-simplified'); }catch{}
+	const el = document.getElementById('simplifiedStyle'); if (el && el.parentNode) el.parentNode.removeChild(el);
+	try{ const b=document.getElementById('layoutBadge'); if(b) b.textContent='Web'; }catch{}
+	try{ localStorage.removeItem('hive_simplified'); }catch{}
+    try{ const d=document.getElementById('simplifiedDock'); if(d) d.style.display='none'; }catch{}
+}
 
 // Create Space button -> prompt name and create
 const createSpaceBtn = document.getElementById('createSpaceBtn');
@@ -322,6 +504,7 @@ createSpaceBtn?.addEventListener('click', async ()=>{
 });
 
 async function renderLibrary(){
+  content.setAttribute('data-view','library');
   content.innerHTML = `
     <div class="content-head">
       <div class="title"><h2>My Library</h2></div>
@@ -437,6 +620,7 @@ async function renderRoute(){
   if (!me){ renderAuth(content); return; }
   const hash = location.hash.replace(/^#/, '');
   if (hash.startsWith('space/')){
+    content.setAttribute('data-view','space');
     const sid = hash.split('/')[1];
     const chatsId = localStorage.getItem('hive_chats_space_id')||'';
     if (sid && chatsId && sid===chatsId){ const { renderChatsSpace } = await import('./ui/chat.js'); await renderChatsSpace(content); }
@@ -495,6 +679,8 @@ async function ensureAuth(){
   await migrateResearchSpaces();
   await hydrateProfileUI();
   await maybeRunOnboardingTour();
+  // Restore simplified view if user enabled it previously
+  try{ if ((localStorage.getItem('hive_simplified')||'')==='1') applySimplifiedStyles(); }catch{}
   // Re-render route to reflect possible space renames (e.g., Private Research -> Deep Researches)
   try{ await renderRoute(); }catch{}
 })();

@@ -15,7 +15,7 @@ export function renderChat(root){
       <div class="rag-debug" id="ragDebug" style="margin-top:10px; padding:10px; background:var(--panel-2); border:1px dashed var(--border); border-radius:10px; color:var(--muted); font-size:12px; max-height:180px; overflow:auto; display:none"></div>
       <div class="composer panel">
         <div class="composer-head" style="padding:12px 14px; border-bottom:1px solid var(--border); background:var(--panel-2); display:flex; align-items:center; justify-content:space-between">
-          <div>Ask HIve assistant</div>
+          <div>Ask Hive assistant</div>
           <div style="display:flex; gap:8px">
             <button class="button ghost" id="saveChatBtn" data-tip="Save"><i data-lucide="save" class="icon" aria-hidden="true"></i></button>
             <button class="button ghost" id="openChatBtn" data-tip="History"><i data-lucide="history" class="icon" aria-hidden="true"></i></button>
@@ -209,22 +209,32 @@ export function renderChat(root){
         if (ragDebugEl){ ragDebugEl.style.display='block'; ragDebugEl.textContent = `SQL mode | scope: ${scopeVal} | length: ${sqlPrompt.length}`; }
       } else if (qMode==='pplx'){
         if (ragDebugEl){ ragDebugEl.style.display='block'; ragDebugEl.textContent = 'Perplexity deep research…'; }
-        // Dev fallback (localhost): call Perplexity directly using env from .env.local (VITE_PERPLEXITY)
+        // Prefer direct API when key is provided; else try Supabase function; last resort: local /api route
         let reply = 'Error contacting Perplexity';
-        const host = location.hostname||''; const isLocal = /localhost|127\.|\.local$/i.test(host);
-        if (isLocal){
+        try{
+          const apiKey = util_getEnv('PERPLEXITY','PERPLEXITY');
+          if (apiKey){
+            const sys = 'You are a research assistant. Do a deep, multi-step investigation with sources and a concise report.';
+            const rr = await fetch('https://api.perplexity.ai/chat/completions', { method:'POST', headers:{ 'Authorization': `Bearer ${apiKey}`, 'Content-Type':'application/json' }, body: JSON.stringify({ model:'pplx-70b-online', temperature:0.3, messages:[{role:'system',content:sys},{role:'user',content:text}] }) });
+            const jj = await rr.json().catch(()=>({})); if (rr.ok) reply = (jj?.choices?.[0]?.message?.content)||reply;
+          }
+        }catch{}
+        if (reply==='Error contacting Perplexity'){
           try{
-            const apiKey = util_getEnv('PERPLEXITY','PERPLEXITY');
-            if (apiKey){
-              const sys = 'You are a research assistant. Do a deep, multi-step investigation with sources and a concise report.';
-              const rr = await fetch('https://api.perplexity.ai/chat/completions', { method:'POST', headers:{ 'Authorization': `Bearer ${apiKey}`, 'Content-Type':'application/json' }, body: JSON.stringify({ model:'pplx-70b-online', temperature:0.3, messages:[{role:'system',content:sys},{role:'user',content:text}] }) });
-              const jj = await rr.json().catch(()=>({})); if (rr.ok) reply = (jj?.choices?.[0]?.message?.content)||reply;
+            const base = util_getEnv('SUPABASE_URL','SUPABASE_URL');
+            const anon = util_getEnv('SUPABASE_ANON_KEY','SUPABASE_ANON_KEY');
+            if (base && anon){
+              const url = `${base.replace(/\/$/,'')}/functions/v1/pplx-research`;
+              const r = await fetch(url, { method:'POST', headers:{ 'Content-Type':'application/json', 'Authorization': `Bearer ${anon}`, 'apikey': anon }, body: JSON.stringify({ question: text }) }).catch(()=>null);
+              if (r && r.ok){ const j = await r.json().catch(()=>({})); reply = j.reply||reply; }
             }
           }catch{}
         }
         if (reply==='Error contacting Perplexity'){
-          const r = await fetch('/api/pplx-research', { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ question: text }) }).catch(()=>null);
-          if (r && r.ok){ const j = await r.json().catch(()=>({})); reply = j.reply||reply; }
+          try{
+            const r = await fetch('/api/pplx-research', { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ question: text }) }).catch(()=>null);
+            if (r && r.ok){ const j = await r.json().catch(()=>({})); reply = j.reply||reply; }
+          }catch{}
         }
         const sb = getSupabase();
         // Choose space: current scope or default to private user scratch space (create if missing)

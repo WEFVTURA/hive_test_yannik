@@ -34,12 +34,16 @@ export async function renderSpace(root, spaceId){
         ${isDeepResearch ? `<button class="button ghost" id="backIconBtn" data-tip="Back" style="position:relative; z-index:70"><i data-lucide="arrow-left" class="icon" aria-hidden="true"></i></button>` : `<button class="button ghost" id="backBtn">Back</button>`}
       </div>
     </div>
+    <div id="spaceTabs" class="mobile-only" style="display:none">
+      <button class="button" id="tabFiles">Files</button>
+      <button class="button" id="tabNotes">Notes</button>
+    </div>
     <div class="card-grid ${isDeepResearch ? '' : 'space-2col'}">
       ${isDeepResearch ? '' : `
       <section class="lib-card" id="filesSection">
         <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px">
           <div style="font-weight:600">Files</div>
-          <button class="button sm ghost" id="filesCollapseBtn">Collapse</button>
+          <button class="button sm ghost mobile-hidden" id="filesCollapseBtn">Collapse</button>
         </div>
         <div id="filesActions" style="display:flex; gap:8px; margin-bottom:6px">
           <button class="button" id="addLinkBtn">Add link</button>
@@ -51,11 +55,31 @@ export async function renderSpace(root, spaceId){
       <section class="lib-card" id="notesSection" style="${isDeepResearch ? 'grid-column:1/-1' : ''}">
         <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px">
           <div style="font-weight:600">Notes</div>
-          ${isDeepResearch ? `<div style="display:flex; gap:8px"><button class="button" id="deepNewNote"><i data-lucide="file-plus" class="icon" aria-hidden="true"></i> New Note</button></div>` : `<button class="button" id="addNoteBtn">New note</button>`}
+          ${isDeepResearch ? `<div style="display:flex; gap:8px"><button class="button" id="deepNewNote"><i data-lucide="file-plus" class="icon" aria-hidden="true"></i> New Note</button></div>` : `<button class="button mobile-hidden" id="addNoteBtn">New note</button>`}
         </div>
         <div id="notesList" style="display:grid; gap:10px"></div>
       </section>
     </div>`;
+  // Mobile: tabs to toggle full-screen panels
+  (function initMobileTabs(){
+    try{
+      const tabs = root.querySelector('#spaceTabs');
+      const filesCard = root.querySelector('#filesSection');
+      const notesCard = root.querySelector('#notesSection');
+      if (!tabs || !filesCard || !notesCard) return;
+      const isMobile = window.matchMedia('(max-width: 780px)').matches;
+      if (!isMobile) return;
+      tabs.style.display='flex';
+      const show = (which)=>{
+        filesCard.classList.remove('mobile-open'); notesCard.classList.remove('mobile-open');
+        if (which==='files'){ filesCard.classList.add('mobile-open'); }
+        else { notesCard.classList.add('mobile-open'); }
+      };
+      root.querySelector('#tabFiles')?.addEventListener('click', ()=>show('files'));
+      root.querySelector('#tabNotes')?.addEventListener('click', ()=>show('notes'));
+      show('notes');
+    }catch{}
+  })();
 
   // Title rename
   // Initialize Lucide icons for dynamic content in space header
@@ -209,6 +233,12 @@ export async function renderSpace(root, spaceId){
         if (notesSection){
           notesSection.style.gridColumn = collapsed ? '1 / -1' : '';
         }
+      }catch{}
+      // On mobile, hide the entire files card instead of shrinking width
+      try{
+        const isMobile = window.matchMedia('(max-width: 780px)').matches;
+        if (isMobile){ filesSection.style.display = collapsed ? 'none' : 'flex'; }
+        else { filesSection.style.display = 'flex'; }
       }catch{}
     });
   }

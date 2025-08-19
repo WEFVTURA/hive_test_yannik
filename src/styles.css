@@ -38,6 +38,7 @@
 *{box-sizing:border-box}
 html,body{height:100%}
 body{margin:0; background:var(--bg); color:var(--text); font:14px/1.45 ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, "Apple Color Emoji","Segoe UI Emoji"}
+.mobile-only{display:none}
 
 .app{display:grid; grid-template-columns: 260px 1fr 6px var(--chatWidth, 360px); gap:12px; height:100vh; padding:12px}
 .app.chat-closed{grid-template-columns: 260px 1fr}
@@ -215,6 +216,18 @@ body{margin:0; background:var(--bg); color:var(--text); font:14px/1.45 ui-sans-s
   .app.chat-open .right{display:grid}
   .mobile-only{display:inline-flex !important}
   .mobile-header{display:flex}
+  /* Hide desktop-only controls on mobile */
+  .hide-mobile,.mobile-hidden{display:none !important}
+  .segmented{display:none}
+  /* Make space content single-column on mobile */
+  .card-grid{grid-template-columns:1fr}
+  /* Full-screen stack panels in space view */
+  #spaceTabs{display:flex; gap:8px; padding:8px 0}
+  #spaceTabs .button{flex:1; justify-content:center}
+  .lib-card{display:none}
+  .lib-card.mobile-open{display:flex; max-height:calc(100vh - 180px); overflow:auto}
+  .lib-card.mobile-open .note-editor,.lib-card.mobile-open .note-rich,.lib-card.mobile-open #filesList{min-height:calc(100vh - 240px)}
+  .content-head{display:none}
 }
 
 /* Mobile drawer */

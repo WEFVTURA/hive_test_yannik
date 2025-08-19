@@ -95,8 +95,14 @@ export async function openSettingsModal(){
 			const levels=['error','warn','info','debug'];
 			const min = lvlSel?.value||'info';
 			if (levels.indexOf(level) > levels.indexOf(min)) return;
+			const redact = (s)=>{
+				try{
+					return String(s).replace(/https?:\/\/[^\s/]+supabase\.co/gi,'<redacted-supabase>').replace(/eyJhbG[^\s"]+/g,'<redacted-token>');
+				}catch{return s}
+			};
+			const safeArgs = Array.from(args).map(a=> typeof a==='string'? redact(a) : redact(JSON.stringify(a)));
 			const line = document.createElement('div');
-			line.textContent = `[${new Date().toLocaleTimeString()}] ${level.toUpperCase()}: ` + Array.from(args).map(a=>typeof a==='string'?a:JSON.stringify(a)).join(' ');
+			line.textContent = `[${new Date().toLocaleTimeString()}] ${level.toUpperCase()}: ` + safeArgs.join(' ');
 			box.appendChild(line); box.scrollTop = box.scrollHeight;
 		}
 		const original = { log:console.log, warn:console.warn, error:console.error, info:console.info };
