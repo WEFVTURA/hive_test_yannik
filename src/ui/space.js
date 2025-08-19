@@ -90,8 +90,12 @@ export async function renderSpace(root, spaceId){
     const { name, vis, email, del } = res.values || {};
     if (del){
       if (isProtected){ window.showToast && window.showToast('Cannot delete baseline spaces (Meetings, Chats, Deep Researches)'); return; }
-      await db_updateSpace(spaceId, { deleted_at: new Date().toISOString() }).catch(()=>{});
-      window.location.hash='';
+      try{
+        await db_updateSpace(spaceId, { deleted_at: new Date().toISOString() });
+      }catch{ window.showToast && window.showToast('Delete failed'); return; }
+      // Navigate to library immediately
+      try{ location.hash = ''; }catch{}
+      try{ if (typeof window.hiveRenderRoute === 'function'){ window.hiveRenderRoute(); } }catch{}
       return;
     }
     if (name && name!==space.name) await db_updateSpace(spaceId, { name });

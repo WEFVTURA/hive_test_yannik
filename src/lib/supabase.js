@@ -143,12 +143,17 @@ export async function profile_uploadAvatar(file){
 // DB helpers
 export async function db_listSpaces(){
   const sb = getSupabase();
-  const { data, error } = await sb.from('spaces').select('*').order('created_at', { ascending: true });
+  // Exclude soft-deleted spaces (deleted_at not null)
+  const { data, error } = await sb
+    .from('spaces')
+    .select('*')
+    .is('deleted_at', null)
+    .order('created_at', { ascending: true });
   if (error) throw error; return data;
 }
 export async function db_getSpace(id){
   const sb = getSupabase();
-  const { data, error } = await sb.from('spaces').select('*').eq('id', id).single();
+  const { data, error } = await sb.from('spaces').select('*').eq('id', id).is('deleted_at', null).maybeSingle();
   if (error) throw error; return data;
 }
 export async function db_createSpace(name){
