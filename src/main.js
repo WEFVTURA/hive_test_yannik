@@ -57,6 +57,7 @@ app.innerHTML = `
       <button class="button primary" id="askHiveBtn" style="width:100%"><svg class="icon"><use href="#spark"></use></svg> Ask HIve</button>
       <button class="button" id="meetingBtn" style="width:100%"><svg class="icon"><use href="#spark"></use></svg> Meeting Intelligence</button>
       <button class="button" id="deepResearchBtn" style="width:100%"><svg class="icon"><use href="#search"></use></svg> Deep Research</button>
+      <button class="button" id="quickNewNoteBtn" style="width:100%"><svg class="icon"><use href="#edit"></use></svg> New Note</button>
 
       <div class="section">Giannandrea's Library</div>
       <div class="nav-group" id="spacesList"></div>
@@ -244,6 +245,27 @@ deepResearchBtn?.addEventListener('click', ()=>{
       document.getElementById('chatInput')?.focus();
     }catch{}
   }, 0);
+});
+
+// Quick New Note (sidebar): choose space and open rich editor
+const quickNewNoteBtn = document.getElementById('quickNewNoteBtn');
+quickNewNoteBtn?.addEventListener('click', async ()=>{
+  try{
+    const { db_listSpaces, db_createNote } = await import('./lib/supabase.js');
+    const list = await db_listSpaces().catch(()=>[]);
+    const options = list.map(s=>`<option value='${s.id}'>${s.name}</option>`).join('');
+    const body = `
+      <div class='field'><label>Target space</label><select id='tSpace' class='select' style='width:100%'>${options}</select></div>
+      <div class='field'><label>Title</label><input id='tTitle' placeholder='Untitled'></div>`;
+    const { openModalWithExtractor } = await import('./ui/modals.js');
+    const res = await openModalWithExtractor('New note', body, (root)=>({ sid: root.querySelector('#tSpace')?.value||'', title: root.querySelector('#tTitle')?.value||'' }));
+    if (!res.ok) return; const sid = res.values?.sid || list?.[0]?.id; if (!sid) return;
+    const n = await db_createNote(sid);
+    if (res.values?.title) { try{ (await import('./lib/supabase.js')).db_updateNote(n.id, { title: res.values.title }); }catch{} }
+    window.hiveFocusNoteId = n.id;
+    location.hash = 'space/'+sid;
+    if (typeof window.hiveRenderRoute === 'function') window.hiveRenderRoute();
+  }catch{}
 });
 
 // Create Space button -> prompt name and create

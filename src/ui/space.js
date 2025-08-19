@@ -375,6 +375,9 @@ export async function renderSpace(root, spaceId){
             <button class='button sm' data-cmd='insertOrderedList'>1. List</button>
             <button class='button sm' data-cmd='formatBlock' data-value='h3'>H3</button>
             <button class='button sm' data-cmd='formatBlock' data-value='p'>P</button>
+            <button class='button sm' data-cmd='createLink'>Link</button>
+            <button class='button sm' data-cmd='insertHorizontalRule'>HR</button>
+            <button class='button sm' data-cmd='formatBlock' data-value='pre'>Code</button>
             <button class='button sm' data-cmd='insertTable'>Table</button>`;
           const rich = document.createElement('div'); rich.className='note-rich'; rich.contentEditable='true';
           const textarea = document.querySelector('.note-editor'); if (textarea) rich.innerHTML = textarea.value || '';
@@ -384,6 +387,7 @@ export async function renderSpace(root, spaceId){
             btn.addEventListener('click', ()=>{
               const cmd = btn.getAttribute('data-cmd');
               if (cmd==='formatBlock'){ document.execCommand('formatBlock', false, btn.getAttribute('data-value')); }
+              else if (cmd==='createLink'){ const url = prompt('Link URL'); if (url) document.execCommand('createLink', false, url); }
               else if (cmd==='insertTable'){ document.execCommand('insertHTML', false, '<table><tr><td> </td><td> </td></tr></table>'); }
               else { document.execCommand(cmd, false, null); }
             });
