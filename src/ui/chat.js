@@ -225,7 +225,7 @@ export function renderChat(root){
             const anon = util_getEnv('SUPABASE_ANON_KEY','SUPABASE_ANON_KEY');
             if (base && anon){
               const url = `${base.replace(/\/$/,'')}/functions/v1/pplx-research`;
-              const r = await fetch(url, { method:'POST', headers:{ 'Content-Type':'application/json', 'Authorization': `Bearer ${anon}`, 'apikey': anon }, body: JSON.stringify({ question: text }) }).catch(()=>null);
+              const r = await fetch(url, { method:'POST', mode:'cors', headers:{ 'Content-Type':'application/json', 'Authorization': `Bearer ${anon}`, 'apikey': anon }, body: JSON.stringify({ question: text }) }).catch(()=>null);
               if (r && r.ok){ const j = await r.json().catch(()=>({})); reply = j.reply||reply; }
             }
           }catch{}
