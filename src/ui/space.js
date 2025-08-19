@@ -15,6 +15,10 @@ export async function renderSpace(root, spaceId){
 
   const researchId = (typeof localStorage!=='undefined') ? localStorage.getItem('hive_research_space_id') : '';
   const isDeepResearch = (researchId && space.id===researchId) || /deep research/i.test(space.name||'');
+  // Determine protected spaces for header controls
+  const meetingsIdHdr = (typeof localStorage!=='undefined') ? localStorage.getItem('hive_meetings_space_id') : '';
+  const chatsIdHdr = (typeof localStorage!=='undefined') ? localStorage.getItem('hive_chats_space_id') : '';
+  const isProtectedHeader = [meetingsIdHdr, chatsIdHdr, researchId].filter(Boolean).includes(String(spaceId));
   root.innerHTML = `
     <div class="content-head">
       <div class="title" style="display:flex; align-items:center; gap:10px">
@@ -26,6 +30,7 @@ export async function renderSpace(root, spaceId){
         <button class="button ghost" id="spaceSettingsBtn" title="Space settings">Space settings</button>
         <button class="button ghost" id="coverBtn" title="Change cover">Cover</button>
         <button class="button ghost" id="reindexBtn" title="Reindex for AI">Reindex</button>
+        ${!isProtectedHeader ? `<button class="button red" id="deleteHeaderBtn" data-tip="Delete space">Delete</button>` : ''}
         ${isDeepResearch ? `<button class="button ghost" id="backIconBtn" data-tip="Back" style="position:relative; z-index:70"><i data-lucide="arrow-left" class="icon" aria-hidden="true"></i></button>` : `<button class="button ghost" id="backBtn">Back</button>`}
       </div>
     </div>
@@ -43,7 +48,7 @@ export async function renderSpace(root, spaceId){
       <section class="lib-card" style="${isDeepResearch ? 'grid-column:1/-1' : ''}">
         <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px">
           <div style="font-weight:600">Notes</div>
-          <button class="button" id="addNoteBtn">New note</button>
+          ${isDeepResearch ? `<div style="display:flex; gap:8px"><button class="button" id="deepNewNote"><i data-lucide="file-plus" class="icon" aria-hidden="true"></i> New Note</button></div>` : `<button class="button" id="addNoteBtn">New note</button>`}
         </div>
         <div id="notesList" style="display:grid; gap:10px"></div>
       </section>
@@ -58,6 +63,17 @@ export async function renderSpace(root, spaceId){
     const newName = (titleEl.textContent||'').trim(); if(!newName || newName===space.name) return;
     await db_updateSpace(spaceId, { name: newName }).catch(alert);
   });
+
+  // Approach B: header delete button
+  const delHeader = root.querySelector('#deleteHeaderBtn');
+  if (delHeader){
+    delHeader.addEventListener('click', async ()=>{
+      if (!confirm('Delete this space?')) return;
+      try{ const { db_deleteSpace } = await import('../lib/supabase.js'); await db_deleteSpace(spaceId); console.info('Space deleted via header'); }
+      catch(e){ console.error('Delete failed', e); window.showToast && window.showToast('Delete failed'); return; }
+      try{ location.hash=''; }catch{}; try{ window.hiveRenderRoute && window.hiveRenderRoute(); }catch{};
+    });
+  }
 
   // Space settings modal (rename/visibility/delete + share)
   root.querySelector('#spaceSettingsBtn').addEventListener('click', async ()=>{
@@ -85,20 +101,65 @@ export async function renderSpace(root, spaceId){
       <button class='button red' id='spDelete' ${isProtected?'disabled':''}>${isProtected?'Cannot delete baseline space':'Delete space'}</button>`;
     const modalPromise = openModalWithExtractor('Space options', body, (root)=>({ name: root.querySelector('#spName')?.value||'', vis: root.querySelector('#spVis')?.value||space.visibility||'private', email: root.querySelector('#inviteEmail')?.value?.trim()||'', del: root.querySelector('#spDelete')?.dataset?.clicked==='1' }));
     const scrim = document.getElementById('modalScrim');
-    const delBtnEl = scrim?.querySelector('#spDelete');
-    if (delBtnEl){
-      delBtnEl.addEventListener('click', async (e)=>{
+    // Final fallback: floating, topmost Delete inside modal scrim
+    try{
+      if (scrim && !isProtected){
+        const float = document.createElement('button');
+        float.id = 'spDeleteFloat';
+        float.className = 'button red';
+        float.textContent = 'Delete';
+        float.setAttribute('style', 'position:fixed; right:18px; bottom:18px; z-index:1100; pointer-events:auto');
+        scrim.appendChild(float);
+        float.addEventListener('click', async ()=>{
+          if (!confirm('Delete this space?')) return;
+          try{
+            const headerBtn = document.getElementById('deleteHeaderBtn');
+            if (headerBtn){ headerBtn.click(); return; }
+            const { db_deleteSpace } = await import('../lib/supabase.js');
+            await db_deleteSpace(spaceId);
+            console.info('Space deleted via floating button');
+            try{ scrim.querySelector('#modalCancel')?.click(); }catch{}
+            try{ location.hash=''; }catch{}
+            try{ window.hiveRenderRoute && window.hiveRenderRoute(); }catch{}
+          }catch(e){ console.error('Delete failed', e); window.showToast && window.showToast('Delete failed'); }
+        }, { once:true });
+      }
+    }catch{}
+    // Approach A: extra destructive button in modal footer
+    try{
+      const actions = scrim?.querySelector('.modal-actions');
+      if (actions && !isProtected){
+        const danger = document.createElement('button'); danger.className='button red'; danger.id='spDeleteFooter'; danger.textContent='Delete';
+        actions.prepend(danger);
+        danger.addEventListener('click', async ()=>{
+          if (!confirm('Delete this space?')) return;
+          try{ const { db_deleteSpace } = await import('../lib/supabase.js'); await db_deleteSpace(spaceId); console.info('Space deleted via footer'); }
+          catch(e){ console.error('Delete failed', e); window.showToast && window.showToast('Delete failed'); return; }
+          try{ scrim.querySelector('#modalCancel')?.click(); }catch{}; try{ location.hash=''; }catch{}; try{ window.hiveRenderRoute && window.hiveRenderRoute(); }catch{};
+        });
+      }
+    }catch{}
+    // Event delegation to make sure clicks are caught even if layout changes
+    if (scrim){
+      const delegatedDelete = async (e)=>{
+        const target = e.target && (e.target.closest ? e.target.closest('#spDelete, #spDeleteFooter') : null);
+        if (!target) return;
         e.preventDefault(); e.stopPropagation();
-        if (delBtnEl.hasAttribute('disabled')) return;
+        if (target.hasAttribute('disabled')) return;
         if (!confirm('Delete this space?')) return;
         try{
-          await db_updateSpace(spaceId, { deleted_at: new Date().toISOString() });
-          // Close modal and navigate
+          // Reuse the header path if present (it works in your env)
+          const headerBtn = document.getElementById('deleteHeaderBtn');
+          if (headerBtn){ headerBtn.click(); return; }
+          const { db_deleteSpace } = await import('../lib/supabase.js');
+          await db_deleteSpace(spaceId);
+          console.info('Space deleted via modal');
           try{ scrim.querySelector('#modalCancel')?.click(); }catch{}
           try{ location.hash=''; }catch{}
           try{ if (typeof window.hiveRenderRoute === 'function'){ window.hiveRenderRoute(); } }catch{}
-        }catch{ window.showToast && window.showToast('Delete failed'); }
-      }, { once: true });
+        }catch(e){ console.error('Delete space failed', e); window.showToast && window.showToast('Delete failed: '+(e?.message||'unknown')); }
+      };
+      scrim.addEventListener('click', delegatedDelete, { capture:true, once:true });
     }
     const res = await modalPromise;
     if (!res.ok) return;
@@ -106,15 +167,16 @@ export async function renderSpace(root, spaceId){
     if (del){
       if (isProtected){ window.showToast && window.showToast('Cannot delete baseline spaces (Meetings, Chats, Deep Researches)'); return; }
       try{
-        await db_updateSpace(spaceId, { deleted_at: new Date().toISOString() });
+        const { db_deleteSpace } = await import('../lib/supabase.js');
+        await db_deleteSpace(spaceId);
       }catch{ window.showToast && window.showToast('Delete failed'); return; }
       // Navigate to library immediately
       try{ location.hash = ''; }catch{}
       try{ if (typeof window.hiveRenderRoute === 'function'){ window.hiveRenderRoute(); } }catch{}
       return;
     }
-    if (name && name!==space.name) await db_updateSpace(spaceId, { name });
-    if (vis && vis!==space.visibility) await db_updateSpace(spaceId, { visibility: vis });
+    if (name && name!==space.name){ try{ await db_updateSpace(spaceId, { name }); console.info('Space name updated'); }catch(e){ console.error('Update name failed', e); } }
+    if (vis && vis!==space.visibility){ try{ await db_updateSpace(spaceId, { visibility: vis }); console.info('Visibility updated', vis); }catch(e){ console.error('Update visibility failed', e); } }
     if (email){ await (await import('../lib/supabase.js')).db_shareSpace(spaceId, email).catch(()=>alert('Share failed')); window.showToast && window.showToast('Invite sent to '+email); }
     renderSpace(root, spaceId);
   });
@@ -289,6 +351,49 @@ export async function renderSpace(root, spaceId){
   }
   const addNoteBtn = root.querySelector('#addNoteBtn');
   if (addNoteBtn){ addNoteBtn.addEventListener('click', async()=>{ const nn = await db_createNote(spaceId); collapsedState.set(nn.id, false); renderSpace(root, spaceId); }); }
+  const deepNew = root.querySelector('#deepNewNote');
+  if (deepNew){
+    deepNew.addEventListener('click', async ()=>{
+      // Choose target space
+      try{
+        const { db_listSpaces } = await import('../lib/supabase.js');
+        const spaces = await db_listSpaces().catch(()=>[]);
+        const body = `<div class='field'><label>Target space</label><select id='targetSpace' class='select' style='width:100%'>${spaces.map(s=>`<option value='${s.id}'>${s.name}</option>`).join('')}</select></div>`;
+        const { openModalWithExtractor } = await import('./modals.js');
+        const res = await openModalWithExtractor('Create note', body, (root)=>({ sid: root.querySelector('#targetSpace')?.value||'' }));
+        if (!res.ok) return; const sid = res.values?.sid || spaceId;
+        const n = await db_createNote(sid);
+        collapsedState.set(n.id, false);
+        // Convert first note row to rich mode with toolbar
+        renderSpace(root, sid);
+        setTimeout(()=>{ try{ const body = document.querySelector('[data-body]'); if (!body) return; body.classList.add('rich');
+          const toolbar = document.createElement('div'); toolbar.className='rich-toolbar';
+          toolbar.innerHTML = `
+            <button class='button sm' data-cmd='bold'><strong>B</strong></button>
+            <button class='button sm' data-cmd='italic'><em>I</em></button>
+            <button class='button sm' data-cmd='insertUnorderedList'>• List</button>
+            <button class='button sm' data-cmd='insertOrderedList'>1. List</button>
+            <button class='button sm' data-cmd='formatBlock' data-value='h3'>H3</button>
+            <button class='button sm' data-cmd='formatBlock' data-value='p'>P</button>
+            <button class='button sm' data-cmd='insertTable'>Table</button>`;
+          const rich = document.createElement('div'); rich.className='note-rich'; rich.contentEditable='true';
+          const textarea = document.querySelector('.note-editor'); if (textarea) rich.innerHTML = textarea.value || '';
+          const container = body; container.prepend(toolbar); container.appendChild(rich);
+          // Commands
+          toolbar.querySelectorAll('[data-cmd]').forEach(btn=>{
+            btn.addEventListener('click', ()=>{
+              const cmd = btn.getAttribute('data-cmd');
+              if (cmd==='formatBlock'){ document.execCommand('formatBlock', false, btn.getAttribute('data-value')); }
+              else if (cmd==='insertTable'){ document.execCommand('insertHTML', false, '<table><tr><td> </td><td> </td></tr></table>'); }
+              else { document.execCommand(cmd, false, null); }
+            });
+          });
+          // Sync back to textarea on blur
+          rich.addEventListener('blur', ()=>{ if (textarea) textarea.value = rich.innerHTML; });
+        }catch{} }, 50);
+      }catch{}
+    });
+  }
   const reindexBtn = root.querySelector('#reindexBtn');
   if (reindexBtn) reindexBtn.addEventListener('click', async()=>{
     const { getPrefs } = await import('./settings.js');

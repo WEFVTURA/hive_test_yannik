@@ -15,6 +15,8 @@ export function getPrefs(){
 		includeFiles: p.includeFiles ?? true,
 		directMode: Boolean(p.directMode ?? false),
 		contextBudget: Number.isFinite(p.contextBudget) ? p.contextBudget : 16000,
+		logLevel: p.logLevel || 'info',
+		enableDebugLog: Boolean(p.enableDebugLog ?? false),
 	};
 }
 
@@ -51,12 +53,50 @@ export async function openSettingsModal(){
 		    <div class="field"><label>Direct context budget (characters)</label>
 		      <input id="sCtxBudget" type="number" min="2000" max="180000" step="1000" value="${p.contextBudget}">
 		    </div>
+		    <div class="field"><label>Logging</label>
+		      <div style="display:grid; gap:6px">
+		        <label><input type="checkbox" id="sDebug" ${p.enableDebugLog?'checked':''}> Enable in-app debug log</label>
+		        <select id="sLogLevel">
+		          <option value="error" ${p.logLevel==='error'?'selected':''}>Error</option>
+		          <option value="warn" ${p.logLevel==='warn'?'selected':''}>Warn</option>
+		          <option value="info" ${p.logLevel==='info'?'selected':''}>Info</option>
+		          <option value="debug" ${p.logLevel==='debug'?'selected':''}>Debug</option>
+		        </select>
+		      </div>
+		    </div>
+		    <div class="field"><label>Debug log</label>
+		      <div id="debugLog" style="display:${p.enableDebugLog?'block':'none'}; max-height:200px; overflow:auto; font:12px/1.4 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace; background:var(--panel-2); border:1px solid var(--border); border-radius:8px; padding:8px"></div>
+		    </div>
 		  </div>
 		  <div class="modal-actions"><button class="button" id="cancelBtn">Cancel</button><button class="button primary" id="saveBtn">Save</button></div>
 		</div>`;
 	function close(){ scrim.classList.remove('modal-show'); scrim.setAttribute('aria-hidden','true'); scrim.style.display='none'; }
 	scrim.querySelector('#xClose').onclick = close;
 	scrim.querySelector('#cancelBtn').onclick = close;
+	// Live log hookup
+	(function initDebugLog(){
+		const box = scrim.querySelector('#debugLog');
+		const chk = scrim.querySelector('#sDebug');
+		const lvlSel = scrim.querySelector('#sLogLevel');
+		function print(level, args){
+			if (!box || !(chk?.checked)) return;
+			const levels=['error','warn','info','debug'];
+			const min = lvlSel?.value||'info';
+			if (levels.indexOf(level) > levels.indexOf(min)) return;
+			const line = document.createElement('div');
+			line.textContent = `[${new Date().toLocaleTimeString()}] ${level.toUpperCase()}: ` + Array.from(args).map(a=>typeof a==='string'?a:JSON.stringify(a)).join(' ');
+			box.appendChild(line); box.scrollTop = box.scrollHeight;
+		}
+		const original = { log:console.log, warn:console.warn, error:console.error, info:console.info };
+		['log','warn','error','info'].forEach(k=>{
+			console[k] = function(){ try{ print(k==='log'?'debug':k, arguments); }catch{}; return original[k].apply(console, arguments); };
+		});
+		window.__hiveLog = function(level, ...args){ print(level, args); };
+		// Flush buffered logs captured before opening Settings
+		try{ (window.__hiveLogBuffer||[]).forEach(entry=>print(entry.level, entry.args)); }catch{}
+		chk?.addEventListener('change', ()=>{ try{ box.style.display = chk.checked ? 'block' : 'none'; }catch{} });
+	})();
+
 	scrim.querySelector('#saveBtn').onclick = ()=>{
 		const next = {
 			...p,
@@ -70,6 +110,8 @@ export async function openSettingsModal(){
 			contextOnly: scrim.querySelector('#sContextOnly').checked,
 			directMode: scrim.querySelector('#sDirect').checked,
 			contextBudget: parseInt(scrim.querySelector('#sCtxBudget').value,10) || 16000,
+			enableDebugLog: scrim.querySelector('#sDebug').checked,
+			logLevel: scrim.querySelector('#sLogLevel').value,
 		};
 		savePrefs(next); close(); location.reload();
 	};

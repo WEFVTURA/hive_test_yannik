@@ -10,6 +10,22 @@ import { ragIndex } from './lib/rag.js';
 initModals();
 const prefs = getPrefs();
 
+// Lightweight global debug logger so logs are captured even before Settings is opened
+(function initDebugLogger(){
+	try{
+		if (!prefs.enableDebugLog) return;
+		window.__hiveLogBuffer = window.__hiveLogBuffer || [];
+		function capture(level, args){
+			try{ window.__hiveLogBuffer.push({ t: Date.now(), level, args: Array.from(args) }); if (window.__hiveLogBuffer.length>1000) window.__hiveLogBuffer.shift(); }catch{}
+		}
+		const orig = { log:console.log, warn:console.warn, error:console.error, info:console.info };
+		['log','warn','error','info'].forEach(k=>{
+			console[k] = function(){ capture(k==='log'?'debug':k, arguments); return orig[k].apply(console, arguments); };
+		});
+		window.__hiveLog = function(level, ...args){ capture(level, args); };
+	}catch{}
+})();
+
 
 // Toasts container and helper
 (function ensureToasts(){

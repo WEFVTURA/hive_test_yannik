@@ -143,18 +143,30 @@ export async function profile_uploadAvatar(file){
 // DB helpers
 export async function db_listSpaces(){
   const sb = getSupabase();
-  // Exclude soft-deleted spaces (deleted_at not null)
-  const { data, error } = await sb
-    .from('spaces')
-    .select('*')
-    .is('deleted_at', null)
-    .order('created_at', { ascending: true });
-  if (error) throw error; return data;
+  // Query without server-side filter to avoid 400s on schema mismatch, filter client-side instead
+  const r = await sb.from('spaces').select('*').order('created_at', { ascending: true });
+  if (r.error) throw r.error;
+  const rows = r.data || [];
+  return rows.filter(s => !('deleted_at' in s) || s.deleted_at === null || s.deleted_at === '' || !s.deleted_at);
 }
 export async function db_getSpace(id){
   const sb = getSupabase();
-  const { data, error } = await sb.from('spaces').select('*').eq('id', id).is('deleted_at', null).maybeSingle();
-  if (error) throw error; return data;
+  const r = await sb.from('spaces').select('*').eq('id', id).maybeSingle();
+  if (r.error) throw r.error;
+  const row = r.data || null;
+  if (row && 'deleted_at' in row && row.deleted_at && row.deleted_at !== '') return null;
+  return row;
+}
+
+// Tries soft-delete (set deleted_at). If that fails (column missing), hard-delete the row
+export async function db_deleteSpace(id){
+  const sb = getSupabase();
+  try{
+    const u = await sb.from('spaces').update({ deleted_at: new Date().toISOString() }).eq('id', id);
+    if (!u.error) return true;
+  }catch{}
+  const d = await sb.from('spaces').delete().eq('id', id);
+  if (d.error) throw d.error; return true;
 }
 export async function db_createSpace(name){
   const sb = getSupabase();
