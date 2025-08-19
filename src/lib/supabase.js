@@ -1,8 +1,8 @@
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
 
 // Fallbacks to unblock production when envs are missing
-const DEFAULT_SUPABASE_URL = 'https://lmrnnfjuytygomdfujhs.supabase.co';
-const DEFAULT_SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imxtcm5uZmp1eXR5Z29tZGZ1amhzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTE3MjQ3NTMsImV4cCI6MjA2NzMwMDc1M30.BFj_fQyHX-vAwd65RQrZpq0TU2B87BfdRVrIcXuAv10';
+export const DEFAULT_SUPABASE_URL = 'https://lmrnnfjuytygomdfujhs.supabase.co';
+export const DEFAULT_SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imxtcm5uZmp1eXR5Z29tZGZ1amhzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTE3MjQ3NTMsImV4cCI6MjA2NzMwMDc1M30.BFj_fQyHX-vAwd65RQrZpq0TU2B87BfdRVrIcXuAv10';
 
 export function util_getEnv(key, promptLabel){
   // Production-safe: only trust build-time envs so we don't accidentally use stale window/localStorage
