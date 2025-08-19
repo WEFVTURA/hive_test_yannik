@@ -74,6 +74,10 @@ body{margin:0; background:var(--bg); color:var(--text); font:14px/1.45 ui-sans-s
 .select-wrap{position:relative; display:inline-block}
 .select-wrap:after{content:"▾"; position:absolute; right:10px; top:50%; transform:translateY(-50%); color:var(--muted); pointer-events:none}
 
+/* Ensure native selects inside modals are clipped correctly and size nicely */
+.modal .field select{background:var(--panel); color:var(--text); border:1px solid var(--border); border-radius:10px; padding:10px; width:100%}
+.modal .field select:focus{outline:2px solid rgba(122,140,255,.35); outline-offset:1px}
+
 /* Shadcn-like glass select */
 .select-glass{appearance:none; -webkit-appearance:none; -moz-appearance:none; background:rgba(20,24,33,.6); color:var(--text); border:1px solid var(--border); border-radius:10px; padding:10px 38px 10px 12px; backdrop-filter: blur(10px); box-shadow:0 2px 0 0 rgba(255,255,255,.03) inset}
 .select-glass:focus{outline:2px solid rgba(122,140,255,.35); outline-offset:1px}

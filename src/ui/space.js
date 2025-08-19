@@ -64,6 +64,11 @@ export async function renderSpace(root, spaceId){
     const space = await db_getSpace(spaceId).catch(()=>({ id: spaceId, name:'Space', visibility:'private' }));
     const { openModalWithExtractor } = await import('./modals.js');
     const shares = await (await import('../lib/supabase.js')).db_listShares(spaceId).catch(()=>[]);
+    // Protect baseline spaces from deletion
+    const meetingsId = (typeof localStorage!=='undefined') ? localStorage.getItem('hive_meetings_space_id') : '';
+    const chatsId = (typeof localStorage!=='undefined') ? localStorage.getItem('hive_chats_space_id') : '';
+    const researchId2 = (typeof localStorage!=='undefined') ? localStorage.getItem('hive_research_space_id') : '';
+    const isProtected = [meetingsId, chatsId, researchId2].filter(Boolean).includes(String(spaceId));
     const body = `
       <div class='field'><label>Name</label><input id='spName' value='${space.name||''}' /></div>
       <div class='field'><label>Visibility</label>
@@ -77,13 +82,18 @@ export async function renderSpace(root, spaceId){
       <div class='muted' style='font-size:12px'>Existing shares</div>
       <div style='display:grid; gap:6px'>${shares.map(s=>`<div style='border:1px solid var(--border); padding:6px; border-radius:8px'>${s.email}</div>`).join('')||'<div class=muted>None</div>'}</div>
       <div class='muted' style='font-size:12px;margin-top:8px'>Danger zone</div>
-      <button class='button red' id='spDelete'>Delete space</button>`;
+      <button class='button red' id='spDelete' ${isProtected?'disabled':''}>${isProtected?'Cannot delete baseline space':'Delete space'}</button>`;
     const res = await openModalWithExtractor('Space options', body, (root)=>({ name: root.querySelector('#spName')?.value||'', vis: root.querySelector('#spVis')?.value||space.visibility||'private', email: root.querySelector('#inviteEmail')?.value?.trim()||'', del: root.querySelector('#spDelete')?.dataset?.clicked==='1' }));
     const scrim = document.getElementById('modalScrim');
     scrim?.querySelector('#spDelete')?.addEventListener('click', ()=>{ scrim.querySelector('#spDelete').dataset.clicked='1'; });
     if (!res.ok) return;
     const { name, vis, email, del } = res.values || {};
-    if (del){ await db_updateSpace(spaceId, { deleted_at: new Date().toISOString() }).catch(()=>{}); window.location.hash=''; return; }
+    if (del){
+      if (isProtected){ window.showToast && window.showToast('Cannot delete baseline spaces (Meetings, Chats, Deep Researches)'); return; }
+      await db_updateSpace(spaceId, { deleted_at: new Date().toISOString() }).catch(()=>{});
+      window.location.hash='';
+      return;
+    }
     if (name && name!==space.name) await db_updateSpace(spaceId, { name });
     if (vis && vis!==space.visibility) await db_updateSpace(spaceId, { visibility: vis });
     if (email){ await (await import('../lib/supabase.js')).db_shareSpace(spaceId, email).catch(()=>alert('Share failed')); window.showToast && window.showToast('Invite sent to '+email); }
