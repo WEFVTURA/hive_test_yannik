@@ -209,8 +209,13 @@ export function renderChat(root){
         if (ragDebugEl){ ragDebugEl.style.display='block'; ragDebugEl.textContent = `SQL mode | scope: ${scopeVal} | length: ${sqlPrompt.length}`; }
       } else if (qMode==='pplx'){
         if (ragDebugEl){ ragDebugEl.style.display='block'; ragDebugEl.textContent = 'Perplexity deep research…'; }
-        // Prefer direct API when key is provided; else try Supabase function; last resort: local /api route
+        // Order: same-origin proxy (/api/pplx-proxy) → Supabase function → direct API → local /api fallback
         let reply = 'Error contacting Perplexity';
+        // 1) Same-origin proxy (no CORS)
+        try{
+          const pr = await fetch('/api/pplx-proxy', { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ question: text }) });
+          if (pr.ok){ const pj = await pr.json().catch(()=>({})); reply = pj.reply || reply; }
+        }catch{}
         try{
           const apiKey = util_getEnv('PERPLEXITY','PERPLEXITY');
           if (apiKey){
