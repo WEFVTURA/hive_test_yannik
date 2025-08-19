@@ -83,9 +83,24 @@ export async function renderSpace(root, spaceId){
       <div style='display:grid; gap:6px'>${shares.map(s=>`<div style='border:1px solid var(--border); padding:6px; border-radius:8px'>${s.email}</div>`).join('')||'<div class=muted>None</div>'}</div>
       <div class='muted' style='font-size:12px;margin-top:8px'>Danger zone</div>
       <button class='button red' id='spDelete' ${isProtected?'disabled':''}>${isProtected?'Cannot delete baseline space':'Delete space'}</button>`;
-    const res = await openModalWithExtractor('Space options', body, (root)=>({ name: root.querySelector('#spName')?.value||'', vis: root.querySelector('#spVis')?.value||space.visibility||'private', email: root.querySelector('#inviteEmail')?.value?.trim()||'', del: root.querySelector('#spDelete')?.dataset?.clicked==='1' }));
+    const modalPromise = openModalWithExtractor('Space options', body, (root)=>({ name: root.querySelector('#spName')?.value||'', vis: root.querySelector('#spVis')?.value||space.visibility||'private', email: root.querySelector('#inviteEmail')?.value?.trim()||'', del: root.querySelector('#spDelete')?.dataset?.clicked==='1' }));
     const scrim = document.getElementById('modalScrim');
-    scrim?.querySelector('#spDelete')?.addEventListener('click', ()=>{ scrim.querySelector('#spDelete').dataset.clicked='1'; });
+    const delBtnEl = scrim?.querySelector('#spDelete');
+    if (delBtnEl){
+      delBtnEl.addEventListener('click', async (e)=>{
+        e.preventDefault(); e.stopPropagation();
+        if (delBtnEl.hasAttribute('disabled')) return;
+        if (!confirm('Delete this space?')) return;
+        try{
+          await db_updateSpace(spaceId, { deleted_at: new Date().toISOString() });
+          // Close modal and navigate
+          try{ scrim.querySelector('#modalCancel')?.click(); }catch{}
+          try{ location.hash=''; }catch{}
+          try{ if (typeof window.hiveRenderRoute === 'function'){ window.hiveRenderRoute(); } }catch{}
+        }catch{ window.showToast && window.showToast('Delete failed'); }
+      }, { once: true });
+    }
+    const res = await modalPromise;
     if (!res.ok) return;
     const { name, vis, email, del } = res.values || {};
     if (del){
