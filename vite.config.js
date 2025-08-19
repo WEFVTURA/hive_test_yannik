@@ -6,8 +6,7 @@ export default defineConfig({
     port: 4700,
     open: true,
     proxy: {
-      '/api/pplx-proxy': { target: 'http://localhost:4700', changeOrigin: true },
-      '/api/pplx-research': { target: 'http://localhost:4700', changeOrigin: true }
+      // API proxies removed for localhost dev to avoid 404s
     }
   }
 });

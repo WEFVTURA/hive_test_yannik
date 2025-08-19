@@ -41,6 +41,14 @@ export function renderChat(root){
               <option value="ALL" ${prefs.defaultScope==='ALL'?'selected':''}>ALL</option>
             </select></span>
           </div>
+          <div style="display:flex; gap:8px; align-items:center" id="researchModelRow">
+            <label class="muted" style="font-size:12px">Research Model</label>
+            <span class="select-wrap" style="flex:1"><select id="researchModel" class="select" style="width:100%">
+              <option value="mistral" selected>Mistral AI</option>
+              <option value="openai">OpenAI GPT-4o</option>
+              <option value="perplexity">Perplexity AI</option>
+            </select></span>
+          </div>
           <div class="input" style="display:flex; align-items:center; gap:10px; border:1px solid var(--border); background:var(--panel); border-radius:12px; padding:8px">
             <input id="chatInput" placeholder="Type your question" style="flex:1; background:transparent; border:0; color:var(--text); outline:none; padding:8px"/>
             <button class="button" id="askBtn">Ask</button>
@@ -60,9 +68,27 @@ export function renderChat(root){
   const scopeSel = root.querySelector('#spaceScope');
   const saveBtn = root.querySelector('#saveChatBtn');
   const openBtn = root.querySelector('#openChatBtn');
+  const researchModelRow = root.querySelector('#researchModelRow');
+  const queryModeSelect = root.querySelector('#queryMode');
   let history = [];
   let model = prefs.defaultModel;
   let currentChatId = null;
+  
+  // Show/hide research model selector based on query mode
+  function toggleResearchModelSelector() {
+    const isResearchMode = queryModeSelect?.value === 'pplx';
+    if (researchModelRow) {
+      researchModelRow.style.display = isResearchMode ? 'flex' : 'none';
+    }
+  }
+  
+  // Initially hide research model selector
+  toggleResearchModelSelector();
+  
+  // Listen for query mode changes
+  if (queryModeSelect) {
+    queryModeSelect.addEventListener('change', toggleResearchModelSelector);
+  }
 
   // Ensure any legacy side hide button is removed
   try{ document.querySelectorAll('.chat-side-hide').forEach(el=>el.remove()); }catch{}
@@ -123,14 +149,35 @@ export function renderChat(root){
   });
 
   async function callModel(prompt){
-    const anon = util_getEnv('SUPABASE_ANON_KEY','SUPABASE_ANON_KEY');
+    const anon = util_getEnv('VITE_SUPABASE_ANON_KEY','VITE_SUPABASE_ANON_KEY') || util_getEnv('SUPABASE_ANON_KEY','SUPABASE_ANON_KEY');
     const started = performance.now();
     try{
       if (model === 'Mistral'){
-        const r = await fetch('/api/mistral-chat', { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ prompt, model:'mistral-medium-latest' }) });
-        const j = await r.json(); if(!r.ok){ throw new Error(j?.error||'mistral error'); } if(ragDebugEl){ ragDebugEl.textContent += `\nModel latency: ${Math.round(performance.now()-started)}ms`; } return j.reply||'';
-      } else {
-        const r = await fetch('https://lmrnnfjuytygomdfujhs.supabase.co/functions/v1/openai-chat', { method:'POST', headers:{ 'Content-Type':'application/json', 'Authorization': `Bearer ${anon}`, 'apikey': anon }, body: JSON.stringify({ prompt, model:'gpt-4o-mini', openai_api_key: (window.OPENAI_API_KEY||'') }) });
+        const mistralKey = util_getEnv('VITE_MISTRAL_API_KEY','VITE_MISTRAL_API_KEY') || util_getEnv('MISTRAL_AI_API','MISTRAL_AI_API') || '';
+        if (mistralKey) {
+          const r = await fetch('https://api.mistral.ai/v1/chat/completions', { 
+            method:'POST', 
+            headers:{ 
+              'Authorization': `Bearer ${mistralKey}`, 
+              'Content-Type':'application/json' 
+            }, 
+            body: JSON.stringify({ 
+              model:'mistral-medium-latest', 
+              messages:[{role:'user',content:prompt}] 
+            }) 
+          });
+          const j = await r.json(); 
+          if(!r.ok){ throw new Error(j?.error?.message||'mistral error'); } 
+          if(ragDebugEl){ ragDebugEl.textContent += `\nModel latency: ${Math.round(performance.now()-started)}ms`; } 
+          return j.choices?.[0]?.message?.content||'';
+        } else {
+          console.warn('Mistral API key not found, falling back to OpenAI');
+        }
+      }
+      // Use OpenAI (or fallback for Mistral if no key)
+      {
+        const openaiKey = util_getEnv('VITE_OPENAI_API_KEY','VITE_OPENAI_API_KEY') || util_getEnv('OPEN_AI_API','OPEN_AI_API') || window.OPENAI_API_KEY || '';
+        const r = await fetch('https://lmrnnfjuytygomdfujhs.supabase.co/functions/v1/openai-chat', { method:'POST', headers:{ 'Content-Type':'application/json', 'Authorization': `Bearer ${anon}`, 'apikey': anon }, body: JSON.stringify({ prompt, model:'gpt-4o-mini', openai_api_key: openaiKey }) });
         const j = await r.json(); if(!r.ok){ throw new Error(j?.error||'openai error'); } if(ragDebugEl){ ragDebugEl.textContent += `\nModel latency: ${Math.round(performance.now()-started)}ms`; } return j.reply||'';
       }
     }catch(e){ if(ragDebugEl){ ragDebugEl.textContent += `\nModel error: ${e}`; } throw e; }
@@ -208,38 +255,126 @@ export function renderChat(root){
         prompt = sqlPrompt;
         if (ragDebugEl){ ragDebugEl.style.display='block'; ragDebugEl.textContent = `SQL mode | scope: ${scopeVal} | length: ${sqlPrompt.length}`; }
       } else if (qMode==='pplx'){
-        if (ragDebugEl){ ragDebugEl.style.display='block'; ragDebugEl.textContent = 'Perplexity deep research…'; }
-        // Order: same-origin proxy (/api/pplx-proxy) → Supabase function → direct API → local /api fallback
-        let reply = 'Error contacting Perplexity';
-        // 1) Same-origin proxy (no CORS)
+        // Get selected research model from dropdown
+        const researchModelSel = document.getElementById('researchModel');
+        const selectedModel = researchModelSel ? researchModelSel.value : 'mistral';
+        
+        if (ragDebugEl){ ragDebugEl.style.display='block'; ragDebugEl.textContent = `Deep research using ${selectedModel.toUpperCase()}…`; }
+        
+        let reply = 'Error in deep research';
+        
         try{
-          const pr = await fetch('/api/pplx-proxy', { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ question: text }) });
-          if (pr.ok){ const pj = await pr.json().catch(()=>({})); reply = pj.reply || reply; }
-        }catch{}
-        try{
-          const apiKey = util_getEnv('PERPLEXITY','PERPLEXITY');
-          if (apiKey){
-            const sys = 'You are a research assistant. Do a deep, multi-step investigation with sources and a concise report.';
-            const rr = await fetch('https://api.perplexity.ai/chat/completions', { method:'POST', headers:{ 'Authorization': `Bearer ${apiKey}`, 'Content-Type':'application/json' }, body: JSON.stringify({ model:'pplx-70b-online', temperature:0.3, messages:[{role:'system',content:sys},{role:'user',content:text}] }) });
-            const jj = await rr.json().catch(()=>({})); if (rr.ok) reply = (jj?.choices?.[0]?.message?.content)||reply;
-          }
-        }catch{}
-        if (reply==='Error contacting Perplexity'){
-          try{
-            const base = util_getEnv('SUPABASE_URL','SUPABASE_URL');
-            const anon = util_getEnv('SUPABASE_ANON_KEY','SUPABASE_ANON_KEY');
-            if (base && anon){
-              const url = `${base.replace(/\/$/,'')}/functions/v1/pplx-research`;
-              const r = await fetch(url, { method:'POST', mode:'cors', headers:{ 'Content-Type':'application/json', 'Authorization': `Bearer ${anon}`, 'apikey': anon }, body: JSON.stringify({ question: text }) }).catch(()=>null);
-              if (r && r.ok){ const j = await r.json().catch(()=>({})); reply = j.reply||reply; }
+          if (selectedModel === 'perplexity') {
+            // Perplexity API for Deep Research
+            const pplxKey = util_getEnv('VITE_PERPLEXITY','VITE_PERPLEXITY') || util_getEnv('PERPLEXITY','PERPLEXITY');
+            if (pplxKey) {
+              const sys = 'You are a research assistant. Do a deep, multi-step investigation with sources and a concise report.';
+              const requestBody = { 
+                model: 'llama-3.1-sonar-small-128k-online', 
+                temperature: 0.3, 
+                messages: [
+                  { role: 'system', content: sys },
+                  { role: 'user', content: text }
+                ]
+              };
+              const rr = await fetch('https://api.perplexity.ai/chat/completions', { 
+                method: 'POST', 
+                headers: { 
+                  'Authorization': `Bearer ${pplxKey}`, 
+                  'Content-Type': 'application/json' 
+                }, 
+                body: JSON.stringify(requestBody) 
+              });
+              const jj = await rr.json().catch(()=>({})); 
+              if (rr.ok) {
+                reply = (jj?.choices?.[0]?.message?.content) || reply;
+              } else {
+                console.error('Perplexity API Error:', rr.status, rr.statusText, jj);
+                throw new Error(`Perplexity API failed: ${rr.status}`);
+              }
+            } else {
+              throw new Error('Perplexity API key not found');
             }
-          }catch{}
-        }
-        if (reply==='Error contacting Perplexity'){
-          try{
-            const r = await fetch('/api/pplx-research', { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ question: text }) }).catch(()=>null);
-            if (r && r.ok){ const j = await r.json().catch(()=>({})); reply = j.reply||reply; }
-          }catch{}
+          } else if (selectedModel === 'openai') {
+            // OpenAI via Supabase for Deep Research
+            const openaiKey = util_getEnv('VITE_OPENAI_API_KEY','VITE_OPENAI_API_KEY') || util_getEnv('OPEN_AI_API','OPEN_AI_API') || '';
+            const anon = util_getEnv('VITE_SUPABASE_ANON_KEY','VITE_SUPABASE_ANON_KEY') || util_getEnv('SUPABASE_ANON_KEY','SUPABASE_ANON_KEY');
+            if (openaiKey && anon) {
+              const researchPrompt = `Research this topic thoroughly and provide detailed analysis with multiple perspectives: ${text}`;
+              const r = await fetch('https://lmrnnfjuytygomdfujhs.supabase.co/functions/v1/openai-chat', { 
+                method:'POST', 
+                headers:{ 'Content-Type':'application/json', 'Authorization': `Bearer ${anon}`, 'apikey': anon }, 
+                body: JSON.stringify({ prompt: researchPrompt, model:'gpt-4o-mini', openai_api_key: openaiKey }) 
+              });
+              const j = await r.json(); 
+              if (r.ok) {
+                reply = j.reply || reply;
+              } else {
+                throw new Error(`OpenAI API failed: ${r.status}`);
+              }
+            } else {
+              throw new Error('OpenAI API key or Supabase key not found');
+            }
+          } else {
+            // Default: Mistral for Deep Research
+            const mistralKey = util_getEnv('VITE_MISTRAL_API_KEY','VITE_MISTRAL_API_KEY') || util_getEnv('MISTRAL_AI_API','MISTRAL_AI_API') || '';
+            if (mistralKey) {
+              const sys = 'You are an expert research assistant. Provide a comprehensive, well-researched analysis with multiple perspectives and actionable insights. Structure your response with clear sections and bullet points.';
+              const requestBody = { 
+                model: 'mistral-medium-latest', 
+                temperature: 0.4, 
+                messages: [
+                  { role: 'system', content: sys },
+                  { role: 'user', content: `Research this topic thoroughly: ${text}` }
+                ]
+              };
+              const rr = await fetch('https://api.mistral.ai/v1/chat/completions', { 
+                method: 'POST', 
+                headers: { 
+                  'Authorization': `Bearer ${mistralKey}`, 
+                  'Content-Type': 'application/json' 
+                }, 
+                body: JSON.stringify(requestBody) 
+              });
+              const jj = await rr.json().catch(()=>({})); 
+              if (rr.ok) {
+                reply = (jj?.choices?.[0]?.message?.content) || reply;
+              } else {
+                console.error('Mistral Research Error:', rr.status, rr.statusText, jj);
+                throw new Error(`Mistral API failed: ${rr.status}`);
+              }
+            } else {
+              throw new Error('Mistral API key not found');
+            }
+          }
+        }catch(err){
+          console.error('Deep Research Error:', err);
+          // Auto-fallback to next available model
+          if (selectedModel === 'perplexity') {
+            console.log('Falling back to Mistral...');
+            const mistralKey = util_getEnv('VITE_MISTRAL_API_KEY','VITE_MISTRAL_API_KEY') || util_getEnv('MISTRAL_AI_API','MISTRAL_AI_API') || '';
+            if (mistralKey) {
+              try {
+                const requestBody = { 
+                  model: 'mistral-medium-latest', 
+                  temperature: 0.4, 
+                  messages: [
+                    { role: 'system', content: 'You are an expert research assistant. Provide comprehensive analysis.' },
+                    { role: 'user', content: `Research this topic: ${text}` }
+                  ]
+                };
+                const rr = await fetch('https://api.mistral.ai/v1/chat/completions', { 
+                  method: 'POST', 
+                  headers: { 'Authorization': `Bearer ${mistralKey}`, 'Content-Type': 'application/json' }, 
+                  body: JSON.stringify(requestBody) 
+                });
+                const jj = await rr.json().catch(()=>({})); 
+                if (rr.ok) reply = (jj?.choices?.[0]?.message?.content) || reply;
+              } catch (fallbackErr) {
+                console.error('Fallback also failed:', fallbackErr);
+              }
+            }
+          }
         }
         const sb = getSupabase();
         // Choose space: current scope or default to private user scratch space (create if missing)

@@ -26,7 +26,7 @@ export default async function handler(req) {
     const { question } = JSON.parse(bodyText||'{}');
     const key = process.env.PERPLEXITY || process.env.PPLX || process.env.VITE_PERPLEXITY || '';
     if (!key){ return new Response(JSON.stringify({ error:'PERPLEXITY key missing on server' }), { status:500, headers:{ ...cors, 'Content-Type':'application/json' } }); }
-    const rr = await fetch('https://api.perplexity.ai/chat/completions', { method:'POST', headers:{ 'Authorization':`Bearer ${key}`, 'Content-Type':'application/json' }, body: JSON.stringify({ model:'pplx-70b-online', temperature:0.3, messages:[{role:'system',content:'Deep research assistant.'},{role:'user',content:String(question||'')}] }) });
+    const rr = await fetch('https://api.perplexity.ai/chat/completions', { method:'POST', headers:{ 'Authorization':`Bearer ${key}`, 'Content-Type':'application/json' }, body: JSON.stringify({ model:'llama-3.1-sonar-small-128k-online', temperature:0.3, messages:[{role:'system',content:'Deep research assistant.'},{role:'user',content:String(question||'')}] }) });
     const jj = await rr.json().catch(()=>({}));
     if (!rr.ok){ return new Response(JSON.stringify({ error: jj?.error?.message || 'Perplexity API error' }), { status: rr.status, headers:{ ...cors, 'Content-Type':'application/json' } }); }
     return new Response(JSON.stringify({ reply: jj?.choices?.[0]?.message?.content || '' }), { status:200, headers:{ ...cors, 'Content-Type':'application/json' } });
