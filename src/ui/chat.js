@@ -17,10 +17,10 @@ export function renderChat(root){
         <div class="composer-head" style="padding:12px 14px; border-bottom:1px solid var(--border); background:var(--panel-2); display:flex; align-items:center; justify-content:space-between">
           <div>Ask HIve assistant</div>
           <div style="display:flex; gap:8px">
-            <button class="button ghost" id="saveChatBtn" title="Save"><svg class="icon"><use href="#sliders"></use></svg></button>
-            <button class="button ghost" id="openChatBtn" title="History"><svg class="icon"><use href="#folder"></use></svg></button>
-            <button class="button ghost" id="clearChatBtn" title="Clear"><svg class="icon"><use href="#edit"></use></svg></button>
-            <button class="button ghost" id="hideChatBtn" title="Hide">Hide</button>
+            <button class="button ghost" id="saveChatBtn" data-tip="Save"><i data-lucide="save" class="icon" aria-hidden="true"></i></button>
+            <button class="button ghost" id="openChatBtn" data-tip="History"><i data-lucide="history" class="icon" aria-hidden="true"></i></button>
+            <button class="button ghost" id="clearChatBtn" data-tip="Clear"><i data-lucide="eraser" class="icon" aria-hidden="true"></i></button>
+            <button class="button ghost" id="hideChatBtn" data-tip="Hide">Hide</button>
           </div>
         </div>
         <div class="composer-body" style="padding:12px; display:grid; gap:8px">
@@ -49,6 +49,9 @@ export function renderChat(root){
       </div>
     </div>`;
 
+  // Initialize Lucide icons for dynamically injected content
+  try{ window.lucide && window.lucide.createIcons({ attrs: { width: 18, height: 18 } }); }catch{}
+
   const chatMessagesEl = root.querySelector('#chatMessages');
   const chatInput = root.querySelector('#chatInput');
   const clearBtn = root.querySelector('#clearChatBtn');
@@ -60,6 +63,9 @@ export function renderChat(root){
   let history = [];
   let model = prefs.defaultModel;
   let currentChatId = null;
+
+  // Ensure any legacy side hide button is removed
+  try{ document.querySelectorAll('.chat-side-hide').forEach(el=>el.remove()); }catch{}
 
   (async()=>{
     const spaces = await db_listSpaces().catch(()=>[]);
@@ -86,12 +92,6 @@ export function renderChat(root){
   clearBtn.addEventListener('click', ()=>{ history=[]; renderMessages(); });
   function hideChat(){ const appRoot=document.getElementById('appRoot'); const scrim=document.getElementById('scrim'); if(appRoot){ appRoot.classList.remove('chat-open'); appRoot.classList.add('chat-closed'); } if(scrim){ scrim.style.display='none'; } }
   hideBtn.addEventListener('click', hideChat);
-  // Side hide button mounted on the right panel edge
-  const panel = root.closest('#chatPanel');
-  if (panel && !panel.querySelector('.chat-side-hide')){
-    const side = document.createElement('button'); side.className='chat-side-hide'; side.title='Hide chat'; side.textContent='Hide';
-    panel.appendChild(side); side.addEventListener('click', hideChat);
-  }
 
   // Save/Open (Supabase)
   saveBtn.addEventListener('click', async ()=>{

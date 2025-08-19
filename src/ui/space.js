@@ -22,11 +22,11 @@ export async function renderSpace(root, spaceId){
         <h2 id="spaceTitle" contenteditable="true" title="Click to rename">${space.name}</h2>
         <span class="muted">Files & Notes</span>
       </div>
-      <div class="view-controls">
-        <button class="button ghost" id="shareBtn" title="Share">Share</button>
+      <div class="view-controls" style="pointer-events:auto">
+        <button class="button ghost" id="spaceSettingsBtn" title="Space settings">Space settings</button>
         <button class="button ghost" id="coverBtn" title="Change cover">Cover</button>
         <button class="button ghost" id="reindexBtn" title="Reindex for AI">Reindex</button>
-        <button class="button ghost" id="backBtn">Back</button>
+        ${isDeepResearch ? `<button class="button ghost" id="backIconBtn" data-tip="Back" style="position:relative; z-index:70"><i data-lucide="arrow-left" class="icon" aria-hidden="true"></i></button>` : `<button class="button ghost" id="backBtn">Back</button>`}
       </div>
     </div>
     <div class="card-grid ${isDeepResearch ? '' : 'space-2col'}">
@@ -50,6 +50,8 @@ export async function renderSpace(root, spaceId){
     </div>`;
 
   // Title rename
+  // Initialize Lucide icons for dynamic content in space header
+  try{ window.lucide && window.lucide.createIcons({ attrs: { width: 18, height: 18 } }); }catch{}
   const titleEl = root.querySelector('#spaceTitle');
   titleEl.addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ e.preventDefault(); titleEl.blur(); } });
   titleEl.addEventListener('blur', async ()=>{
@@ -57,87 +59,105 @@ export async function renderSpace(root, spaceId){
     await db_updateSpace(spaceId, { name: newName }).catch(alert);
   });
 
-  // Visibility selector removed from header; managed via card/menu elsewhere
-
-  // Share via email
-  root.querySelector('#shareBtn').addEventListener('click', async ()=>{
+  // Space settings modal (rename/visibility/delete + share)
+  root.querySelector('#spaceSettingsBtn').addEventListener('click', async ()=>{
+    const space = await db_getSpace(spaceId).catch(()=>({ id: spaceId, name:'Space', visibility:'private' }));
     const { openModalWithExtractor } = await import('./modals.js');
     const shares = await (await import('../lib/supabase.js')).db_listShares(spaceId).catch(()=>[]);
-    const body = `<div class="field"><label>Invite by email</label><input id="inviteEmail" placeholder="name@company.com"></div><div class="muted" style="font-size:12px">Existing shares</div>` +
-      `<div style="display:grid; gap:6px">${shares.map(s=>`<div style='border:1px solid var(--border); padding:6px; border-radius:8px'>${s.email}</div>`).join('')||'<div class=muted>None</div>'}</div>`;
-    const res = await openModalWithExtractor('Share space', body, (root)=>({ email: root.querySelector('#inviteEmail')?.value?.trim()||'' }));
-    if (!res.ok) return; const email = res.values?.email; if(!email) return;
-    await (await import('../lib/supabase.js')).db_shareSpace(spaceId, email).catch(()=>alert('Share failed'));
-    window.showToast && window.showToast('Invite sent to '+email);
+    const body = `
+      <div class='field'><label>Name</label><input id='spName' value='${space.name||''}' /></div>
+      <div class='field'><label>Visibility</label>
+        <select id='spVis'>
+          <option value='private' ${space.visibility==='private'?'selected':''}>Private</option>
+          <option value='team' ${space.visibility==='team'?'selected':''}>Team</option>
+          <option value='public' ${space.visibility==='public'?'selected':''}>Public</option>
+        </select>
+      </div>
+      <div class='field'><label>Invite by email</label><input id='inviteEmail' placeholder='name@company.com' /></div>
+      <div class='muted' style='font-size:12px'>Existing shares</div>
+      <div style='display:grid; gap:6px'>${shares.map(s=>`<div style='border:1px solid var(--border); padding:6px; border-radius:8px'>${s.email}</div>`).join('')||'<div class=muted>None</div>'}</div>
+      <div class='muted' style='font-size:12px;margin-top:8px'>Danger zone</div>
+      <button class='button red' id='spDelete'>Delete space</button>`;
+    const res = await openModalWithExtractor('Space options', body, (root)=>({ name: root.querySelector('#spName')?.value||'', vis: root.querySelector('#spVis')?.value||space.visibility||'private', email: root.querySelector('#inviteEmail')?.value?.trim()||'', del: root.querySelector('#spDelete')?.dataset?.clicked==='1' }));
+    const scrim = document.getElementById('modalScrim');
+    scrim?.querySelector('#spDelete')?.addEventListener('click', ()=>{ scrim.querySelector('#spDelete').dataset.clicked='1'; });
+    if (!res.ok) return;
+    const { name, vis, email, del } = res.values || {};
+    if (del){ await db_updateSpace(spaceId, { deleted_at: new Date().toISOString() }).catch(()=>{}); window.location.hash=''; return; }
+    if (name && name!==space.name) await db_updateSpace(spaceId, { name });
+    if (vis && vis!==space.visibility) await db_updateSpace(spaceId, { visibility: vis });
+    if (email){ await (await import('../lib/supabase.js')).db_shareSpace(spaceId, email).catch(()=>alert('Share failed')); window.showToast && window.showToast('Invite sent to '+email); }
     renderSpace(root, spaceId);
   });
 
-  // Files list
+  // Files list (only present when not in Deep Research view)
   const filesList = root.querySelector('#filesList');
-  filesList.innerHTML = files.map(f=>{
-    const href = f.url || (f.storage_path ? `https://lmrnnfjuytygomdfujhs.supabase.co/storage/v1/object/public/hive-attachments/${f.storage_path}` : '#');
-    const preview = (f.content_type||'').startsWith('image/') ? `<img src="${href}" alt="${f.name}" style="max-height:40px; border-radius:6px">` : `<svg class="icon"><use href="#box"></use></svg>`;
-    const tags = Array.isArray(f.tags) ? f.tags : [];
-    return `<div style="display:flex; align-items:center; justify-content:space-between; border:1px solid var(--border); padding:8px; border-radius:10px">
-      <div style="display:flex; align-items:center; gap:10px"><a href="${href}" target="_blank">${preview}</a><a href="${href}" target="_blank">${f.name}</a></div>
-      <div style="display:flex; gap:8px; align-items:center; font-size:12px">
-        <span class="muted">${f.content_type||''}</span>
-        <span class="muted" title="tags">${tags.map(t=>`#${t}`).join(' ')}</span>
-        <button class="button sm" data-add-file-tag="${f.id}">Tags</button>
-        <button class="button sm" data-convert-jina="${f.id}">Convert to note</button>
-        <button class="button sm red" data-delete-file="${f.id}">Delete</button>
-      </div>
-    </div>`;
-  }).join('');
+  if (filesList){
+    filesList.innerHTML = files.map(f=>{
+      const href = f.url || (f.storage_path ? `https://lmrnnfjuytygomdfujhs.supabase.co/storage/v1/object/public/hive-attachments/${f.storage_path}` : '#');
+      const preview = (f.content_type||'').startsWith('image/') ? `<img src="${href}" alt="${f.name}" style="max-height:40px; border-radius:6px">` : `<svg class="icon"><use href="#box"></use></svg>`;
+      const tags = Array.isArray(f.tags) ? f.tags : [];
+      return `<div style="display:flex; align-items:center; justify-content:space-between; border:1px solid var(--border); padding:8px; border-radius:10px">
+        <div style="display:flex; align-items:center; gap:10px"><a href="${href}" target="_blank">${preview}</a><a href="${href}" target="_blank">${f.name}</a></div>
+        <div style="display:flex; gap:8px; align-items:center; font-size:12px">
+          <span class="muted">${f.content_type||''}</span>
+          <span class="muted" title="tags">${tags.map(t=>`#${t}`).join(' ')}</span>
+          <button class="button sm" data-add-file-tag="${f.id}">Tags</button>
+          <button class="button sm" data-convert-jina="${f.id}">Convert to note</button>
+          <button class="button sm red" data-delete-file="${f.id}">Delete</button>
+        </div>
+      </div>`;
+    }).join('');
 
-  // File actions: convert to note (Jina), delete
-  const fileById = new Map(files.map(x=>[String(x.id), x]));
-  filesList.querySelectorAll('[data-convert-jina]').forEach(btn=>{
-    btn.addEventListener('click', async ()=>{
-      const id = btn.getAttribute('data-convert-jina');
-      const f = fileById.get(id); if(!f) return;
-      try{
-        const href = f.url || (f.storage_path ? `https://lmrnnfjuytygomdfujhs.supabase.co/storage/v1/object/public/hive-attachments/${f.storage_path}` : '');
-        if (!href){ window.showToast && window.showToast('File has no URL'); return; }
-        const isHttps = href.startsWith('https://');
-        const noScheme = href.replace(/^https?:\/\//i, '');
-        const readerUrl = `https://r.jina.ai/${isHttps ? 'https' : 'http'}://${noScheme}`;
-        const r = await fetch(readerUrl);
-        const textContent = await r.text();
-        const title = (f.name||'Document').replace(/\.[^/.]+$/,'');
-        const n = await db_createNote(spaceId);
-        await db_updateNote(n.id, { title, content: (textContent||'(no extractable text)').slice(0,50000) });
-        collapsedState.set(n.id, false);
-        window.showToast && window.showToast('Created note via Jina Reader');
-        renderSpace(root, spaceId);
-      }catch{ window.showToast && window.showToast('Jina conversion failed'); }
+    // File actions: convert to note (Jina), delete
+    const fileById = new Map(files.map(x=>[String(x.id), x]));
+    filesList.querySelectorAll('[data-convert-jina]').forEach(btn=>{
+      btn.addEventListener('click', async ()=>{
+        const id = btn.getAttribute('data-convert-jina');
+        const f = fileById.get(id); if(!f) return;
+        try{
+          const href = f.url || (f.storage_path ? `https://lmrnnfjuytygomdfujhs.supabase.co/storage/v1/object/public/hive-attachments/${f.storage_path}` : '');
+          if (!href){ window.showToast && window.showToast('File has no URL'); return; }
+          const isHttps = href.startsWith('https://');
+          const noScheme = href.replace(/^https?:\/\//i, '');
+          const readerUrl = `https://r.jina.ai/${isHttps ? 'https' : 'http'}://${noScheme}`;
+          const r = await fetch(readerUrl);
+          const textContent = await r.text();
+          const title = (f.name||'Document').replace(/\.[^/.]+$/,'');
+          const n = await db_createNote(spaceId);
+          await db_updateNote(n.id, { title, content: (textContent||'(no extractable text)').slice(0,50000) });
+          collapsedState.set(n.id, false);
+          window.showToast && window.showToast('Created note via Jina Reader');
+          renderSpace(root, spaceId);
+        }catch{ window.showToast && window.showToast('Jina conversion failed'); }
+      });
     });
-  });
-  filesList.querySelectorAll('[data-delete-file]').forEach(btn=>{
-    btn.addEventListener('click', async ()=>{
-      const id = btn.getAttribute('data-delete-file');
-      const f = fileById.get(id); if(!f) return;
-      const ok = confirm('Delete this file?'); if(!ok) return;
-      try{
-        const sb = getSupabase();
-        if (f.storage_path){ await sb.storage.from('hive-attachments').remove([f.storage_path]); }
-        await sb.from('files').delete().eq('id', f.id);
-        window.showToast && window.showToast('File deleted');
-        renderSpace(root, spaceId);
-      }catch{ window.showToast && window.showToast('Delete failed'); }
+    filesList.querySelectorAll('[data-delete-file]').forEach(btn=>{
+      btn.addEventListener('click', async ()=>{
+        const id = btn.getAttribute('data-delete-file');
+        const f = fileById.get(id); if(!f) return;
+        const ok = confirm('Delete this file?'); if(!ok) return;
+        try{
+          const sb = getSupabase();
+          if (f.storage_path){ await sb.storage.from('hive-attachments').remove([f.storage_path]); }
+          await sb.from('files').delete().eq('id', f.id);
+          window.showToast && window.showToast('File deleted');
+          renderSpace(root, spaceId);
+        }catch{ window.showToast && window.showToast('Delete failed'); }
+      });
     });
-  });
-  // File tags add/edit
-  filesList.querySelectorAll('[data-add-file-tag]').forEach(btn=>{
-    btn.addEventListener('click', async ()=>{
-      const id = btn.getAttribute('data-add-file-tag');
-      const f = fileById.get(id); if(!f) return;
-      const current = Array.isArray(f.tags)? f.tags.join(', ') : '';
-      const next = prompt('Add tags (comma separated)', current) || '';
-      const tags = next.split(',').map(s=>s.trim()).filter(Boolean);
-      try{ await db_updateFileTags(f.id, tags); window.showToast && window.showToast('Tags updated'); renderSpace(root, spaceId); }catch{ window.showToast && window.showToast('Failed to update tags'); }
+    // File tags add/edit
+    filesList.querySelectorAll('[data-add-file-tag]').forEach(btn=>{
+      btn.addEventListener('click', async ()=>{
+        const id = btn.getAttribute('data-add-file-tag');
+        const f = fileById.get(id); if(!f) return;
+        const current = Array.isArray(f.tags)? f.tags.join(', ') : '';
+        const next = prompt('Add tags (comma separated)', current) || '';
+        const tags = next.split(',').map(s=>s.trim()).filter(Boolean);
+        try{ await db_updateFileTags(f.id, tags); window.showToast && window.showToast('Tags updated'); renderSpace(root, spaceId); }catch{ window.showToast && window.showToast('Failed to update tags'); }
+      });
     });
-  });
+  }
 
   // Notes list
   const notesList = root.querySelector('#notesList');
@@ -224,29 +244,40 @@ export async function renderSpace(root, spaceId){
     notesList.appendChild(row);
   }
 
-  // Buttons
-  root.querySelector('#backBtn').addEventListener('click', ()=>{
-    try{ const inp = document.getElementById('globalSearch'); if (inp){ inp.value=''; inp.dispatchEvent(new Event('input')); } }catch{}
-    if (location.hash !== ''){ location.hash=''; }
-    else { try{ window.dispatchEvent(new HashChangeEvent('hashchange')); }catch{} }
-    window.scrollTo({ top:0, behavior:'smooth' });
-  });
-  root.querySelector('#addNoteBtn').addEventListener('click', async()=>{ const nn = await db_createNote(spaceId); collapsedState.set(nn.id, false); renderSpace(root, spaceId); });
-  root.querySelector('#reindexBtn').addEventListener('click', async()=>{
+  // Buttons (header)
+  const backBtnEl = root.querySelector('#backBtn') || root.querySelector('#backIconBtn');
+  if (backBtnEl){
+    const navigateToLibrary = ()=>{
+      try{ const inp = document.getElementById('globalSearch'); if (inp){ inp.value=''; inp.dispatchEvent(new Event('input')); } }catch{}
+      // Strategy 1: explicit navigate to root hash
+      try{ location.assign('#'); }catch{}
+      // Strategy 2: force router render shortly after
+      setTimeout(()=>{ try{ if (typeof window.hiveRenderRoute === 'function'){ window.hiveRenderRoute(); } }catch{} }, 0);
+      // Strategy 3: final fallback - full reload to root
+      setTimeout(()=>{ try{ if ((location.hash||'') !== '' && (location.hash||'') !== '#'){ location.href = '#'; } }catch{} }, 150);
+    };
+    backBtnEl.addEventListener('click', (e)=>{ e.preventDefault(); e.stopPropagation(); navigateToLibrary(); });
+  }
+  const addNoteBtn = root.querySelector('#addNoteBtn');
+  if (addNoteBtn){ addNoteBtn.addEventListener('click', async()=>{ const nn = await db_createNote(spaceId); collapsedState.set(nn.id, false); renderSpace(root, spaceId); }); }
+  const reindexBtn = root.querySelector('#reindexBtn');
+  if (reindexBtn) reindexBtn.addEventListener('click', async()=>{
     const { getPrefs } = await import('./settings.js');
     const prefs = getPrefs();
     const payload = notes.slice(0,50).map(n=>({ source_type:'note', source_id:n.id, content:(n.title||'')+'\n'+(n.content||'') }));
     const res = await ragIndex(spaceId, payload, prefs.searchProvider).catch(()=>null);
     window.showToast && window.showToast('Reindex completed');
   });
-  root.querySelector('#addLinkBtn').addEventListener('click', async()=>{
+  const addLinkBtn = root.querySelector('#addLinkBtn');
+  if (addLinkBtn) addLinkBtn.addEventListener('click', async()=>{
     const res = await openModalWithExtractor('Add link', `<div class="field"><label>Name</label><input id="fName" placeholder="Link name"></div><div class="field"><label>URL</label><input id="fUrl" placeholder="https://..."></div>`, (root)=>({ name: root.querySelector('#fName')?.value?.trim()||'', url: root.querySelector('#fUrl')?.value?.trim()||'' }));
     if(!res.ok) return; let { name, url } = res.values || {}; if(!name||!url) return; if(!/^https?:\/\//i.test(url)) url='https://'+url;
     const sb = getSupabase();
     const { data, error } = await sb.from('files').insert([{ space_id: spaceId, name, kind: 'link', url, content_type: 'link' }]).select('*');
     if (!error){ const { getPrefs } = await import('./settings.js'); const prefs = getPrefs(); await ragIndex(spaceId, [{ source_type:'file', source_id:data?.[0]?.id, content:`${name} ${url}` }], prefs.searchProvider); renderSpace(root, spaceId); }
   });
-  root.querySelector('#uploadBtn').addEventListener('click', async()=>{
+  const uploadBtn = root.querySelector('#uploadBtn');
+  if (uploadBtn) uploadBtn.addEventListener('click', async()=>{
     const res = await openModalWithExtractor('Upload file', `<div class="field"><label>File</label><input id="fInput" type="file"></div><div class="muted" style="font-size:12px">Uploads go to public bucket 'hive-attachments'</div>`, (root)=>({ file: root.querySelector('#fInput')?.files?.[0] || null }));
     if(!res.ok) return; const file = res.values?.file; if(!file) return;
     const sb = getSupabase();
@@ -275,7 +306,8 @@ export async function renderSpace(root, spaceId){
       renderSpace(root, spaceId);
     }
   });
-  root.querySelector('#uploadAudioBtn').addEventListener('click', async()=>{
+  const uploadAudioBtn = root.querySelector('#uploadAudioBtn');
+  if (uploadAudioBtn) uploadAudioBtn.addEventListener('click', async()=>{
     const res = await openModalWithExtractor('Transcribe audio', `<div class="field"><label>Audio file</label><input id="aInput" type="file" accept="audio/*"></div>`, (root)=>({ file: root.querySelector('#aInput')?.files?.[0] || null }));
     if(!res.ok) return; const file = res.values?.file; if(!file) return;
     const sb = getSupabase();

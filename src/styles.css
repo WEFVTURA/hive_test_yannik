@@ -60,10 +60,11 @@ body{margin:0; background:var(--bg); color:var(--text); font:14px/1.45 ui-sans-s
 .search svg{position:absolute; left:12px; top:50%; transform:translateY(-50%); width:18px; height:18px; opacity:.7}
 .go-btn{position:absolute; right:8px; top:50%; transform:translateY(-50%); border-radius:999px; padding:8px 12px; border:1px solid var(--border); background:var(--panel-2); cursor:pointer}
 .content{margin-top:10px; display:grid; grid-template-rows:auto 1fr}
-.content-head{display:flex; align-items:center; justify-content:space-between; margin-bottom:10px}
+.content-head{display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; position:relative; z-index:60}
 .title{display:flex; align-items:baseline; gap:10px}
 .title h2{margin:0}
 .view-controls{display:flex; align-items:center; gap:8px}
+.view-controls, .view-controls *{pointer-events:auto}
 .segmented{display:flex; border:1px solid var(--border); border-radius:999px; overflow:hidden}
 .segmented button{padding:8px 12px; background:transparent; border:0; color:var(--text); cursor:pointer}
 .segmented button.active{background:var(--panel-2)}
@@ -72,6 +73,12 @@ body{margin:0; background:var(--bg); color:var(--text); font:14px/1.45 ui-sans-s
 .select{appearance:none; -webkit-appearance:none; -moz-appearance:none; background:var(--panel); color:var(--text); border:1px solid var(--border); border-radius:10px; padding:8px 34px 8px 10px; position:relative}
 .select-wrap{position:relative; display:inline-block}
 .select-wrap:after{content:"▾"; position:absolute; right:10px; top:50%; transform:translateY(-50%); color:var(--muted); pointer-events:none}
+
+/* Shadcn-like glass select */
+.select-glass{appearance:none; -webkit-appearance:none; -moz-appearance:none; background:rgba(20,24,33,.6); color:var(--text); border:1px solid var(--border); border-radius:10px; padding:10px 38px 10px 12px; backdrop-filter: blur(10px); box-shadow:0 2px 0 0 rgba(255,255,255,.03) inset}
+.select-glass:focus{outline:2px solid rgba(122,140,255,.35); outline-offset:1px}
+.select-glass-wrap{position:relative; display:inline-block}
+.select-glass-wrap:after{content:"▾"; position:absolute; right:12px; top:50%; transform:translateY(-50%); color:var(--muted); pointer-events:none}
 
 .card-grid{margin-top:12px;display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;grid-auto-flow:row dense; align-items:start; align-content:start; justify-content:stretch}
 .space-2col{grid-template-columns:1fr 1fr}
@@ -87,7 +94,7 @@ body{margin:0; background:var(--bg); color:var(--text); font:14px/1.45 ui-sans-s
 .list .lib-visual{height:60px}
 
 /* RIGHT / CHAT */
-.right{display:grid; grid-template-rows: 1fr auto; padding:14px; position:relative; z-index:20; min-height:0; overflow:auto}
+.right{display:grid; grid-template-rows: 1fr auto; padding:14px; position:relative; z-index:20; min-height:0; overflow:visible}
 .chat-side-hide{position:absolute; left:-52px; top:12px; transform:rotate(-90deg); transform-origin:left top; background:var(--panel); border:1px solid var(--border); color:var(--text); padding:6px 8px; border-radius:8px; cursor:pointer; opacity:.7}
 .chat-side-hide:hover{opacity:1}
 .chat-header{display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:6px}
@@ -98,7 +105,7 @@ body{margin:0; background:var(--bg); color:var(--text); font:14px/1.45 ui-sans-s
 .splitter:after{content:""; position:absolute; left:2px; top:0; bottom:0; width:2px; background:var(--border)}
 .app.chat-closed .splitter{display:none}
 .stage{display:block; color:var(--muted); border:1px dashed var(--border); border-radius:14px}
-.composer{margin-top:12px; padding:0; overflow:hidden}
+.composer{margin-top:12px; padding:0; overflow:visible}
 .composer-head{padding:12px 14px; border-bottom:1px solid var(--border); background:var(--panel-2); display:flex; align-items:center; justify-content:space-between}
 .composer-body{padding:12px; display:grid; gap:8px}
 .input{display:flex; align-items:center; gap:10px; border:1px solid var(--border); background:var(--panel); border-radius:12px; padding:8px}
@@ -143,6 +150,21 @@ body{margin:0; background:var(--bg); color:var(--text); font:14px/1.45 ui-sans-s
 /* ICONS */
 .icon{width:18px; height:18px; display:inline-block; vertical-align:middle}
 .card-icon{width:28px; height:28px}
+
+/* Tooltips (custom hover boxes) */
+[data-tip]{position:relative}
+[data-tip]::after{content:attr(data-tip); position:absolute; left:50%; bottom:calc(100% + 8px); transform:translateX(-50%); background:var(--panel); color:var(--text); border:1px solid var(--border); padding:6px 8px; border-radius:8px; box-shadow:var(--shadow); white-space:nowrap; font-size:12px; display:none; z-index:9999; pointer-events:none}
+[data-tip]::before{content:""; position:absolute; left:50%; bottom:100%; transform:translateX(-50%); border-left:6px solid transparent; border-right:6px solid transparent; border-top:6px solid var(--panel); display:none; z-index:99; pointer-events:none}
+[data-tip]:hover::after,[data-tip]:focus::after,[data-tip]:hover::before,[data-tip]:focus::before{display:block}
+/* Ensure tooltips appear above panels and scrims */
+.app *, .panel *, .scrim *{z-index:auto}
+.tooltip-layer{z-index:9999}
+@media (prefers-reduced-motion: no-preference){
+  [data-tip]::after{opacity:0; transform:translateX(-50%) translateY(4px); transition:opacity .12s ease, transform .12s ease}
+  [data-tip]:hover::after,[data-tip]:focus::after{opacity:1; transform:translateX(-50%) translateY(0)}
+}
+
+/* (removed) Floating controls for Deep Research */
 
 /* Chats list rows */
 .chat-row{display:flex; align-items:center; justify-content:space-between; border:1px solid var(--border); padding:4px 8px; border-radius:8px; height:34px; overflow:hidden; background:var(--panel)}

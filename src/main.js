@@ -75,6 +75,7 @@ app.innerHTML = `
         
         <div class="pref-item" id="toggleTheme"><svg class="icon"><use href="#sun"></use></svg> <span>Light mode</span></div>
         <div class="pref-item" id="openGuide"><svg class="icon"><use href="#sliders"></use></svg> <span>Guide</span></div>
+        <div class="pref-item" id="resetApp"><svg class="icon"><use href="#edit"></use></svg> <span>Reset app state</span></div>
         <div class="pref-item" id="openAuth"><svg class="icon"><use href="#user"></use></svg> <span>Sign in / Sign up</span></div>
       </div>
     </aside>
@@ -124,6 +125,7 @@ const openSettings2 = document.getElementById('openSettings2');
 const openProfileBtn = document.getElementById('openProfile');
 const openAuthBtn = document.getElementById('openAuth');
 const authToggleBtn = document.getElementById('authToggleBtn');
+const resetAppBtn = document.getElementById('resetApp');
  
 openSettings2?.addEventListener('click', openSettingsModal);
 openProfileBtn?.addEventListener('click', openProfileModal);
@@ -141,9 +143,15 @@ authToggleBtn?.addEventListener('mouseleave', ()=>{ const h=document.getElementB
 openSettings2?.setAttribute('tabindex','0');
 openProfileBtn?.setAttribute('tabindex','0');
 openAuthBtn?.setAttribute('tabindex','0');
+resetAppBtn?.setAttribute('tabindex','0');
 openSettings2?.addEventListener('keydown', (e)=>{ if(e.key==='Enter' || e.key===' '){ e.preventDefault(); openSettingsModal(); } });
 openProfileBtn?.addEventListener('keydown', (e)=>{ if(e.key==='Enter' || e.key===' '){ e.preventDefault(); openProfileModal(); } });
 openAuthBtn?.addEventListener('keydown', (e)=>{ if(e.key==='Enter' || e.key===' '){ e.preventDefault(); renderAuth(content); } });
+resetAppBtn?.addEventListener('click', ()=>{
+  try{ localStorage.clear(); sessionStorage.clear(); }catch{}
+  try{ document.cookie = 'sb_access_token=; Max-Age=0; Path=/'; document.cookie = 'sb_refresh_token=; Max-Age=0; Path=/'; }catch{}
+  location.reload();
+});
  
 
 // Learn more modal
@@ -271,27 +279,7 @@ async function renderLibrary(){
       const id = btn.getAttribute('data-space-menu');
       const space = spaces.find(s=>s.id===id);
       if (!space) return;
-      const { openModalWithExtractor } = await import('./ui/modals.js');
-      const body = `
-        <div class='field'><label>Name</label><input id='spName' value='${space.name||''}' /></div>
-        <div class='field'><label>Visibility</label>
-          <select id='spVis'>
-            <option value='private' ${space.visibility==='private'?'selected':''}>Private</option>
-            <option value='team' ${space.visibility==='team'?'selected':''}>Team</option>
-            <option value='public' ${space.visibility==='public'?'selected':''}>Public</option>
-          </select>
-        </div>
-        <div class='muted' style='font-size:12px'>Danger zone</div>
-        <button class='button red' id='spDelete'>Delete space</button>`;
-      const res = await openModalWithExtractor('Space options', body, (root)=>({ name: root.querySelector('#spName')?.value||'', vis: root.querySelector('#spVis')?.value||space.visibility||'private', del: root.querySelector('#spDelete')?.dataset?.clicked==='1' }));
-      const scrim = document.getElementById('modalScrim');
-      scrim?.querySelector('#spDelete')?.addEventListener('click', ()=>{ scrim.querySelector('#spDelete').dataset.clicked='1'; });
-      if (!res.ok) return;
-      const { name, vis, del } = res.values || {};
-      const sb = await import('./lib/supabase.js');
-      if (del){ await (await import('./lib/supabase.js')).db_updateSpace(id, { deleted_at: new Date().toISOString() }).catch(()=>{}); }
-      else { if (name && name!==space.name) await sb.db_updateSpace(id, { name }); if (vis && vis!==space.visibility) await sb.db_updateSpace(id, { visibility: vis }); }
-      renderRoute();
+      await openSpaceOptions(space);
     });
   });
 
@@ -311,10 +299,43 @@ async function renderLibrary(){
     else { cover = s.cover_url ? `<img src="${s.cover_url}" alt="cover" style="width:100%; height:100%; object-fit:cover; border-radius:12px">` : `<div style=\"display:grid; place-items:center; gap:8px\"><svg class=\"icon\"><use href=\"#box\"></use></svg><span class=\"muted\">Cover</span></div>`; }
     return `<article class="lib-card" data-id="${s.id}">
       <div class="lib-visual">${cover}<div class="card-title-overlay">${s.name}</div></div>
-      <div class="lib-meta"><span>Space</span><span></span><span title="Open">›</span></div>
+      <div class="lib-meta"><span>Space</span><span></span><button class="button ghost sm" data-space-menu-grid="${s.id}" title="Options">⋯</button></div>
     </article>`;
   }).join('');
   grid.querySelectorAll('[data-id]').forEach(el=>{ el.addEventListener('click', ()=>{ location.hash = 'space/'+el.getAttribute('data-id'); }); });
+  grid.querySelectorAll('[data-space-menu-grid]').forEach(btn=>{
+    btn.addEventListener('click', async (e)=>{
+      e.stopPropagation();
+      const id = btn.getAttribute('data-space-menu-grid');
+      const space = spaces.find(s=>s.id===id);
+      if (!space) return;
+      await openSpaceOptions(space);
+    });
+  });
+}
+
+async function openSpaceOptions(space){
+  const { openModalWithExtractor } = await import('./ui/modals.js');
+  const body = `
+    <div class='field'><label>Name</label><input id='spName' value='${space.name||''}' /></div>
+    <div class='field'><label>Visibility</label>
+      <select id='spVis'>
+        <option value='private' ${space.visibility==='private'?'selected':''}>Private</option>
+        <option value='team' ${space.visibility==='team'?'selected':''}>Team</option>
+        <option value='public' ${space.visibility==='public'?'selected':''}>Public</option>
+      </select>
+    </div>
+    <div class='muted' style='font-size:12px'>Danger zone</div>
+    <button class='button red' id='spDelete'>Delete space</button>`;
+  const res = await openModalWithExtractor('Space options', body, (root)=>({ name: root.querySelector('#spName')?.value||'', vis: root.querySelector('#spVis')?.value||space.visibility||'private', del: root.querySelector('#spDelete')?.dataset?.clicked==='1' }));
+  const scrim = document.getElementById('modalScrim');
+  scrim?.querySelector('#spDelete')?.addEventListener('click', ()=>{ scrim.querySelector('#spDelete').dataset.clicked='1'; });
+  if (!res.ok) return;
+  const { name, vis, del } = res.values || {};
+  const sb = await import('./lib/supabase.js');
+  if (del){ await (await import('./lib/supabase.js')).db_updateSpace(space.id, { deleted_at: new Date().toISOString() }).catch(()=>{}); }
+  else { if (name && name!==space.name) await sb.db_updateSpace(space.id, { name }); if (vis && vis!==space.visibility) await sb.db_updateSpace(space.id, { visibility: vis }); }
+  renderRoute();
 }
 
 async function renderRoute(){
@@ -333,6 +354,9 @@ async function renderRoute(){
 
 window.addEventListener('hashchange', renderRoute);
 renderRoute();
+
+// Expose router for programmatic navigation from other modules
+try{ window.hiveRenderRoute = renderRoute; }catch{}
 
 // Chat splitter drag
 const splitter = document.getElementById('chatSplitter');
