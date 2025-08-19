@@ -32,6 +32,18 @@ export async function openSettingsModal(){
 		<div class="modal" role="dialog" aria-modal="true">
 		  <div class="modal-head"><div>Settings</div><button class="button ghost" id="xClose">✕</button></div>
 		  <div class="modal-body">
+		    <div class="field"><label>Theme</label>
+		      <select id="sTheme">
+		        <option value="dark" ${document.documentElement.getAttribute('data-theme')==='dark'?'selected':''}>Default (Dark)</option>
+		        <option value="light">Light</option>
+		        <option value="slate">Slate</option>
+		        <option value="zinc">Zinc</option>
+		        <option value="rose">Rose</option>
+		        <option value="emerald">Emerald</option>
+		        <option value="amber">Amber</option>
+		        <option value="indigo">Indigo</option>
+		      </select>
+		    </div>
 		    <div class="field"><label>Default model</label>
 		      <select id="sModel"><option ${p.defaultModel==='Mistral'?'selected':''}>Mistral</option><option ${p.defaultModel==='GPT-4o'?'selected':''}>GPT-4o</option></select>
 		    </div>
@@ -97,6 +109,13 @@ export async function openSettingsModal(){
 		chk?.addEventListener('change', ()=>{ try{ box.style.display = chk.checked ? 'block' : 'none'; }catch{} });
 	})();
 
+	// Theme live preview
+	const themeSel = scrim.querySelector('#sTheme');
+	themeSel?.addEventListener('change', ()=>{
+		const val = themeSel.value; const map = { dark:'dark', light:'light', slate:'slate', zinc:'zinc', rose:'rose', emerald:'emerald', amber:'amber', indigo:'indigo' };
+		document.documentElement.setAttribute('data-theme', map[val]||'dark');
+	});
+
 	scrim.querySelector('#saveBtn').onclick = ()=>{
 		const next = {
 			...p,
@@ -113,6 +132,7 @@ export async function openSettingsModal(){
 			enableDebugLog: scrim.querySelector('#sDebug').checked,
 			logLevel: scrim.querySelector('#sLogLevel').value,
 		};
+		try{ const sel = themeSel?.value || 'dark'; document.documentElement.setAttribute('data-theme', sel); }catch{}
 		savePrefs(next); close(); location.reload();
 	};
 }

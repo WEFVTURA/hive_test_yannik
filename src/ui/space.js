@@ -36,16 +36,19 @@ export async function renderSpace(root, spaceId){
     </div>
     <div class="card-grid ${isDeepResearch ? '' : 'space-2col'}">
       ${isDeepResearch ? '' : `
-      <section class="lib-card">
-        <div style="font-weight:600; margin-bottom:6px">Files</div>
-        <div style="display:flex; gap:8px; margin-bottom:6px">
+      <section class="lib-card" id="filesSection">
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px">
+          <div style="font-weight:600">Files</div>
+          <button class="button sm ghost" id="filesCollapseBtn">Collapse</button>
+        </div>
+        <div id="filesActions" style="display:flex; gap:8px; margin-bottom:6px">
           <button class="button" id="addLinkBtn">Add link</button>
           <button class="button" id="uploadBtn">Upload file</button>
           <button class="button" id="uploadAudioBtn">Transcribe audio</button>
         </div>
         <div id="filesList" style="display:grid; gap:8px"></div>
       </section>`}
-      <section class="lib-card" style="${isDeepResearch ? 'grid-column:1/-1' : ''}">
+      <section class="lib-card" id="notesSection" style="${isDeepResearch ? 'grid-column:1/-1' : ''}">
         <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px">
           <div style="font-weight:600">Notes</div>
           ${isDeepResearch ? `<div style="display:flex; gap:8px"><button class="button" id="deepNewNote"><i data-lucide="file-plus" class="icon" aria-hidden="true"></i> New Note</button></div>` : `<button class="button" id="addNoteBtn">New note</button>`}
@@ -250,6 +253,19 @@ export async function renderSpace(root, spaceId){
     });
   }
 
+  // Files collapse/expand
+  const filesCollapseBtn = root.querySelector('#filesCollapseBtn');
+  const filesSection = root.querySelector('#filesSection');
+  if (filesCollapseBtn && filesSection){
+    filesCollapseBtn.addEventListener('click', ()=>{
+      const collapsed = filesSection.classList.toggle('collapsed');
+      filesCollapseBtn.textContent = collapsed ? 'Expand' : 'Collapse';
+      const actions = root.querySelector('#filesActions');
+      if (actions) actions.style.display = collapsed ? 'none' : 'flex';
+      if (filesList) filesList.style.display = collapsed ? 'none' : 'grid';
+    });
+  }
+
   // Notes list
   const notesList = root.querySelector('#notesList');
   for(const n of notes){
@@ -264,7 +280,6 @@ export async function renderSpace(root, spaceId){
           <div class="segmented" role="tablist">
             <button data-mode="edit" class="active">Edit</button>
             <button data-mode="preview">Preview</button>
-            <button data-mode="split">Split</button>
           </div>
           <button class="button" data-toggle>${isCollapsed?'Expand':'Collapse'}</button>
           <button class="button red" data-delete>Delete</button>
@@ -272,9 +287,9 @@ export async function renderSpace(root, spaceId){
         </div>
       </div>
       <div class="note-snippet">${firstLines || '—'}</div>
-      <div class="note-body edit" data-body>
-        <textarea class="note-editor" data-content>${n.content||''}</textarea>
-        <div class="note-preview" data-preview></div>
+      <div class="note-body rich" data-body>
+        <textarea class="note-editor" data-content style="display:none">${n.content||''}</textarea>
+        <div class="note-preview" data-preview style="display:none"></div>
         <div style="display:flex; gap:8px; align-items:center"><span class="muted" style="font-size:12px">Tags:</span><input data-note-tags placeholder="comma, tags" style="flex:1; background:transparent; border:1px solid var(--border); color:var(--text); padding:6px 8px; border-radius:8px"/></div>
       </div>`;
 
@@ -283,31 +298,101 @@ export async function renderSpace(root, spaceId){
     const preview = row.querySelector('[data-preview]');
     const tagsInput = row.querySelector('[data-note-tags]');
     const body = row.querySelector('[data-body]');
+    // Build rich editor and toolbar for every note
+    const toolbar = document.createElement('div'); toolbar.className='rich-toolbar';
+    toolbar.innerHTML = `
+      <button class='button sm' data-cmd='bold'><strong>B</strong></button>
+      <button class='button sm' data-cmd='italic'><em>I</em></button>
+      <button class='button sm' data-cmd='insertUnorderedList'>• List</button>
+      <button class='button sm' data-cmd='insertOrderedList'>1. List</button>
+      <button class='button sm' data-cmd='formatBlock' data-value='h1'>H1</button>
+      <button class='button sm' data-cmd='formatBlock' data-value='h2'>H2</button>
+      <button class='button sm' data-cmd='formatBlock' data-value='h3'>H3</button>
+      <button class='button sm' data-cmd='formatBlock' data-value='p'>P</button>
+      <button class='button sm' data-cmd='createLink'>Link</button>
+      <button class='button sm' data-cmd='formatBlock' data-value='blockquote'>Quote</button>
+      <button class='button sm' data-cmd='insertHorizontalRule'>HR</button>
+      <button class='button sm' data-cmd='formatBlock' data-value='pre'>Code</button>
+      <button class='button sm' data-cmd='insertTable'>Table</button>`;
+    const rich = document.createElement('div'); rich.className='note-rich'; rich.contentEditable='true';
+    rich.innerHTML = n.content || '';
+    body.prepend(toolbar);
+    body.insertBefore(rich, body.querySelector('div[style]'));
 
-    const applyMode = (mode)=>{
-      body.classList.remove('edit','preview','split');
-      body.classList.add(mode);
+    // Mode toggle: edit (rich) vs preview (read-only)
+    const setMode = (mode)=>{
+      const isEdit = mode==='edit';
       row.querySelectorAll('[data-mode]').forEach(b=>b.classList.toggle('active', b.getAttribute('data-mode')===mode));
+      toolbar.style.display = isEdit ? '' : 'none';
+      rich.style.display = isEdit ? '' : 'none';
+      if (!isEdit){
+        // Render markdown nicely (legacy notes) or fall back to HTML when content is rich
+        const raw = content?.value || '';
+        const htmlFromRich = rich.innerHTML || '';
+        const looksLikeHtml = /<\s*\w+[^>]*>/i.test(raw) || /<\s*\w+[^>]*>/i.test(htmlFromRich);
+        if (looksLikeHtml){
+          preview.innerHTML = htmlFromRich || raw;
+        } else {
+          try{ preview.innerHTML = marked.parse(htmlFromRich || raw); }
+          catch{ preview.textContent = htmlFromRich || raw; }
+        }
+        preview.style.display='block';
+        preview.setAttribute('contenteditable','true');
+        preview.style.outline='none';
+      }
+      else {
+        if (preview && preview.getAttribute('contenteditable')==='true'){
+          rich.innerHTML = preview.innerHTML;
+        }
+        preview.style.display='none';
+        preview.removeAttribute('contenteditable');
+      }
     };
-
-    const renderPrev = ()=>{ preview.innerHTML = marked.parse(content.value||''); };
-    renderPrev();
     tagsInput.value = Array.isArray(n.tags)? n.tags.join(', ') : '';
 
+    const getEditorValue = ()=> {
+      const isPreviewMode = toolbar.style.display==='none';
+      if (isPreviewMode) return preview?.innerHTML || content.value || '';
+      return rich?.innerHTML || content.value || '';
+    };
     const autosave = debounce(async()=>{
-      await db_updateNote(n.id, { title: title.value||'', content: content.value||'', updated_at: new Date().toISOString() }).catch(console.error);
-      try{ const { getPrefs } = await import('./settings.js'); const prefs = getPrefs(); await ragIndex(spaceId, [{ source_type:'note', source_id:n.id, content: (title.value||'')+'\n'+(content.value||'') }], prefs.searchProvider); } catch {}
+      const val = getEditorValue();
+      await db_updateNote(n.id, { title: title.value||'', content: val, updated_at: new Date().toISOString() }).catch(console.error);
+      try{ const { getPrefs } = await import('./settings.js'); const prefs = getPrefs(); await ragIndex(spaceId, [{ source_type:'note', source_id:n.id, content: (title.value||'')+'\n'+val }], prefs.searchProvider); } catch {}
     }, 800);
 
     title.addEventListener('input', autosave);
-    content.addEventListener('input', ()=>{ renderPrev(); autosave(); });
+    rich.addEventListener('input', ()=>{ autosave(); });
     tagsInput.addEventListener('change', async ()=>{
       const tags = tagsInput.value.split(',').map(s=>s.trim()).filter(Boolean);
       try{ await db_updateNoteTags(n.id, tags); window.showToast && window.showToast('Note tags updated'); }catch{}
     });
-    row.querySelector('[data-mode="edit"]').addEventListener('click', ()=>applyMode('edit'));
-    row.querySelector('[data-mode="preview"]').addEventListener('click', ()=>applyMode('preview'));
-    row.querySelector('[data-mode="split"]').addEventListener('click', ()=>applyMode('split'));
+    // Rich toolbar commands
+    toolbar.querySelectorAll('[data-cmd]').forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        const cmd = btn.getAttribute('data-cmd');
+        if (cmd==='formatBlock'){ document.execCommand('formatBlock', false, btn.getAttribute('data-value')); }
+        else if (cmd==='createLink'){ const url = prompt('Link URL'); if (url) document.execCommand('createLink', false, url); }
+        else if (cmd==='insertTable'){ document.execCommand('insertHTML', false, '<table><tr><td> </td><td> </td></tr></table>'); }
+        else { document.execCommand(cmd, false, null); }
+        rich.focus();
+      });
+    });
+
+    // Mode buttons
+    row.querySelector('[data-mode="edit"]').addEventListener('click', ()=>setMode('edit'));
+    row.querySelector('[data-mode="preview"]').addEventListener('click', ()=>setMode('preview'));
+    setMode('edit');
+
+    // Keep autosave while editing directly in preview
+    preview.addEventListener('input', ()=>{ autosave(); });
+    // Keyboard toggle Ctrl/Cmd+E
+    row.addEventListener('keydown', (e)=>{
+      if ((e.ctrlKey||e.metaKey) && e.key.toLowerCase()==='e'){ e.preventDefault();
+        const to = toolbar.style.display==='none' ? 'edit' : 'preview'; setMode(to);
+        try{ (to==='edit'?rich:preview).focus(); }catch{}
+      }
+    });
 
     const fsBtn = row.querySelector('[data-fullscreen]');
     fsBtn.addEventListener('click', ()=>{
