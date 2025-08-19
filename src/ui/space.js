@@ -83,11 +83,8 @@ export async function renderSpace(root, spaceId){
     const space = await db_getSpace(spaceId).catch(()=>({ id: spaceId, name:'Space', visibility:'private' }));
     const { openModalWithExtractor } = await import('./modals.js');
     const shares = await (await import('../lib/supabase.js')).db_listShares(spaceId).catch(()=>[]);
-    // Protect baseline spaces from deletion
-    const meetingsId = (typeof localStorage!=='undefined') ? localStorage.getItem('hive_meetings_space_id') : '';
-    const chatsId = (typeof localStorage!=='undefined') ? localStorage.getItem('hive_chats_space_id') : '';
-    const researchId2 = (typeof localStorage!=='undefined') ? localStorage.getItem('hive_research_space_id') : '';
-    const isProtected = [meetingsId, chatsId, researchId2].filter(Boolean).includes(String(spaceId));
+    const storedColor = (typeof localStorage!=='undefined') ? (localStorage.getItem('space_color_'+spaceId)||'') : '';
+    const palette = ['#7c3aed','#2563eb','#059669','#f59e0b','#e11d48','#06b6d4','#a855f7'];
     const body = `
       <div class='field'><label>Name</label><input id='spName' value='${space.name||''}' /></div>
       <div class='field'><label>Visibility</label>
@@ -97,87 +94,30 @@ export async function renderSpace(root, spaceId){
           <option value='public' ${space.visibility==='public'?'selected':''}>Public</option>
         </select>
       </div>
+      <div class='field'><label>Color</label>
+        <div id='spColors' style='display:flex; gap:8px'>
+          ${palette.map(c=>`<button class='button' data-color='${c}' title='${c}' style='width:26px; height:26px; padding:0; border-radius:999px; background:${c}; border:2px solid ${storedColor===c?'#fff':'var(--border)'}'></button>`).join('')}
+          <button class='button' data-color='' title='None' style='width:26px; height:26px; padding:0; border-radius:999px; background:transparent'>✕</button>
+        </div>
+      </div>
       <div class='field'><label>Invite by email</label><input id='inviteEmail' placeholder='name@company.com' /></div>
       <div class='muted' style='font-size:12px'>Existing shares</div>
-      <div style='display:grid; gap:6px'>${shares.map(s=>`<div style='border:1px solid var(--border); padding:6px; border-radius:8px'>${s.email}</div>`).join('')||'<div class=muted>None</div>'}</div>
-      <div class='muted' style='font-size:12px;margin-top:8px'>Danger zone</div>
-      <button class='button red' id='spDelete' ${isProtected?'disabled':''}>${isProtected?'Cannot delete baseline space':'Delete space'}</button>`;
-    const modalPromise = openModalWithExtractor('Space options', body, (root)=>({ name: root.querySelector('#spName')?.value||'', vis: root.querySelector('#spVis')?.value||space.visibility||'private', email: root.querySelector('#inviteEmail')?.value?.trim()||'', del: root.querySelector('#spDelete')?.dataset?.clicked==='1' }));
+      <div style='display:grid; gap:6px'>${shares.map(s=>`<div style='border:1px solid var(--border); padding:6px; border-radius:8px'>${s.email}</div>`).join('')||'<div class=muted>None</div>'}</div>`;
+    const modalPromise = openModalWithExtractor('Space options', body, (root)=>({ name: root.querySelector('#spName')?.value||'', vis: root.querySelector('#spVis')?.value||space.visibility||'private', email: root.querySelector('#inviteEmail')?.value?.trim()||'', color: root.querySelector('#spColors [data-selected="1"]')?.getAttribute('data-color')||'' }));
     const scrim = document.getElementById('modalScrim');
-    // Final fallback: floating, topmost Delete inside modal scrim
-    try{
-      if (scrim && !isProtected){
-        const float = document.createElement('button');
-        float.id = 'spDeleteFloat';
-        float.className = 'button red';
-        float.textContent = 'Delete';
-        float.setAttribute('style', 'position:fixed; right:18px; bottom:18px; z-index:1100; pointer-events:auto');
-        scrim.appendChild(float);
-        float.addEventListener('click', async ()=>{
-          if (!confirm('Delete this space?')) return;
-          try{
-            const headerBtn = document.getElementById('deleteHeaderBtn');
-            if (headerBtn){ headerBtn.click(); return; }
-            const { db_deleteSpace } = await import('../lib/supabase.js');
-            await db_deleteSpace(spaceId);
-            console.info('Space deleted via floating button');
-            try{ scrim.querySelector('#modalCancel')?.click(); }catch{}
-            try{ location.hash=''; }catch{}
-            try{ window.hiveRenderRoute && window.hiveRenderRoute(); }catch{}
-          }catch(e){ console.error('Delete failed', e); window.showToast && window.showToast('Delete failed'); }
-        }, { once:true });
-      }
-    }catch{}
-    // Approach A: extra destructive button in modal footer
-    try{
-      const actions = scrim?.querySelector('.modal-actions');
-      if (actions && !isProtected){
-        const danger = document.createElement('button'); danger.className='button red'; danger.id='spDeleteFooter'; danger.textContent='Delete';
-        actions.prepend(danger);
-        danger.addEventListener('click', async ()=>{
-          if (!confirm('Delete this space?')) return;
-          try{ const { db_deleteSpace } = await import('../lib/supabase.js'); await db_deleteSpace(spaceId); console.info('Space deleted via footer'); }
-          catch(e){ console.error('Delete failed', e); window.showToast && window.showToast('Delete failed'); return; }
-          try{ scrim.querySelector('#modalCancel')?.click(); }catch{}; try{ location.hash=''; }catch{}; try{ window.hiveRenderRoute && window.hiveRenderRoute(); }catch{};
-        });
-      }
-    }catch{}
-    // Event delegation to make sure clicks are caught even if layout changes
-    if (scrim){
-      const delegatedDelete = async (e)=>{
-        const target = e.target && (e.target.closest ? e.target.closest('#spDelete, #spDeleteFooter') : null);
-        if (!target) return;
-        e.preventDefault(); e.stopPropagation();
-        if (target.hasAttribute('disabled')) return;
-        if (!confirm('Delete this space?')) return;
-        try{
-          // Reuse the header path if present (it works in your env)
-          const headerBtn = document.getElementById('deleteHeaderBtn');
-          if (headerBtn){ headerBtn.click(); return; }
-          const { db_deleteSpace } = await import('../lib/supabase.js');
-          await db_deleteSpace(spaceId);
-          console.info('Space deleted via modal');
-          try{ scrim.querySelector('#modalCancel')?.click(); }catch{}
-          try{ location.hash=''; }catch{}
-          try{ if (typeof window.hiveRenderRoute === 'function'){ window.hiveRenderRoute(); } }catch{}
-        }catch(e){ console.error('Delete space failed', e); window.showToast && window.showToast('Delete failed: '+(e?.message||'unknown')); }
-      };
-      scrim.addEventListener('click', delegatedDelete, { capture:true, once:true });
-    }
+    // Color selection events
+    try{ scrim.querySelectorAll('#spColors [data-color]').forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        scrim.querySelectorAll('#spColors [data-color]').forEach(b=>{ b.removeAttribute('data-selected'); b.style.borderColor='var(--border)'; });
+        btn.setAttribute('data-selected','1'); btn.style.borderColor='#fff';
+      });
+      if (storedColor && btn.getAttribute('data-color')===storedColor){ btn.setAttribute('data-selected','1'); btn.style.borderColor='#fff'; }
+    }); }catch{}
     const res = await modalPromise;
     if (!res.ok) return;
-    const { name, vis, email, del } = res.values || {};
-    if (del){
-      if (isProtected){ window.showToast && window.showToast('Cannot delete baseline spaces (Meetings, Chats, Deep Researches)'); return; }
-      try{
-        const { db_deleteSpace } = await import('../lib/supabase.js');
-        await db_deleteSpace(spaceId);
-      }catch{ window.showToast && window.showToast('Delete failed'); return; }
-      // Navigate to library immediately
-      try{ location.hash = ''; }catch{}
-      try{ if (typeof window.hiveRenderRoute === 'function'){ window.hiveRenderRoute(); } }catch{}
-      return;
-    }
+    const { name, vis, email, color } = res.values || {};
+    // Persist color locally for library card styling
+    try{ if (typeof localStorage!=='undefined'){ if (color){ localStorage.setItem('space_color_'+spaceId, color); } else { localStorage.removeItem('space_color_'+spaceId); } } }catch{}
     if (name && name!==space.name){ try{ await db_updateSpace(spaceId, { name }); console.info('Space name updated'); }catch(e){ console.error('Update name failed', e); } }
     if (vis && vis!==space.visibility){ try{ await db_updateSpace(spaceId, { visibility: vis }); console.info('Visibility updated', vis); }catch(e){ console.error('Update visibility failed', e); } }
     if (email){ await (await import('../lib/supabase.js')).db_shareSpace(spaceId, email).catch(()=>alert('Share failed')); window.showToast && window.showToast('Invite sent to '+email); }
@@ -263,6 +203,13 @@ export async function renderSpace(root, spaceId){
       const actions = root.querySelector('#filesActions');
       if (actions) actions.style.display = collapsed ? 'none' : 'flex';
       if (filesList) filesList.style.display = collapsed ? 'none' : 'grid';
+      // When collapsed, let notes take full width
+      try{
+        const notesSection = root.querySelector('#notesSection');
+        if (notesSection){
+          notesSection.style.gridColumn = collapsed ? '1 / -1' : '';
+        }
+      }catch{}
     });
   }
 

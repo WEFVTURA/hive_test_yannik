@@ -58,6 +58,7 @@ app.innerHTML = `
       <button class="button" id="meetingBtn" style="width:100%"><svg class="icon"><use href="#spark"></use></svg> Meeting Intelligence</button>
       <button class="button" id="deepResearchBtn" style="width:100%"><svg class="icon"><use href="#search"></use></svg> Deep Research</button>
       <button class="button" id="quickNewNoteBtn" style="width:100%"><svg class="icon"><use href="#edit"></use></svg> New Note</button>
+      <button class="button mobile-only" id="openChatMobile" style="display:none; width:100%"><svg class="icon"><use href="#chat"></use></svg> Open Chat</button>
 
       <div class="section">Giannandrea's Library</div>
       <div class="nav-group" id="spacesList"></div>
@@ -268,6 +269,12 @@ quickNewNoteBtn?.addEventListener('click', async ()=>{
   }catch{}
 });
 
+// Mobile: open chat quickly
+document.getElementById('openChatMobile')?.addEventListener('click', ()=>{
+  const appRoot = document.getElementById('appRoot');
+  if (appRoot){ appRoot.classList.add('chat-open'); appRoot.classList.remove('chat-closed'); }
+});
+
 // Create Space button -> prompt name and create
 const createSpaceBtn = document.getElementById('createSpaceBtn');
 createSpaceBtn?.addEventListener('click', async ()=>{
@@ -322,21 +329,22 @@ async function renderLibrary(){
   });
 
   const grid = document.getElementById('grid');
-  // Promote baseline spaces first
+  // Promote baseline spaces first: Deep Research, Meetings, Chats
   const meetingsId = localStorage.getItem('hive_meetings_space_id')||'';
   const chatsId = localStorage.getItem('hive_chats_space_id')||'';
+  const researchId = localStorage.getItem('hive_research_space_id')||'';
   spaces.sort((a,b)=>{
-    const aScore = ((a.id===meetingsId)?-2:0) + ((a.id===chatsId)?-1:0);
-    const bScore = ((b.id===meetingsId)?-2:0) + ((b.id===chatsId)?-1:0);
-    return aScore - bScore;
+    const score = (s)=>((s.id===researchId)?-3:0) + ((s.id===meetingsId)?-2:0) + ((s.id===chatsId)?-1:0);
+    return score(a) - score(b);
   });
   grid.innerHTML = spaces.map(s=>{
+    const color = (typeof localStorage!=='undefined') ? (localStorage.getItem('space_color_'+s.id)||'') : '';
     let cover;
     if (s.id===meetingsId){ cover = `<div style=\"display:grid; place-items:center; height:100%\"><svg class=\"icon card-icon\"><use href=\"#video\"></use></svg></div>`; }
     else if (s.id===chatsId){ cover = `<div style=\"display:grid; place-items:center; height:100%\"><svg class=\"icon card-icon\"><use href=\"#chat\"></use></svg></div>`; }
     else { cover = s.cover_url ? `<img src="${s.cover_url}" alt="cover" style="width:100%; height:100%; object-fit:cover; border-radius:12px">` : `<div style=\"display:grid; place-items:center; gap:8px\"><svg class=\"icon\"><use href=\"#box\"></use></svg><span class=\"muted\">Cover</span></div>`; }
     return `<article class="lib-card" data-id="${s.id}">
-      <div class="lib-visual">${cover}<div class="card-title-overlay">${s.name}</div></div>
+      <div class="lib-visual" style="${color?`border:2px solid ${color}`:''}">${cover}<div class="card-title-overlay">${s.name}</div></div>
       <div class="lib-meta"><span>Space</span><span></span><button class="button ghost sm" data-space-menu-grid="${s.id}" title="Options">⋯</button></div>
     </article>`;
   }).join('');
@@ -354,6 +362,8 @@ async function renderLibrary(){
 
 async function openSpaceOptions(space){
   const { openModalWithExtractor } = await import('./ui/modals.js');
+  const storedColor = (typeof localStorage!=='undefined') ? (localStorage.getItem('space_color_'+space.id)||'') : '';
+  const palette = ['#7c3aed','#2563eb','#059669','#f59e0b','#e11d48','#06b6d4','#a855f7'];
   const body = `
     <div class='field'><label>Name</label><input id='spName' value='${space.name||''}' /></div>
     <div class='field'><label>Visibility</label>
@@ -363,16 +373,31 @@ async function openSpaceOptions(space){
         <option value='public' ${space.visibility==='public'?'selected':''}>Public</option>
       </select>
     </div>
-    <div class='muted' style='font-size:12px'>Danger zone</div>
-    <button class='button red' id='spDelete'>Delete space</button>`;
-  const res = await openModalWithExtractor('Space options', body, (root)=>({ name: root.querySelector('#spName')?.value||'', vis: root.querySelector('#spVis')?.value||space.visibility||'private', del: root.querySelector('#spDelete')?.dataset?.clicked==='1' }));
+    <div class='field'><label>Color</label>
+      <div id='spColors' style='display:flex; gap:8px'>
+        ${palette.map(c=>`<button class='button' data-color='${c}' title='${c}' style='width:26px; height:26px; padding:0; border-radius:999px; background:${c}; border:2px solid ${storedColor===c?'#fff':'var(--border)'}'></button>`).join('')}
+        <button class='button' data-color='' title='None' style='width:26px; height:26px; padding:0; border-radius:999px; background:transparent'>✕</button>
+      </div>
+    </div>`;
+  const res = await openModalWithExtractor('Space options', body, (root)=>({ name: root.querySelector('#spName')?.value||'', vis: root.querySelector('#spVis')?.value||space.visibility||'private', color: root.querySelector('#spColors [data-selected="1"]')?.getAttribute('data-color')||'' }));
   const scrim = document.getElementById('modalScrim');
-  scrim?.querySelector('#spDelete')?.addEventListener('click', ()=>{ scrim.querySelector('#spDelete').dataset.clicked='1'; });
+  // Color interactions
+  try{
+    scrim.querySelectorAll('#spColors [data-color]').forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        scrim.querySelectorAll('#spColors [data-color]').forEach(b=>{ b.removeAttribute('data-selected'); b.style.borderColor='var(--border)'; });
+        btn.setAttribute('data-selected','1'); btn.style.borderColor = '#fff';
+      });
+      if (storedColor && btn.getAttribute('data-color')===storedColor){ btn.setAttribute('data-selected','1'); btn.style.borderColor='#fff'; }
+    });
+  }catch{}
   if (!res.ok) return;
-  const { name, vis, del } = res.values || {};
+  const { name, vis, color } = res.values || {};
   const sb = await import('./lib/supabase.js');
-  if (del){ await (await import('./lib/supabase.js')).db_updateSpace(space.id, { deleted_at: new Date().toISOString() }).catch(()=>{}); }
-  else { if (name && name!==space.name) await sb.db_updateSpace(space.id, { name }); if (vis && vis!==space.visibility) await sb.db_updateSpace(space.id, { visibility: vis }); }
+  // Persist color locally
+  try{ if (typeof localStorage!=='undefined'){ if (color){ localStorage.setItem('space_color_'+space.id, color); } else { localStorage.removeItem('space_color_'+space.id); } } }catch{}
+  if (name && name!==space.name) await sb.db_updateSpace(space.id, { name });
+  if (vis && vis!==space.visibility) await sb.db_updateSpace(space.id, { visibility: vis });
   renderRoute();
 }
 
