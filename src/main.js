@@ -3,6 +3,7 @@ import { db_listSpaces, db_createSpace, db_listNotes, db_listFiles, getSupabase,
 import { renderSpace } from './ui/space.js';
 import { renderAuth } from './ui/auth.js';
 import { renderChat } from './ui/chat.js';
+import { initSelectEnhancer } from './ui/select.js';
 import { getPrefs, openSettingsModal, openProfileModal } from './ui/settings.js';
 import { openModalWithExtractor } from './ui/modals.js';
 import { ragIndex } from './lib/rag.js';
@@ -129,6 +130,7 @@ app.innerHTML = `
     </div>
   </div>`;
 try{ window.lucide && window.lucide.createIcons(); }catch{}
+try{ initSelectEnhancer(); }catch{}
 // Disable legacy mobile stylesheet; Simplified view will handle mobile
 try{ const m=document.getElementById('mobileCss'); if(m){ m.setAttribute('media','not all'); m.disabled=true; m.setAttribute('data-forced','0'); } }catch{}
 
