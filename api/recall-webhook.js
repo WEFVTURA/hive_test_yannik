@@ -58,17 +58,16 @@ export default async function handler(req){
         const transcriptId = body?.transcript_id || body?.transcript?.id || body?.data?.transcript_id || '';
         if (RECALL_KEY && transcriptId){
           // Try multiple host/path variants and auth header styles
-          const region = (process.env.RECALL_REGION || '').trim();
-          const explicitBase = (process.env.RECALL_BASE_URL || '').trim();
-          const bases = [];
-          if (explicitBase) bases.push(explicitBase.replace(/\/$/, ''));
-          bases.push('https://api.recall.ai','https://app.recall.ai');
-          if (region){
-            bases.push(`https://api.${region}.recall.ai`, `https://app.${region}.recall.ai`);
-            bases.push(`https://${region}.api.recall.ai`, `https://${region}.app.recall.ai`);
-          }
-          const urls = [];
-          for (const b of bases){ urls.push(`${b}/v1/transcripts/${transcriptId}`, `${b}/api/v1/transcripts/${transcriptId}`); }
+          // Recall keys are region-scoped: US/EU/JP/Pay-as-you-go
+          const region = (process.env.RECALL_REGION || 'us').trim().toLowerCase();
+          const regionBases = {
+            'us': 'https://us-west-2.recall.ai',
+            'eu': 'https://eu-west-1.recall.ai', 
+            'jp': 'https://ap-northeast-1.recall.ai',
+            'payg': 'https://api.recall.ai'
+          };
+          const base = regionBases[region] || regionBases.us;
+          const urls = [`${base}/v1/transcripts/${transcriptId}`, `${base}/api/v1/transcripts/${transcriptId}`];
           const headersList = [ { Authorization:`Token ${RECALL_KEY}` }, { 'X-Api-Key': RECALL_KEY } ];
           for (const u of urls){
             for (const hdrs of headersList){

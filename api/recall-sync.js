@@ -48,22 +48,20 @@ export default async function handler(req){
         { Authorization:`Token ${RECALL_KEY}`, Accept:'application/json' },
         { 'X-Api-Key': RECALL_KEY, Accept:'application/json' },
       ];
-      const region = (process.env.RECALL_REGION || '').trim();
-      const explicitBase = (process.env.RECALL_BASE_URL || '').trim();
-      const bases = [];
-      if (explicitBase) bases.push(explicitBase.replace(/\/$/, ''));
-      bases.push('https://api.recall.ai', 'https://app.recall.ai');
-      if (region){
-        bases.push(`https://api.${region}.recall.ai`, `https://app.${region}.recall.ai`);
-        bases.push(`https://${region}.api.recall.ai`, `https://${region}.app.recall.ai`);
-      }
+      // Recall keys are region-scoped: US/EU/JP/Pay-as-you-go
+      const region = (process.env.RECALL_REGION || 'us').trim().toLowerCase();
+      const regionBases = {
+        'us': 'https://us-west-2.recall.ai',
+        'eu': 'https://eu-west-1.recall.ai', 
+        'jp': 'https://ap-northeast-1.recall.ai',
+        'payg': 'https://api.recall.ai'
+      };
+      const base = regionBases[region] || regionBases.us;
       const paths = [ '/v1/transcripts', '/api/v1/transcripts' ];
       const queryVariants = [ '', '?status=completed', '?state=completed' ];
       const urls = [];
-      for (const base of bases){
-        for (const path of paths){
-          for (const q of queryVariants){ urls.push(`${base}${path}${q}${q? '&' : '?'}limit=100`); }
-        }
+      for (const path of paths){
+        for (const q of queryVariants){ urls.push(`${base}${path}${q}${q? '&' : '?'}limit=100`); }
       }
       const aggregated = [];
       for (const firstUrl of urls){
@@ -82,7 +80,7 @@ export default async function handler(req){
           let nextUrl = data?.next || data?.links?.next || '';
           if (nextUrl && typeof nextUrl === 'string'){
             // Support relative next links
-            if (nextUrl.startsWith('/')) nextUrl = `https://api.recall.ai${nextUrl}`;
+            if (nextUrl.startsWith('/')) nextUrl = `${base}${nextUrl}`;
             url = nextUrl;
           } else {
             break;

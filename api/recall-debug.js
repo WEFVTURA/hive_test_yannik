@@ -14,13 +14,15 @@ export default async function handler(req){
   const region = (process.env.RECALL_REGION || '').trim();
   const explicitBase = (process.env.RECALL_BASE_URL || '').trim();
   
-  const bases = [];
-  if (explicitBase) bases.push(explicitBase.replace(/\/$/, ''));
-  bases.push('https://api.recall.ai', 'https://app.recall.ai');
-  if (region){
-    bases.push(`https://api.${region}.recall.ai`, `https://app.${region}.recall.ai`);
-    bases.push(`https://${region}.api.recall.ai`, `https://${region}.app.recall.ai`);
-  }
+  // Recall keys are region-scoped: US/EU/JP/Pay-as-you-go
+  const regionBases = {
+    'us': 'https://us-west-2.recall.ai',
+    'eu': 'https://eu-west-1.recall.ai', 
+    'jp': 'https://ap-northeast-1.recall.ai',
+    'payg': 'https://api.recall.ai'
+  };
+  const bases = [regionBases[region?.toLowerCase()] || regionBases.us];
+  if (explicitBase) bases.unshift(explicitBase.replace(/\/$/, ''));
 
   const results = [];
   const headersList = [
