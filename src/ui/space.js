@@ -549,7 +549,23 @@ export async function renderSpace(root, spaceId){
       try{
         const signed = await bucket.createSignedUploadUrl(path).catch(()=>null);
         if (signed?.data?.signedUrl){
-          await new Promise((resolve,reject)=>{ const xhr=new XMLHttpRequest(); xhr.open('POST', signed.data.signedUrl); xhr.upload.onprogress=(e)=>{ if(e.lengthComputable) updateProgress(pId,(e.loaded/e.total)*100); }; xhr.onload=()=> (xhr.status>=200&&xhr.status<300)?resolve(null):reject(new Error('upload')); xhr.onerror=()=>reject(new Error('network')); const form=new FormData(); form.append('file',file); xhr.send(form); });
+          await new Promise((resolve,reject)=>{
+            const xhr = new XMLHttpRequest();
+            xhr.open('POST', signed.data.signedUrl, true);
+            xhr.upload.onprogress = (e) => { if(e.lengthComputable) updateProgress(pId,(e.loaded/e.total)*100); };
+            xhr.onload = () => {
+              if(xhr.status >= 200 && xhr.status < 300) {
+                resolve(null);
+              } else {
+                console.error('Upload failed:', xhr.status, xhr.responseText);
+                reject(new Error(`upload_${xhr.status}`));
+              }
+            };
+            xhr.onerror = () => reject(new Error('network'));
+            const form = new FormData();
+            form.append('file', file, file.name);
+            xhr.send(form);
+          });
         } else {
           const up = await bucket.upload(path,file,{ upsert:true }); if (up.error) throw up.error; updateProgress(pId,100);
         }
