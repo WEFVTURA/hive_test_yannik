@@ -29,16 +29,36 @@ export default async function handler(req){
 
   // Ensure Meetings space
   let spaceId = '';
+  let spaceDebug = '';
   try{
-    const q = await fetch(`${SUPABASE_URL}/rest/v1/spaces?select=id&name=eq.Meetings`, { headers:{ apikey:SERVICE_KEY, Authorization:`Bearer ${SERVICE_KEY}` } });
+    // Try exact match first
+    const q = await fetch(`${SUPABASE_URL}/rest/v1/spaces?select=id,name&name=eq.Meetings`, { headers:{ apikey:SERVICE_KEY, Authorization:`Bearer ${SERVICE_KEY}` } });
     const arr = await q.json().catch(()=>[]);
-    if (Array.isArray(arr) && arr.length) spaceId = arr[0].id;
-    else {
-      const r = await fetch(`${SUPABASE_URL}/rest/v1/spaces`, { method:'POST', headers:{ 'Content-Type':'application/json', apikey:SERVICE_KEY, Authorization:`Bearer ${SERVICE_KEY}` }, body: JSON.stringify({ name:'Meetings', visibility:'private' }) });
-      const created = await r.json().catch(()=>({}));
-      spaceId = created?.[0]?.id || created?.id || '';
+    spaceDebug += `exact_match:${arr.length} `;
+    
+    if (Array.isArray(arr) && arr.length) {
+      spaceId = arr[0].id;
+      spaceDebug += `found:${spaceId} `;
+    } else {
+      // Try case-insensitive search like frontend does
+      const q2 = await fetch(`${SUPABASE_URL}/rest/v1/spaces?select=id,name&name=ilike.meetings`, { headers:{ apikey:SERVICE_KEY, Authorization:`Bearer ${SERVICE_KEY}` } });
+      const arr2 = await q2.json().catch(()=>[]);
+      spaceDebug += `ilike_match:${arr2.length} `;
+      
+      if (Array.isArray(arr2) && arr2.length) {
+        spaceId = arr2[0].id;
+        spaceDebug += `found_ilike:${spaceId} `;
+      } else {
+        // Create new space
+        const r = await fetch(`${SUPABASE_URL}/rest/v1/spaces`, { method:'POST', headers:{ 'Content-Type':'application/json', apikey:SERVICE_KEY, Authorization:`Bearer ${SERVICE_KEY}` }, body: JSON.stringify({ name:'Meetings', visibility:'private' }) });
+        const created = await r.json().catch(()=>({}));
+        spaceId = created?.[0]?.id || created?.id || '';
+        spaceDebug += `created:${spaceId} `;
+      }
     }
-  }catch{}
+  }catch(e){
+    spaceDebug += `error:${e.message} `;
+  }
 
   let imported = 0; let checked = 0;
   try{
@@ -121,7 +141,7 @@ export default async function handler(req){
     }
   }catch{}
 
-  return jres({ ok:true, space_id: spaceId, checked, imported }, 200, cors);
+  return jres({ ok:true, space_id: spaceId, checked, imported, debug: spaceDebug }, 200, cors);
 }
 
 
