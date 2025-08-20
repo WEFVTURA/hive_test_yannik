@@ -10,8 +10,21 @@ export default async function handler(req){
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
   if (req.method !== 'POST') return new Response('Method Not Allowed', { status: 405, headers: cors });
   try{
-    const form = await req.formData();
-    const file = form.get('file');
+    const ct = req.headers.get('Content-Type')||'';
+    let file = null;
+    if (ct.startsWith('multipart/form-data')){
+      const form = await req.formData();
+      file = form.get('file');
+    } else {
+      // Support URL ingestion: { url }
+      const j = await req.json().catch(()=>({}));
+      const url = j?.url||'';
+      if (url){
+        const rf = await fetch(url);
+        const blob = await rf.blob();
+        file = new File([blob], (new URL(url).pathname.split('/').pop()||'audio.m4a'), { type: blob.type||'application/octet-stream' });
+      }
+    }
     if (!file) return new Response(JSON.stringify({ error:'file missing' }), { status:400, headers:{...cors,'Content-Type':'application/json'} });
     const hdrAuth = req.headers.get('authorization') || '';
     const inlineKey = hdrAuth.toLowerCase().startsWith('bearer ') ? hdrAuth.slice(7).trim() : '';

@@ -542,8 +542,20 @@ export async function renderSpace(root, spaceId){
       completeProgress(pId,true); return url;
     }
     async function uploadViaStorage(file){
-      const pId = showProgress({ label:'Uploading to Storage…', determinate:false });
-      const path = `${spaceId}/${Date.now()}_${file.name}`; const bucket = sb.storage.from('hive-attachments'); const up = await bucket.upload(path,file,{ upsert:true }); if(up.error){ completeProgress(pId,false); throw up.error; } const url=bucket.getPublicUrl(path).data.publicUrl; completeProgress(pId,true); return url;
+      const pId = showProgress({ label:'Uploading to Storage…', determinate:true });
+      // Use signed URL + XHR for true progress
+      const bucket = sb.storage.from('hive-attachments');
+      const path = `${spaceId}/${Date.now()}_${file.name}`;
+      try{
+        const signed = await bucket.createSignedUploadUrl(path).catch(()=>null);
+        if (signed?.data?.signedUrl){
+          await new Promise((resolve,reject)=>{ const xhr=new XMLHttpRequest(); xhr.open('POST', signed.data.signedUrl); xhr.upload.onprogress=(e)=>{ if(e.lengthComputable) updateProgress(pId,(e.loaded/e.total)*100); }; xhr.onload=()=> (xhr.status>=200&&xhr.status<300)?resolve(null):reject(new Error('upload')); xhr.onerror=()=>reject(new Error('network')); const form=new FormData(); form.append('file',file); xhr.send(form); });
+        } else {
+          const up = await bucket.upload(path,file,{ upsert:true }); if (up.error) throw up.error; updateProgress(pId,100);
+        }
+      }catch(e){ completeProgress(pId,false); throw e; }
+      completeProgress(pId,true);
+      return bucket.getPublicUrl(path).data.publicUrl;
     }
     async function transcribe(url, title){
       const indId = showProgress({ label:'Transcribing…', determinate:false });
@@ -553,8 +565,8 @@ export async function renderSpace(root, spaceId){
     menu.querySelector('[data-route="vercel"]').onclick = async()=>{ menu.style.display='none'; const f=await pickFile(); if(!f) return; const u=await uploadViaVercel(f); await transcribe(u,(f.name||'Audio').replace(/\.[^/.]+$/,'')); };
     menu.querySelector('[data-route="supabase"]').onclick = async()=>{ menu.style.display='none'; const f=await pickFile(); if(!f) return; const u=await uploadViaFunction(f); await transcribe(u,(f.name||'Audio').replace(/\.[^/.]+$/,'')); };
     menu.querySelector('[data-route="storage"]').onclick = async()=>{ menu.style.display='none'; const f=await pickFile(); if(!f) return; const u=await uploadViaStorage(f); await transcribe(u,(f.name||'Audio').replace(/\.[^/.]+$/,'')); };
-    menu.querySelector('[data-route="openai"]').onclick = async()=>{ menu.style.display='none'; const f=await pickFile(); if(!f) return; const pId=showProgress({ label:'OpenAI Whisper…', determinate:true }); try{ const form=new FormData(); form.append('file',f); const r=await fetch('/api/openai-whisper',{ method:'POST', headers:{ Authorization:`Bearer ${ (window.OPENAI_API_KEY||'') }` }, body: form }); const j=await r.json(); if(!r.ok) throw new Error(j?.error||'openai'); const n=await db_createNote(spaceId); await db_updateNote(n.id,{ title:(f.name||'Audio').replace(/\.[^/.]+$/,''), content:j.text||'' }); completeProgress(pId,true); }catch{ completeProgress(pId,false); } };
-    menu.querySelector('[data-route="deepgram"]').onclick = async()=>{ menu.style.display='none'; const f=await pickFile(); if(!f) return; const pId=showProgress({ label:'Deepgram…', determinate:true }); try{ const form=new FormData(); form.append('file',f); const r=await fetch('/api/deepgram-upload',{ method:'POST', headers:{ Authorization:`Bearer ${'def4729bf48ec55083d38cec18e6c314c5a4a180'}` }, body: form }); const j=await r.json(); if(!r.ok) throw new Error(j?.error||'deepgram'); const n=await db_createNote(spaceId); await db_updateNote(n.id,{ title:(f.name||'Audio').replace(/\.[^/.]+$/,''), content:j.text||'' }); completeProgress(pId,true); }catch{ completeProgress(pId,false); } };
+    menu.querySelector('[data-route="openai"]').onclick = async()=>{ menu.style.display='none'; const f=await pickFile(); if(!f) return; const url=await uploadViaStorage(f); const pId=showProgress({ label:'OpenAI Whisper…', determinate:false }); try{ const r=await fetch('/api/openai-whisper',{ method:'POST', headers:{ Authorization:`Bearer ${ (window.OPENAI_API_KEY||'') }`, 'Content-Type':'application/json' }, body: JSON.stringify({ url }) }); const j=await r.json(); if(!r.ok) throw new Error(j?.error||'openai'); const n=await db_createNote(spaceId); await db_updateNote(n.id,{ title:(f.name||'Audio').replace(/\.[^/.]+$/,''), content:j.text||'' }); completeProgress(pId,true); window.showToast && window.showToast('Transcript saved'); renderSpace(root, spaceId); }catch{ completeProgress(pId,false); } };
+    menu.querySelector('[data-route="deepgram"]').onclick = async()=>{ menu.style.display='none'; const f=await pickFile(); if(!f) return; const url=await uploadViaStorage(f); const pId=showProgress({ label:'Deepgram…', determinate:false }); try{ const r=await fetch('/api/deepgram-upload',{ method:'POST', headers:{ Authorization:`Bearer ${'def4729bf48ec55083d38cec18e6c314c5a4a180'}`, 'Content-Type':'application/json' }, body: JSON.stringify({ url }) }); const j=await r.json(); if(!r.ok) throw new Error(j?.error||'deepgram'); const n=await db_createNote(spaceId); await db_updateNote(n.id,{ title:(f.name||'Audio').replace(/\.[^/.]+$/,''), content:j.text||'' }); completeProgress(pId,true); window.showToast && window.showToast('Transcript saved'); renderSpace(root, spaceId); }catch{ completeProgress(pId,false); } };
   });
   root.querySelector('#coverBtn').addEventListener('click', async()=>{
     const res = await openModalWithExtractor('Change cover', `<div class="field"><label>Upload</label><input id="coverInput" type="file" accept="image/*"></div>`, (root)=>({ file: root.querySelector('#coverInput')?.files?.[0]||null }));
