@@ -111,10 +111,14 @@ export default async function handler(req){
     }
 
     const list = await fetchAllCandidates();
+    let importDebug = '';
     for (const t of list){
       checked++;
       const status = t?.status?.code || t?.status || t?.state || '';
-      if (!['completed', 'done'].includes(String(status).toLowerCase())) continue;
+      if (!['completed', 'done'].includes(String(status).toLowerCase())) {
+        importDebug += `skip_status:${status} `;
+        continue;
+      }
       const id = t?.id || t?.transcript_id || '';
       const title = (t?.meeting_title || `Recall ${id || ''}`).trim() || `Recall ${new Date().toISOString()}`;
       let text = t?.text || t?.transcript || '';
@@ -125,20 +129,33 @@ export default async function handler(req){
           const jsonData = await rr.json();
           // Extract text from the transcript JSON structure
           text = jsonData?.transcript || jsonData?.text || JSON.stringify(jsonData);
+          importDebug += `fetched_text:${text.length} `;
         } 
-      }catch{}
-      if (!text) continue;
+      }catch(e){
+        importDebug += `fetch_error:${e.message} `;
+      }
+      if (!text) {
+        importDebug += `no_text `;
+        continue;
+      }
       // Avoid naive duplicates by searching for same title prefix
       try{
         const exist = await fetch(`${SUPABASE_URL}/rest/v1/notes?select=id&title=eq.${encodeURIComponent(title)}`, { headers:{ apikey:SERVICE_KEY, Authorization:`Bearer ${SERVICE_KEY}` } });
         const exj = await exist.json().catch(()=>[]);
-        if (Array.isArray(exj) && exj.length) continue;
+        if (Array.isArray(exj) && exj.length) {
+          importDebug += `duplicate:${title} `;
+          continue;
+        }
       }catch{}
       try{
         await fetch(`${SUPABASE_URL}/rest/v1/notes`, { method:'POST', headers:{ 'Content-Type':'application/json', apikey:SERVICE_KEY, Authorization:`Bearer ${SERVICE_KEY}` }, body: JSON.stringify({ space_id: spaceId||null, title, content: text }) });
         imported++;
-      }catch{}
+        importDebug += `saved:${title} `;
+      }catch(e){
+        importDebug += `save_error:${e.message} `;
+      }
     }
+    spaceDebug += importDebug;
   }catch{}
 
   return jres({ ok:true, space_id: spaceId, checked, imported, debug: spaceDebug }, 200, cors);
