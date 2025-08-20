@@ -309,7 +309,7 @@ export function renderChat(root){
           console.warn('Mistral API key not found, falling back to OpenAI');
         }
       } else if (model === 'Perplexity') {
-        const pplxKey = util_getEnv('VITE_PERPLEXITY','VITE_PERPLEXITY') || util_getEnv('PERPLEXITY','PERPLEXITY') || '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';
+        const pplxKey = util_getEnv('VITE_PERPLEXITY','VITE_PERPLEXITY') || util_getEnv('PERPLEXITY','PERPLEXITY') || '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';
         if (pplxKey) {
           console.log(`[Perplexity] API Key length: ${pplxKey.length}, prefix: ${pplxKey.substring(0, 10)}...`);
           
@@ -446,7 +446,7 @@ export function renderChat(root){
         try{
           if (selectedModel === 'perplexity') {
             // Perplexity API for Deep Research
-            const pplxKey = util_getEnv('VITE_PERPLEXITY','VITE_PERPLEXITY') || util_getEnv('PERPLEXITY','PERPLEXITY') || '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';
+            const pplxKey = util_getEnv('VITE_PERPLEXITY','VITE_PERPLEXITY') || util_getEnv('PERPLEXITY','PERPLEXITY') || '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';
             if (pplxKey) {
               console.log(`[Perplexity Research] API Key length: ${pplxKey.length}, prefix: ${pplxKey.substring(0, 10)}...`);
               
