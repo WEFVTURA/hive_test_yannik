@@ -26,8 +26,9 @@ export default async function handler(req){
     'jp': 'https://ap-northeast-1.recall.ai',
     'payg': 'https://api.recall.ai'
   };
-  
   const base = regionBases[region] || regionBases.us;
+
+  try {
   // Test multiple endpoint patterns and auth formats
   const testVariants = [
     { url: `${base}/api/v1/transcript/?page=1`, auth: `Token ${RECALL_KEY}` },
@@ -126,8 +127,7 @@ export default async function handler(req){
       message: error.message,
       api_key_length: RECALL_KEY.length,
       region_used: region,
-      base_url: base,
-      test_url: testUrl
+      base_url: base
     }, null, 2), { 
       status: 500, 
       headers: { ...cors, 'Content-Type': 'application/json' }
