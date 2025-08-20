@@ -313,11 +313,11 @@ export function renderChat(root){
         if (pplxKey) {
           console.log(`[Perplexity] API Key length: ${pplxKey.length}, prefix: ${pplxKey.substring(0, 10)}...`);
           
-          // Simplified request without problematic parameters
-          const requestBody = {
-            model: 'llama-3.1-sonar-small-128k-online',
-            messages: [{ role: 'user', content: prompt }]
-          };
+                        // Simplified request without problematic parameters
+              const requestBody = {
+                model: 'sonar',
+                messages: [{ role: 'user', content: prompt }]
+              };
           
           console.log(`[Perplexity] Request:`, requestBody);
           
@@ -452,7 +452,7 @@ export function renderChat(root){
               
               // Simplified request - remove temperature and system message that might cause issues
               const requestBody = { 
-                model: 'llama-3.1-sonar-small-128k-online',
+                model: 'sonar',
                 messages: [
                   { role: 'user', content: `Research this topic thoroughly: ${text}` }
                 ]

@@ -27,11 +27,10 @@
                         'Content-Type': 'application/json'
                     },
                     body: JSON.stringify({
-                        model: 'llama-3.1-sonar-small-128k-online',
+                        model: 'sonar',
                         messages: [
                             { role: 'user', content: 'What is 2+2?' }
-                        ],
-                        temperature: 0.3
+                        ]
                     })
                 });
                 
@@ -48,7 +47,7 @@
                 }
                 
                 // Test 2: Different model
-                results.textContent += '\n--- Test 2: Different Model ---\n';
+                results.textContent += '\n--- Test 2: Try pplx-7b-online ---\n';
                 const response2 = await fetch('https://api.perplexity.ai/chat/completions', {
                     method: 'POST',
                     headers: {
@@ -56,7 +55,7 @@
                         'Content-Type': 'application/json'
                     },
                     body: JSON.stringify({
-                        model: 'llama-3.1-sonar-large-128k-online',
+                        model: 'pplx-7b-online',
                         messages: [
                             { role: 'user', content: 'Hello world' }
                         ]
@@ -67,8 +66,27 @@
                 const data2 = await response2.json();
                 results.textContent += `Response: ${JSON.stringify(data2, null, 2)}\n`;
                 
-                // Test 3: Check API key validity
-                results.textContent += '\n--- Test 3: API Key Length Check ---\n';
+                // Test 3: Try pplx-70b-online
+                results.textContent += '\n--- Test 3: Try pplx-70b-online ---\n';
+                const response3 = await fetch('https://api.perplexity.ai/chat/completions', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${apiKey}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        model: 'pplx-70b-online',
+                        messages: [
+                            { role: 'user', content: 'What is the capital of France?' }
+                        ]
+                    })
+                });
+                results.textContent += `Status: ${response3.status} ${response3.statusText}\n`;
+                const data3 = await response3.json();
+                results.textContent += `Response: ${JSON.stringify(data3, null, 2)}\n`;
+                
+                // Test 4: Check API key validity
+                results.textContent += '\n--- Test 4: API Key Length Check ---\n';
                 results.textContent += `API key length: ${apiKey.length}\n`;
                 results.textContent += `API key prefix: ${apiKey.substring(0, 10)}...\n`;
                 
