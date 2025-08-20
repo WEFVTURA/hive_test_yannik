@@ -46,7 +46,6 @@ export default async function handler(req){
     async function fetchAllCandidates(){
       const headersList = [
         { Authorization:`Token ${RECALL_KEY}`, Accept:'application/json' },
-        { 'X-Api-Key': RECALL_KEY, Accept:'application/json' },
       ];
       // Recall keys are region-scoped: US/EU/JP/Pay-as-you-go
       const region = (process.env.RECALL_REGION || 'us').trim().toLowerCase();
@@ -57,8 +56,8 @@ export default async function handler(req){
         'payg': 'https://api.recall.ai'
       };
       const base = regionBases[region] || regionBases.us;
-      const paths = [ '/v1/transcripts', '/api/v1/transcripts' ];
-      const queryVariants = [ '', '?status=completed', '?state=completed' ];
+      const paths = [ '/api/v1/transcript/', '/api/v1/transcripts/', '/api/v1/bot/' ];
+      const queryVariants = [ '', '?page=1', '?status=completed', '?state=completed' ];
       const urls = [];
       for (const path of paths){
         for (const q of queryVariants){ urls.push(`${base}${path}${q}${q? '&' : '?'}limit=100`); }

@@ -28,12 +28,13 @@ export default async function handler(req){
   };
   
   const base = regionBases[region] || regionBases.us;
-  // Test multiple endpoint patterns and auth methods
+  // Test multiple endpoint patterns based on Recall API docs
   const testVariants = [
-    { url: `${base}/v1/transcripts?limit=5`, auth: `Token ${RECALL_KEY}` },
-    { url: `${base}/api/v1/transcripts?limit=5`, auth: `Token ${RECALL_KEY}` },
-    { url: `${base}/v1/transcripts?limit=5`, auth: `Bearer ${RECALL_KEY}` },
-    { url: `${base}/v1/transcripts`, auth: `Token ${RECALL_KEY}` }
+    { url: `${base}/api/v1/transcript/?page=1`, auth: `Token ${RECALL_KEY}` },
+    { url: `${base}/api/v1/transcripts/?page=1`, auth: `Token ${RECALL_KEY}` },
+    { url: `${base}/api/v1/transcript/`, auth: `Token ${RECALL_KEY}` },
+    { url: `${base}/api/v1/transcripts/`, auth: `Token ${RECALL_KEY}` },
+    { url: `${base}/api/v1/bot/?page=1`, auth: `Token ${RECALL_KEY}` }
   ];
   
   const results = [];
