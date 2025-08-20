@@ -511,10 +511,52 @@ export async function renderSpace(root, spaceId){
     const res = await openModalWithExtractor('Transcribe audio', `<div class="field"><label>Audio file</label><input id="aInput" type="file" accept="audio/*"></div>`, (root)=>({ file: root.querySelector('#aInput')?.files?.[0] || null }));
     if(!res.ok) return; const file = res.values?.file; if(!file) return;
     const sb = getSupabase();
-    const path = `${spaceId}/${Date.now()}_${file.name}`;
-    const bucket = sb.storage.from('hive-attachments');
-    const up = await bucket.upload(path, file, { upsert:true }); if(up.error) return alert('Upload failed');
-    const pub = bucket.getPublicUrl(path).data.publicUrl;
+    const { showProgress, updateProgress, completeProgress } = await import('./progress.js');
+    const pId = showProgress({ label:'Uploading to Assembly…', determinate:true });
+    // Solution A: Direct to AssemblyAI via same-origin proxy (no Storage)
+    let assemblyUploadUrl = '';
+    async function tryVercel(){
+      return await new Promise((resolve, reject)=>{
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', '/api/assembly-upload');
+        xhr.responseType = 'json';
+        xhr.setRequestHeader('Authorization', `Bearer ${'808060f1237a4866ad46691bd4ea7153'}`);
+        xhr.timeout = 0;
+        xhr.upload.onprogress = (e)=>{ if(e.lengthComputable) updateProgress(pId, (e.loaded/e.total)*100); };
+        xhr.onload = ()=>{
+          if (xhr.status>=200 && xhr.status<300){ const u = (xhr.response?.upload_url)||xhr.response?.url||''; return resolve(u); }
+          return reject(new Error(String(xhr.status)));
+        };
+        xhr.onerror = ()=> reject(new Error('network'));
+        const form = new FormData(); form.append('file', file); xhr.send(form);
+      });
+    }
+    async function trySupabase(){
+      const base = (await import('../lib/supabase.js')).util_getEnv('VITE_SUPABASE_URL','VITE_SUPABASE_URL') || (await import('../lib/supabase.js')).util_getEnv('SUPABASE_URL','SUPABASE_URL');
+      const anon = (await import('../lib/supabase.js')).util_getEnv('VITE_SUPABASE_ANON_KEY','VITE_SUPABASE_ANON_KEY') || (await import('../lib/supabase.js')).util_getEnv('SUPABASE_ANON_KEY','SUPABASE_ANON_KEY');
+      return await new Promise((resolve, reject)=>{
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', `${base.replace(/\/$/,'')}/functions/v1/assembly-chunk-upload`);
+        xhr.responseType = 'json';
+        xhr.setRequestHeader('Authorization', `Bearer ${anon}`);
+        xhr.setRequestHeader('apikey', anon);
+        try{ xhr.setRequestHeader('x-content-type', file.type || 'application/octet-stream'); }catch{}
+        xhr.timeout = 0;
+        xhr.upload.onprogress = (e)=>{ if(e.lengthComputable) updateProgress(pId, (e.loaded/e.total)*100); };
+        xhr.onload = ()=>{ if (xhr.status>=200 && xhr.status<300){ const u = (xhr.response?.upload_url)||xhr.response?.url||''; return resolve(u); } return reject(new Error(String(xhr.status))); };
+        xhr.onerror = ()=> reject(new Error('network'));
+        xhr.send(file);
+      });
+    }
+    try{
+      try {
+        assemblyUploadUrl = await tryVercel();
+      } catch {
+        assemblyUploadUrl = await trySupabase();
+      }
+      if (!assemblyUploadUrl) throw new Error('no_upload_url');
+    }catch{ completeProgress(pId, false); alert('Upload failed'); return; }
+    completeProgress(pId, true);
     const btn = document.getElementById('uploadAudioBtn');
     const origText = btn.textContent;
     btn.textContent = 'Transcribing…'; btn.setAttribute('disabled','true');
@@ -523,10 +565,11 @@ export async function renderSpace(root, spaceId){
     const tempNote = await db_createNote(spaceId).catch(()=>null);
     if (tempNote){ await db_updateNote(tempNote.id, { title: `${tempTitle} (transcribing…)`, content: 'Transcription in progress…' }).catch(()=>{}); try{ collapsedState.set(tempNote.id, false); }catch{} }
     try{
-      let resp = await sb.functions.invoke('assembly', { body: { url: pub, space_id: spaceId, api_key: '808060f1237a4866ad46691bd4ea7153', title: file.name.replace(/\.[^/.]+$/,'') } });
+      const indId = showProgress({ label:'Transcribing…', determinate:false });
+      let resp = await sb.functions.invoke('assembly', { body: { url: assemblyUploadUrl, space_id: spaceId, api_key: '808060f1237a4866ad46691bd4ea7153', title: file.name.replace(/\.[^/.]+$/,'') } });
       if (resp.error){
         // Fallback to alternate slug if the deployment name differs
-        resp = await sb.functions.invoke('assembly-transcribe', { body: { url: pub, space_id: spaceId, api_key: '808060f1237a4866ad46691bd4ea7153', title: file.name.replace(/\.[^/.]+$/,'') } });
+        resp = await sb.functions.invoke('assembly-transcribe', { body: { url: assemblyUploadUrl, space_id: spaceId, api_key: '808060f1237a4866ad46691bd4ea7153', title: file.name.replace(/\.[^/.]+$/,'') } });
       }
       const { data, error } = resp;
       if (error) throw error; window.showToast && window.showToast('Transcription started');
@@ -534,6 +577,25 @@ export async function renderSpace(root, spaceId){
       if (typeof data?.transcript === 'string' && data.transcript){
         if (tempNote){ await db_updateNote(tempNote.id, { title: tempTitle, content: data.transcript }).catch(()=>{}); }
         else { const n = await db_createNote(spaceId); await db_updateNote(n.id, { title: tempTitle, content: data.transcript }); }
+        completeProgress(indId, true);
+      } else {
+        // Poll status if id is returned
+        if (data?.id){
+          const API_KEY = '808060f1237a4866ad46691bd4ea7153';
+          const id = data.id;
+          const deadline = Date.now() + 120000;
+          while(Date.now()<deadline){
+            await new Promise(r=>setTimeout(r, 2000));
+            const r = await fetch(`https://api.assemblyai.com/v2/transcript/${id}`, { headers:{ Authorization: API_KEY } });
+            const j = await r.json().catch(()=>({}));
+            if (j.status==='completed'){
+              if (tempNote){ await db_updateNote(tempNote.id, { title: tempTitle, content: j.text||'' }).catch(()=>{}); }
+              completeProgress(indId, true);
+              break;
+            }
+            if (j.status==='error'){ completeProgress(indId, false); break; }
+          }
+        } else { completeProgress(indId, true); }
       }
     }catch{ window.showToast && window.showToast('Transcription failed'); }
     finally{ btn.textContent = origText; btn.removeAttribute('disabled'); renderSpace(root, spaceId); }
