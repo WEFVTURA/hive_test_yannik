@@ -48,7 +48,15 @@ export default async function handler(req){
         { Authorization:`Token ${RECALL_KEY}`, Accept:'application/json' },
         { 'X-Api-Key': RECALL_KEY, Accept:'application/json' },
       ];
-      const bases = [ 'https://api.recall.ai', 'https://app.recall.ai' ];
+      const region = (process.env.RECALL_REGION || '').trim();
+      const explicitBase = (process.env.RECALL_BASE_URL || '').trim();
+      const bases = [];
+      if (explicitBase) bases.push(explicitBase.replace(/\/$/, ''));
+      bases.push('https://api.recall.ai', 'https://app.recall.ai');
+      if (region){
+        bases.push(`https://api.${region}.recall.ai`, `https://app.${region}.recall.ai`);
+        bases.push(`https://${region}.api.recall.ai`, `https://${region}.app.recall.ai`);
+      }
       const paths = [ '/v1/transcripts', '/api/v1/transcripts' ];
       const queryVariants = [ '', '?status=completed', '?state=completed' ];
       const urls = [];

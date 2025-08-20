@@ -58,12 +58,17 @@ export default async function handler(req){
         const transcriptId = body?.transcript_id || body?.transcript?.id || body?.data?.transcript_id || '';
         if (RECALL_KEY && transcriptId){
           // Try multiple host/path variants and auth header styles
-          const urls = [
-            `https://api.recall.ai/v1/transcripts/${transcriptId}`,
-            `https://api.recall.ai/api/v1/transcripts/${transcriptId}`,
-            `https://app.recall.ai/v1/transcripts/${transcriptId}`,
-            `https://app.recall.ai/api/v1/transcripts/${transcriptId}`,
-          ];
+          const region = (process.env.RECALL_REGION || '').trim();
+          const explicitBase = (process.env.RECALL_BASE_URL || '').trim();
+          const bases = [];
+          if (explicitBase) bases.push(explicitBase.replace(/\/$/, ''));
+          bases.push('https://api.recall.ai','https://app.recall.ai');
+          if (region){
+            bases.push(`https://api.${region}.recall.ai`, `https://app.${region}.recall.ai`);
+            bases.push(`https://${region}.api.recall.ai`, `https://${region}.app.recall.ai`);
+          }
+          const urls = [];
+          for (const b of bases){ urls.push(`${b}/v1/transcripts/${transcriptId}`, `${b}/api/v1/transcripts/${transcriptId}`); }
           const headersList = [ { Authorization:`Token ${RECALL_KEY}` }, { 'X-Api-Key': RECALL_KEY } ];
           for (const u of urls){
             for (const hdrs of headersList){
