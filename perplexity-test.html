@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Perplexity API Test</title>
+</head>
+<body>
+    <div>
+        <h2>Perplexity API Test</h2>
+        <button onclick="testPerplexity()">Test Perplexity API</button>
+        <div id="results" style="margin-top:20px; font-family:monospace; white-space:pre-wrap; background:#f5f5f5; padding:10px;"></div>
+    </div>
+
+    <script>
+        async function testPerplexity() {
+            const results = document.getElementById('results');
+            results.textContent = 'Testing Perplexity API...\n';
+            
+            const apiKey = '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';
+            
+            try {
+                // Test 1: Basic API call
+                results.textContent += '\n--- Test 1: Basic API Call ---\n';
+                const response1 = await fetch('https://api.perplexity.ai/chat/completions', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${apiKey}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        model: 'llama-3.1-sonar-small-128k-online',
+                        messages: [
+                            { role: 'user', content: 'What is 2+2?' }
+                        ],
+                        temperature: 0.3
+                    })
+                });
+                
+                results.textContent += `Status: ${response1.status} ${response1.statusText}\n`;
+                results.textContent += `Headers: ${JSON.stringify([...response1.headers.entries()], null, 2)}\n`;
+                
+                const data1 = await response1.json();
+                results.textContent += `Response: ${JSON.stringify(data1, null, 2)}\n`;
+                
+                if (response1.ok) {
+                    results.textContent += `✅ Success: ${data1.choices?.[0]?.message?.content || 'No content'}\n`;
+                } else {
+                    results.textContent += `❌ Error: ${data1.error?.message || data1.message || 'Unknown error'}\n`;
+                }
+                
+                // Test 2: Different model
+                results.textContent += '\n--- Test 2: Different Model ---\n';
+                const response2 = await fetch('https://api.perplexity.ai/chat/completions', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${apiKey}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        model: 'llama-3.1-sonar-large-128k-online',
+                        messages: [
+                            { role: 'user', content: 'Hello world' }
+                        ]
+                    })
+                });
+                
+                results.textContent += `Status: ${response2.status} ${response2.statusText}\n`;
+                const data2 = await response2.json();
+                results.textContent += `Response: ${JSON.stringify(data2, null, 2)}\n`;
+                
+                // Test 3: Check API key validity
+                results.textContent += '\n--- Test 3: API Key Length Check ---\n';
+                results.textContent += `API key length: ${apiKey.length}\n`;
+                results.textContent += `API key prefix: ${apiKey.substring(0, 10)}...\n`;
+                
+            } catch (error) {
+                results.textContent += `\n❌ Network Error: ${error.message}\n`;
+                results.textContent += `Stack: ${error.stack}\n`;
+            }
+        }
+    </script>
+</body>
+</html>

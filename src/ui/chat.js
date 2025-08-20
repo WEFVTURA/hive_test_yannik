@@ -309,22 +309,36 @@ export function renderChat(root){
           console.warn('Mistral API key not found, falling back to OpenAI');
         }
       } else if (model === 'Perplexity') {
-        const pplxKey = util_getEnv('VITE_PERPLEXITY','VITE_PERPLEXITY') || util_getEnv('PERPLEXITY','PERPLEXITY');
+        const pplxKey = util_getEnv('VITE_PERPLEXITY','VITE_PERPLEXITY') || util_getEnv('PERPLEXITY','PERPLEXITY') || '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';
         if (pplxKey) {
+          console.log(`[Perplexity] API Key length: ${pplxKey.length}, prefix: ${pplxKey.substring(0, 10)}...`);
+          
+          // Simplified request without problematic parameters
+          const requestBody = {
+            model: 'llama-3.1-sonar-small-128k-online',
+            messages: [{ role: 'user', content: prompt }]
+          };
+          
+          console.log(`[Perplexity] Request:`, requestBody);
+          
           const r = await fetch('https://api.perplexity.ai/chat/completions', {
             method: 'POST',
             headers: {
               'Authorization': `Bearer ${pplxKey}`,
               'Content-Type': 'application/json'
             },
-            body: JSON.stringify({
-              model: 'llama-3.1-sonar-small-128k-online',
-              messages: [{ role: 'user', content: prompt }],
-              temperature: 0.3
-            })
+            body: JSON.stringify(requestBody)
           });
+          
+          console.log(`[Perplexity] Response status: ${r.status} ${r.statusText}`);
+          
           const j = await r.json();
-          if (!r.ok) { throw new Error(j?.error?.message || 'Perplexity error'); }
+          console.log(`[Perplexity] Response:`, j);
+          
+          if (!r.ok) { 
+            console.error('[Perplexity] Error details:', j);
+            throw new Error(j?.error?.message || j?.message || `Perplexity API error: ${r.status}`); 
+          }
           if (ragDebugEl) { ragDebugEl.textContent += `\nModel latency: ${Math.round(performance.now()-started)}ms`; }
           return j.choices?.[0]?.message?.content || '';
         } else {
@@ -432,17 +446,20 @@ export function renderChat(root){
         try{
           if (selectedModel === 'perplexity') {
             // Perplexity API for Deep Research
-            const pplxKey = util_getEnv('VITE_PERPLEXITY','VITE_PERPLEXITY') || util_getEnv('PERPLEXITY','PERPLEXITY');
+            const pplxKey = util_getEnv('VITE_PERPLEXITY','VITE_PERPLEXITY') || util_getEnv('PERPLEXITY','PERPLEXITY') || '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';
             if (pplxKey) {
-              const sys = 'You are a research assistant. Do a deep, multi-step investigation with sources and a concise report.';
+              console.log(`[Perplexity Research] API Key length: ${pplxKey.length}, prefix: ${pplxKey.substring(0, 10)}...`);
+              
+              // Simplified request - remove temperature and system message that might cause issues
               const requestBody = { 
-                model: 'llama-3.1-sonar-small-128k-online', 
-                temperature: 0.3, 
+                model: 'llama-3.1-sonar-small-128k-online',
                 messages: [
-                  { role: 'system', content: sys },
-                  { role: 'user', content: text }
+                  { role: 'user', content: `Research this topic thoroughly: ${text}` }
                 ]
               };
+              
+              console.log(`[Perplexity Research] Request:`, requestBody);
+              
               const rr = await fetch('https://api.perplexity.ai/chat/completions', { 
                 method: 'POST', 
                 headers: { 
@@ -451,12 +468,17 @@ export function renderChat(root){
                 }, 
                 body: JSON.stringify(requestBody) 
               });
+              
+              console.log(`[Perplexity Research] Response status: ${rr.status} ${rr.statusText}`);
+              
               const jj = await rr.json().catch(()=>({})); 
+              console.log(`[Perplexity Research] Response:`, jj);
+              
               if (rr.ok) {
                 reply = (jj?.choices?.[0]?.message?.content) || reply;
               } else {
-                console.error('Perplexity API Error:', rr.status, rr.statusText, jj);
-                throw new Error(`Perplexity API failed: ${rr.status}`);
+                console.error('[Perplexity Research] Error details:', jj);
+                throw new Error(jj?.error?.message || jj?.message || `Perplexity API failed: ${rr.status}`);
               }
             } else {
               throw new Error('Perplexity API key not found');
