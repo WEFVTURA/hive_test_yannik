@@ -15,7 +15,10 @@ export function renderChat(root){
       <div class="rag-debug" id="ragDebug" style="margin-top:10px; padding:10px; background:var(--panel-2); border:1px dashed var(--border); border-radius:10px; color:var(--muted); font-size:12px; max-height:180px; overflow:auto; display:none"></div>
       <div class="composer panel">
         <div class="composer-head" style="padding:12px 14px; border-bottom:1px solid var(--border); background:var(--panel-2); display:flex; align-items:center; justify-content:space-between">
-          <div>Ask Hive assistant</div>
+          <div style="display:flex; align-items:center; gap:10px">
+            <span>Ask Hive assistant</span>
+            <span id="activeModelIndicator" style="display:none; background:var(--accent); color:white; padding:2px 8px; border-radius:12px; font-size:10px; font-weight:600; letter-spacing:0.5px"></span>
+          </div>
           <div style="display:flex; gap:8px">
             <button class="button ghost" id="saveChatBtn" data-tip="Save"><i data-lucide="save" class="icon" aria-hidden="true"></i></button>
             <button class="button ghost" id="openChatBtn" data-tip="History"><i data-lucide="history" class="icon" aria-hidden="true"></i></button>
@@ -45,6 +48,7 @@ export function renderChat(root){
             <label class="muted" style="font-size:12px">Research Model</label>
             <span class="select-wrap" style="flex:1"><select id="researchModel" class="select" style="width:100%">
               <option value="mistral" selected>Mistral AI</option>
+              <option value="mistral-large">Mistral Large</option>
               <option value="openai">OpenAI GPT-4o</option>
               <option value="perplexity">Perplexity AI</option>
             </select></span>
@@ -80,6 +84,35 @@ export function renderChat(root){
     if (researchModelRow) {
       researchModelRow.style.display = isResearchMode ? 'flex' : 'none';
     }
+    
+    // Update model indicator
+    updateActiveModelIndicator();
+  }
+  
+  // Update active model indicator
+  function updateActiveModelIndicator() {
+    const activeModelIndicator = document.getElementById('activeModelIndicator');
+    const queryMode = queryModeSelect?.value;
+    const modelSelect = root.querySelector('#modelSelect');
+    const researchModelSelect = root.querySelector('#researchModel');
+    
+    if (activeModelIndicator) {
+      if (queryMode === 'pplx') {
+        // Deep Research mode - show research model
+        const selectedModel = researchModelSelect?.value || 'mistral';
+        const modelNames = { mistral: 'Mistral AI', openai: 'OpenAI GPT-4o', perplexity: 'Perplexity AI', 'mistral-large': 'Mistral Large' };
+        activeModelIndicator.textContent = modelNames[selectedModel] || selectedModel;
+        activeModelIndicator.style.display = 'inline-block';
+      } else if (queryMode === 'rag' || queryMode === 'fts' || queryMode === 'sql' || queryMode === 'direct') {
+        // Regular chat modes - show chat model
+        const selectedModel = modelSelect?.value || model;
+        const modelNames = { 'Mistral': 'Mistral', 'GPT-4o': 'GPT-4o' };
+        activeModelIndicator.textContent = modelNames[selectedModel] || selectedModel;
+        activeModelIndicator.style.display = 'inline-block';
+      } else {
+        activeModelIndicator.style.display = 'none';
+      }
+    }
   }
   
   // Initially hide research model selector
@@ -88,6 +121,21 @@ export function renderChat(root){
   // Listen for query mode changes
   if (queryModeSelect) {
     queryModeSelect.addEventListener('change', toggleResearchModelSelector);
+  }
+  
+  // Listen for model selector changes
+  const modelSelect = root.querySelector('#modelSelect');
+  const researchModelSelect = root.querySelector('#researchModel');
+  
+  if (modelSelect) {
+    modelSelect.addEventListener('change', () => {
+      model = modelSelect.value;
+      updateActiveModelIndicator();
+    });
+  }
+  
+  if (researchModelSelect) {
+    researchModelSelect.addEventListener('change', updateActiveModelIndicator);
   }
 
   // Ensure any legacy side hide button is removed
@@ -261,6 +309,14 @@ export function renderChat(root){
         
         if (ragDebugEl){ ragDebugEl.style.display='block'; ragDebugEl.textContent = `Deep research using ${selectedModel.toUpperCase()}…`; }
         
+        // Show active model indicator
+        const activeModelIndicator = document.getElementById('activeModelIndicator');
+        if (activeModelIndicator) {
+          const modelNames = { mistral: 'Mistral AI', openai: 'OpenAI GPT-4o', perplexity: 'Perplexity AI' };
+          activeModelIndicator.textContent = `🔍 ${modelNames[selectedModel] || selectedModel}`;
+          activeModelIndicator.style.display = 'inline-block';
+        }
+        
         let reply = 'Error in deep research';
         
         try{
@@ -315,8 +371,39 @@ export function renderChat(root){
             } else {
               throw new Error('OpenAI API key or Supabase key not found');
             }
+          } else if (selectedModel === 'mistral-large') {
+            // Mistral Large for Deep Research
+            const mistralKey = util_getEnv('VITE_MISTRAL_API_KEY','VITE_MISTRAL_API_KEY') || util_getEnv('MISTRAL_AI_API','MISTRAL_AI_API') || '';
+            if (mistralKey) {
+              const sys = 'You are an expert research assistant with advanced reasoning capabilities. Provide a comprehensive, well-researched analysis with multiple perspectives, detailed evidence, and actionable insights. Structure your response with clear sections, bullet points, and supporting data.';
+              const requestBody = { 
+                model: 'mistral-large-latest', 
+                temperature: 0.3, 
+                messages: [
+                  { role: 'system', content: sys },
+                  { role: 'user', content: `Conduct thorough research on this topic: ${text}` }
+                ]
+              };
+              const rr = await fetch('https://api.mistral.ai/v1/chat/completions', { 
+                method: 'POST', 
+                headers: { 
+                  'Authorization': `Bearer ${mistralKey}`, 
+                  'Content-Type': 'application/json' 
+                }, 
+                body: JSON.stringify(requestBody) 
+              });
+              const jj = await rr.json().catch(()=>({})); 
+              if (rr.ok) {
+                reply = (jj?.choices?.[0]?.message?.content) || reply;
+              } else {
+                console.error('Mistral Large Research Error:', rr.status, rr.statusText, jj);
+                throw new Error(`Mistral Large API failed: ${rr.status}`);
+              }
+            } else {
+              throw new Error('Mistral API key not found');
+            }
           } else {
-            // Default: Mistral for Deep Research
+            // Default: Mistral AI for Deep Research
             const mistralKey = util_getEnv('VITE_MISTRAL_API_KEY','VITE_MISTRAL_API_KEY') || util_getEnv('MISTRAL_AI_API','MISTRAL_AI_API') || '';
             if (mistralKey) {
               const sys = 'You are an expert research assistant. Provide a comprehensive, well-researched analysis with multiple perspectives and actionable insights. Structure your response with clear sections and bullet points.';
@@ -352,6 +439,10 @@ export function renderChat(root){
           // Auto-fallback to next available model
           if (selectedModel === 'perplexity') {
             console.log('Falling back to Mistral...');
+            const activeModelIndicator = document.getElementById('activeModelIndicator');
+            if (activeModelIndicator) {
+              activeModelIndicator.textContent = 'Mistral AI (fallback)';
+            }
             const mistralKey = util_getEnv('VITE_MISTRAL_API_KEY','VITE_MISTRAL_API_KEY') || util_getEnv('MISTRAL_AI_API','MISTRAL_AI_API') || '';
             if (mistralKey) {
               try {
