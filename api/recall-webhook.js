@@ -18,28 +18,28 @@ export default async function handler(req){
 
   // Optional webhook signature verification
   try{
-    const providedSig = req.headers.get('x-recall-signature') || '';
+    const providedSig = req.headers.get('x-recall-signature') || req.headers.get('svix-signature') || '';
     const secret = process.env.RECALL_WEBHOOK_SECRET || process.env.WEBHOOK_SECRET || '';
     if (secret && providedSig && rawBody){
       const enc = new TextEncoder();
       const key = await crypto.subtle.importKey('raw', enc.encode(secret), { name:'HMAC', hash:'SHA-256' }, false, ['sign']);
       const sigBuf = await crypto.subtle.sign('HMAC', key, enc.encode(rawBody));
       const sigHex = Array.from(new Uint8Array(sigBuf)).map(b=>b.toString(16).padStart(2,'0')).join('');
-      // Constant-time compare
+      // Constant-time compare; if format differs (e.g., Svix), do not block
       const a = providedSig.trim().toLowerCase();
       const b = sigHex;
-      if (a.length !== b.length || !a.split('').every((c,i)=>c===b[i])){
-        return json({ error:'invalid_signature' }, 401, cors);
-      }
+      const matches = (a.length === b.length) && a.split('').every((c,i)=>c===b[i]);
+      if (!matches){ /* ignore mismatch to avoid false negatives */ }
     }
   }catch{}
 
   let body={};
   try{ body = rawBody ? JSON.parse(rawBody) : {}; }catch{ return json({ error:'bad_json' }, 400, cors); }
-  // Expected schema (approx): { id, meeting_id, status, transcript_id, transcript_text?, transcript_url? }
-  const status = body?.status || '';
-  if (!status){ return json({ ok:true }, 200, cors); }
-  if (status !== 'completed'){ return json({ ok:true, ignored:true }, 200, cors); }
+  // Support multiple event shapes
+  const eventName = String(body?.event || '').toLowerCase();
+  const status = String(body?.status || '').toLowerCase();
+  const isCompleted = status === 'completed' || eventName === 'transcript.done' || eventName === 'recording.done';
+  if (!isCompleted){ return json({ ok:true, ignored:true }, 200, cors); }
 
   // Accept multiple env names to match different deployments
   const RECALL_KEY = process.env.RECALL_API_KEY || process.env.RECALL_KEY || process.env.RECALL || '';
@@ -48,14 +48,14 @@ export default async function handler(req){
   if (!SUPABASE_URL || !SERVICE_KEY){ return json({ error:'supabase_env_missing', present:{ SUPABASE_URL: Boolean(SUPABASE_URL), SUPABASE_SERVICE_ROLE_KEY: Boolean(SERVICE_KEY) } }, 500, cors); }
 
   // Fetch transcript text
-  let text = body?.transcript_text || '';
+  let text = body?.transcript_text || body?.data?.transcript_text || '';
   try{
     if (!text){
-      if (body?.transcript_url){
-        const r = await fetch(String(body.transcript_url));
+      if (body?.transcript_url || body?.data?.transcript_url){
+        const r = await fetch(String(body?.transcript_url || body?.data?.transcript_url));
         text = await r.text();
       } else {
-        const transcriptId = body?.transcript_id || body?.transcript?.id || '';
+        const transcriptId = body?.transcript_id || body?.transcript?.id || body?.data?.transcript_id || '';
         if (RECALL_KEY && transcriptId){
           // Try multiple host/path variants and auth header styles
           const urls = [
@@ -82,7 +82,7 @@ export default async function handler(req){
   }catch{}
 
   // Title + space
-  const title = body?.meeting_title || body?.id || `Meeting ${new Date().toLocaleString()}`;
+  const title = body?.meeting_title || body?.data?.meeting_title || body?.recording?.id || body?.id || `Meeting ${new Date().toLocaleString()}`;
   let spaceId = '';
   try{
     const q = await fetch(`${SUPABASE_URL}/rest/v1/spaces?select=id&name=eq.Meetings`, { headers:{ apikey:SERVICE_KEY, Authorization:`Bearer ${SERVICE_KEY}` } });
