@@ -18,10 +18,11 @@ export default async function handler(req){
   if (!status){ return json({ ok:true }, 200, cors); }
   if (status !== 'completed'){ return json({ ok:true, ignored:true }, 200, cors); }
 
-  const RECALL_KEY = process.env.RECALL_API_KEY || '';
-  const SUPABASE_URL = process.env.SUPABASE_URL || '';
-  const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
-  if (!SUPABASE_URL || !SERVICE_KEY){ return json({ error:'supabase_env_missing' }, 500, cors); }
+  // Accept multiple env names to match different deployments
+  const RECALL_KEY = process.env.RECALL_API_KEY || process.env.RECALL_KEY || process.env.RECALL || '';
+  const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || process.env.REACT_APP_SUPABASE_URL || '';
+  const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY || process.env.SERVICE_KEY || '';
+  if (!SUPABASE_URL || !SERVICE_KEY){ return json({ error:'supabase_env_missing', present:{ SUPABASE_URL: Boolean(SUPABASE_URL), SUPABASE_SERVICE_ROLE_KEY: Boolean(SERVICE_KEY) } }, 500, cors); }
 
   // Fetch transcript text
   let text = body?.transcript_text || '';

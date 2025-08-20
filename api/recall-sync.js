@@ -12,10 +12,20 @@ export default async function handler(req){
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
   if (req.method !== 'GET' && req.method !== 'POST') return new Response('Method Not Allowed', { status: 405, headers: cors });
 
-  const RECALL_KEY = process.env.RECALL_API_KEY || '';
-  const SUPABASE_URL = process.env.SUPABASE_URL || '';
-  const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
-  if (!RECALL_KEY || !SUPABASE_URL || !SERVICE_KEY){ return jres({ error: 'Missing env RECALL_API_KEY/SUPABASE_*' }, 500, cors); }
+  // Support multiple env var names to match project setups; do NOT expose values
+  const RECALL_KEY = process.env.RECALL_API_KEY || process.env.RECALL_KEY || process.env.RECALL || '';
+  const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || process.env.REACT_APP_SUPABASE_URL || '';
+  const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY || process.env.SERVICE_KEY || '';
+  if (!RECALL_KEY || !SUPABASE_URL || !SERVICE_KEY){
+    return jres({
+      error: 'Missing env RECALL_API_KEY/SUPABASE_*',
+      present: {
+        RECALL_API_KEY: Boolean(RECALL_KEY),
+        SUPABASE_URL: Boolean(SUPABASE_URL),
+        SUPABASE_SERVICE_ROLE_KEY: Boolean(SERVICE_KEY)
+      }
+    }, 500, cors);
+  }
 
   // Ensure Meetings space
   let spaceId = '';
