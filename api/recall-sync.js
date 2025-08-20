@@ -44,8 +44,13 @@ export default async function handler(req){
   try{
     // Try multiple list variants + pagination
     async function fetchAllCandidates(){
-      const headers = { Authorization:`Token ${RECALL_KEY}` };
+      const headers = { Authorization:`Token ${RECALL_KEY}`, Accept: 'application/json' };
       const urls = [
+        // Primary base (observed in API docs)
+        'https://api.recall.ai/v1/transcripts?status=completed&limit=100',
+        'https://api.recall.ai/v1/transcripts?state=completed&limit=100',
+        'https://api.recall.ai/v1/transcripts?limit=100',
+        // Fallback base (some deployments/documentation variants)
         'https://api.recall.ai/api/v1/transcripts?status=completed&limit=100',
         'https://api.recall.ai/api/v1/transcripts?state=completed&limit=100',
         'https://api.recall.ai/api/v1/transcripts?limit=100'
@@ -60,8 +65,14 @@ export default async function handler(req){
           try{ resp = await fetch(url, { headers }); data = await resp.json().catch(()=>({})); }catch{ data = {}; }
           const chunk = Array.isArray(data) ? data : (Array.isArray(data?.results) ? data.results : []);
           if (chunk.length) aggregated.push(...chunk);
-          const nextUrl = data?.next || data?.links?.next || '';
-          if (nextUrl && typeof nextUrl === 'string') url = nextUrl; else break;
+          let nextUrl = data?.next || data?.links?.next || '';
+          if (nextUrl && typeof nextUrl === 'string'){
+            // Support relative next links
+            if (nextUrl.startsWith('/')) nextUrl = `https://api.recall.ai${nextUrl}`;
+            url = nextUrl;
+          } else {
+            break;
+          }
         }
         if (aggregated.length) break;
       }
