@@ -44,25 +44,31 @@ export default async function handler(req){
   try{
     // Try multiple list variants + pagination
     async function fetchAllCandidates(){
-      const headers = { Authorization:`Token ${RECALL_KEY}`, Accept: 'application/json' };
-      const urls = [
-        // Primary base (observed in API docs)
-        'https://api.recall.ai/v1/transcripts?status=completed&limit=100',
-        'https://api.recall.ai/v1/transcripts?state=completed&limit=100',
-        'https://api.recall.ai/v1/transcripts?limit=100',
-        // Fallback base (some deployments/documentation variants)
-        'https://api.recall.ai/api/v1/transcripts?status=completed&limit=100',
-        'https://api.recall.ai/api/v1/transcripts?state=completed&limit=100',
-        'https://api.recall.ai/api/v1/transcripts?limit=100'
+      const headersList = [
+        { Authorization:`Token ${RECALL_KEY}`, Accept:'application/json' },
+        { 'X-Api-Key': RECALL_KEY, Accept:'application/json' },
       ];
+      const bases = [ 'https://api.recall.ai', 'https://app.recall.ai' ];
+      const paths = [ '/v1/transcripts', '/api/v1/transcripts' ];
+      const queryVariants = [ '', '?status=completed', '?state=completed' ];
+      const urls = [];
+      for (const base of bases){
+        for (const path of paths){
+          for (const q of queryVariants){ urls.push(`${base}${path}${q}${q? '&' : '?'}limit=100`); }
+        }
+      }
       const aggregated = [];
-      for (const base of urls){
-        let url = base;
+      for (const firstUrl of urls){
+        let url = firstUrl;
         let guard = 0;
         while (url && guard < 20){
           guard++;
           let resp, data={};
-          try{ resp = await fetch(url, { headers }); data = await resp.json().catch(()=>({})); }catch{ data = {}; }
+          let ok=false;
+          for (const hdrs of headersList){
+            try{ resp = await fetch(url, { headers: hdrs }); data = await resp.json().catch(()=>({})); ok=true; break; }catch{ ok=false; }
+          }
+          if (!ok){ data={}; }
           const chunk = Array.isArray(data) ? data : (Array.isArray(data?.results) ? data.results : []);
           if (chunk.length) aggregated.push(...chunk);
           let nextUrl = data?.next || data?.links?.next || '';

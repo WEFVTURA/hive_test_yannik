@@ -54,10 +54,29 @@ export default async function handler(req){
       if (body?.transcript_url){
         const r = await fetch(String(body.transcript_url));
         text = await r.text();
-      } else if (RECALL_KEY && body?.transcript_id){
-        const r = await fetch(`https://api.recall.ai/api/v1/transcripts/${body.transcript_id}`, { headers:{ Authorization:`Token ${RECALL_KEY}` } });
-        const j = await r.json().catch(()=>({}));
-        text = j?.text || j?.transcript || '';
+      } else {
+        const transcriptId = body?.transcript_id || body?.transcript?.id || '';
+        if (RECALL_KEY && transcriptId){
+          // Try multiple host/path variants and auth header styles
+          const urls = [
+            `https://api.recall.ai/v1/transcripts/${transcriptId}`,
+            `https://api.recall.ai/api/v1/transcripts/${transcriptId}`,
+            `https://app.recall.ai/v1/transcripts/${transcriptId}`,
+            `https://app.recall.ai/api/v1/transcripts/${transcriptId}`,
+          ];
+          const headersList = [ { Authorization:`Token ${RECALL_KEY}` }, { 'X-Api-Key': RECALL_KEY } ];
+          for (const u of urls){
+            for (const hdrs of headersList){
+              try{
+                const r = await fetch(u, { headers: hdrs });
+                const j = await r.json().catch(()=>({}));
+                text = j?.text || j?.transcript || '';
+                if (text) break;
+              }catch{}
+            }
+            if (text) break;
+          }
+        }
       }
     }
   }catch{}
