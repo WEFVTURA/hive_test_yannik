@@ -12,7 +12,30 @@ export default async function handler(req){
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
   if (req.method !== 'POST') return new Response('Method Not Allowed', { status: 405, headers: cors });
 
-  let body={}; try{ body = await req.json(); }catch{ return json({ error:'bad_json' }, 400, cors); }
+  // Read raw body first so we can verify signature if provided
+  let rawBody = '';
+  try{ rawBody = await req.text(); }catch{}
+
+  // Optional webhook signature verification
+  try{
+    const providedSig = req.headers.get('x-recall-signature') || '';
+    const secret = process.env.RECALL_WEBHOOK_SECRET || process.env.WEBHOOK_SECRET || '';
+    if (secret && providedSig && rawBody){
+      const enc = new TextEncoder();
+      const key = await crypto.subtle.importKey('raw', enc.encode(secret), { name:'HMAC', hash:'SHA-256' }, false, ['sign']);
+      const sigBuf = await crypto.subtle.sign('HMAC', key, enc.encode(rawBody));
+      const sigHex = Array.from(new Uint8Array(sigBuf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+      // Constant-time compare
+      const a = providedSig.trim().toLowerCase();
+      const b = sigHex;
+      if (a.length !== b.length || !a.split('').every((c,i)=>c===b[i])){
+        return json({ error:'invalid_signature' }, 401, cors);
+      }
+    }
+  }catch{}
+
+  let body={};
+  try{ body = rawBody ? JSON.parse(rawBody) : {}; }catch{ return json({ error:'bad_json' }, 400, cors); }
   // Expected schema (approx): { id, meeting_id, status, transcript_id, transcript_text?, transcript_url? }
   const status = body?.status || '';
   if (!status){ return json({ ok:true }, 200, cors); }
