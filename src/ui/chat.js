@@ -11,22 +11,22 @@ export function renderChat(root){
   if (savedWidth) document.documentElement.style.setProperty('--chatWidth', savedWidth+'px');
   root.innerHTML = `
     <div class="chat-root">
-      <div class="panel" style="padding:12px; border-radius:12px; border:1px solid var(--border); background:var(--panel-2); height:100%; overflow:auto" id="chatMessages"></div>
+      <div class="chat-header panel" style="padding:12px 14px; border-bottom:1px solid var(--border); background:var(--panel-2); display:flex; align-items:center; justify-content:space-between; border-radius:12px 12px 0 0">
+        <div style="display:flex; align-items:center; gap:10px">
+          <span>Ask Hive assistant</span>
+          <span id="activeModelIndicator" style="display:none; background:var(--accent); color:white; padding:2px 8px; border-radius:12px; font-size:10px; font-weight:600; letter-spacing:0.5px"></span>
+        </div>
+        <div style="display:flex; gap:8px">
+          <button class="button ghost" id="saveChatBtn" data-tip="Save"><i data-lucide="save" class="icon" aria-hidden="true"></i></button>
+          <button class="button ghost" id="openChatBtn" data-tip="History"><i data-lucide="history" class="icon" aria-hidden="true"></i></button>
+          <button class="button ghost" id="clearChatBtn" data-tip="Clear"><i data-lucide="eraser" class="icon" aria-hidden="true"></i></button>
+          <button class="button ghost" id="collapseChatBtn" data-tip="Collapse/Expand Chat"><i data-lucide="minimize-2" class="icon" aria-hidden="true"></i></button>
+          <button class="button ghost" id="hideChatBtn" data-tip="Hide">Hide</button>
+        </div>
+      </div>
+      <div class="panel" style="padding:12px; border-radius:0; border:1px solid var(--border); border-top:0; background:var(--panel-2); height:100%; overflow:auto" id="chatMessages"></div>
       <div class="rag-debug" id="ragDebug" style="margin-top:10px; padding:10px; background:var(--panel-2); border:1px dashed var(--border); border-radius:10px; color:var(--muted); font-size:12px; max-height:180px; overflow:auto; display:none"></div>
       <div class="composer panel">
-        <div class="composer-head" style="padding:12px 14px; border-bottom:1px solid var(--border); background:var(--panel-2); display:flex; align-items:center; justify-content:space-between">
-          <div style="display:flex; align-items:center; gap:10px">
-            <span>Ask Hive assistant</span>
-            <span id="activeModelIndicator" style="display:none; background:var(--accent); color:white; padding:2px 8px; border-radius:12px; font-size:10px; font-weight:600; letter-spacing:0.5px"></span>
-          </div>
-          <div style="display:flex; gap:8px">
-            <button class="button ghost" id="saveChatBtn" data-tip="Save"><i data-lucide="save" class="icon" aria-hidden="true"></i></button>
-            <button class="button ghost" id="openChatBtn" data-tip="History"><i data-lucide="history" class="icon" aria-hidden="true"></i></button>
-            <button class="button ghost" id="clearChatBtn" data-tip="Clear"><i data-lucide="eraser" class="icon" aria-hidden="true"></i></button>
-            <button class="button ghost" id="collapseChatBtn" data-tip="Collapse/Expand Chat"><i data-lucide="minimize-2" class="icon" aria-hidden="true"></i></button>
-            <button class="button ghost" id="hideChatBtn" data-tip="Hide">Hide</button>
-          </div>
-        </div>
         <div class="composer-body" style="padding:12px; display:grid; gap:8px">
           <div class="muted">context: <span id="chatScopeLabel">All Libraries</span></div>
           <div style="display:flex; gap:8px; align-items:center">
