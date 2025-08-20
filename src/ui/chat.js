@@ -35,7 +35,14 @@ export function renderChat(root){
               <option value="direct">Direct (concat notes)</option>
               <option value="fts">FTS (BM25)</option>
               <option value="sql" selected>SQL (notes)</option>
-              <option value="pplx">Perplexity (deep research)</option>
+              <option value="pplx">Deep Research</option>
+            </select></span>
+          </div>
+          <div style="display:flex; gap:8px; align-items:center">
+            <label class="muted" style="font-size:12px">Model</label>
+            <span class="select-wrap"><select id="modelSelect" class="select">
+              <option value="Mistral" ${prefs.defaultModel==='Mistral'?'selected':''}>Mistral</option>
+              <option value="GPT-4o" ${prefs.defaultModel==='GPT-4o'?'selected':''}>GPT-4o</option>
             </select></span>
           </div>
           <div style="display:flex; gap:8px; align-items:center">
@@ -115,8 +122,11 @@ export function renderChat(root){
     }
   }
   
-  // Initially hide research model selector
+  // Initially set research model selector visibility
   toggleResearchModelSelector();
+  
+  // Initial model indicator update
+  updateActiveModelIndicator();
   
   // Listen for query mode changes
   if (queryModeSelect) {
