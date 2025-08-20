@@ -7,7 +7,7 @@ function buildCors(req: Request){
   return {
     'Access-Control-Allow-Origin': o,
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization, x-file-name, x-content-type',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization, apikey, x-client-info, x-file-name, x-content-type',
     'Access-Control-Max-Age': '86400'
   } as Record<string,string>;
 }

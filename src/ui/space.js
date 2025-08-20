@@ -48,7 +48,17 @@ export async function renderSpace(root, spaceId){
         <div id="filesActions" style="display:flex; gap:8px; margin-bottom:6px">
           <button class="button" id="addLinkBtn">Add link</button>
           <button class="button" id="uploadBtn">Upload file</button>
-          <button class="button" id="uploadAudioBtn">Transcribe audio</button>
+          <div id="transcribeWrap" style="position:relative">
+            <button class="button" id="uploadAudioBtn">Transcribe audio ▾</button>
+            <div class="menu" id="uploadRouteMenu" style="display:none; right:0; min-width:260px">
+              <button class="button" data-route="vercel" style="justify-content:flex-start">Route A · Vercel proxy → AssemblyAI</button>
+              <button class="button" data-route="supabase" style="justify-content:flex-start">Route B · Supabase Function → AssemblyAI</button>
+              <button class="button" data-route="storage" style="justify-content:flex-start">Route C · Supabase Storage → URL → AssemblyAI</button>
+              <div style="height:1px; background:var(--border); margin:6px 0"></div>
+              <button class="button" data-route="openai" style="justify-content:flex-start">OpenAI Whisper</button>
+              <button class="button" data-route="deepgram" style="justify-content:flex-start">Deepgram</button>
+            </div>
+          </div>
         </div>
         <div id="filesList" style="display:grid; gap:8px"></div>
       </section>`}
@@ -507,98 +517,44 @@ export async function renderSpace(root, spaceId){
     }
   });
   const uploadAudioBtn = root.querySelector('#uploadAudioBtn');
-  if (uploadAudioBtn) uploadAudioBtn.addEventListener('click', async()=>{
-    const res = await openModalWithExtractor('Transcribe audio', `<div class="field"><label>Audio file</label><input id="aInput" type="file" accept="audio/*"></div>`, (root)=>({ file: root.querySelector('#aInput')?.files?.[0] || null }));
-    if(!res.ok) return; const file = res.values?.file; if(!file) return;
-    const sb = getSupabase();
+  if (uploadAudioBtn) uploadAudioBtn.addEventListener('click', async(e)=>{
+    e.preventDefault();
+    const menu = root.querySelector('#uploadRouteMenu'); if (!menu) return;
+    menu.style.display = menu.style.display==='grid' ? 'none' : 'grid';
+    const hide = (ev)=>{ if(!menu.contains(ev.target) && ev.target!==uploadAudioBtn){ menu.style.display='none'; document.removeEventListener('click', hide); } };
+    setTimeout(()=>document.addEventListener('click', hide),0);
+
+    async function pickFile(){ return await new Promise((resolve)=>{ const inp=document.createElement('input'); inp.type='file'; inp.accept='audio/*'; inp.onchange=()=>resolve(inp.files?.[0]||null); inp.click(); }); }
     const { showProgress, updateProgress, completeProgress } = await import('./progress.js');
-    const pId = showProgress({ label:'Uploading to Assembly…', determinate:true });
-    // Solution A: Direct to AssemblyAI via same-origin proxy (no Storage)
-    let assemblyUploadUrl = '';
-    async function tryVercel(){
-      return await new Promise((resolve, reject)=>{
-        const xhr = new XMLHttpRequest();
-        xhr.open('POST', '/api/assembly-upload');
-        xhr.responseType = 'json';
-        xhr.setRequestHeader('Authorization', `Bearer ${'808060f1237a4866ad46691bd4ea7153'}`);
-        xhr.timeout = 0;
-        xhr.upload.onprogress = (e)=>{ if(e.lengthComputable) updateProgress(pId, (e.loaded/e.total)*100); };
-        xhr.onload = ()=>{
-          if (xhr.status>=200 && xhr.status<300){ const u = (xhr.response?.upload_url)||xhr.response?.url||''; return resolve(u); }
-          return reject(new Error(String(xhr.status)));
-        };
-        xhr.onerror = ()=> reject(new Error('network'));
-        const form = new FormData(); form.append('file', file); xhr.send(form);
-      });
+    const sb = getSupabase();
+
+    async function uploadViaVercel(file){
+      const pId = showProgress({ label:'Uploading via Vercel…', determinate:true });
+      const url = await new Promise((resolve, reject)=>{
+        const xhr = new XMLHttpRequest(); xhr.open('POST','/api/assembly-upload'); xhr.responseType='json'; xhr.setRequestHeader('Authorization', `Bearer ${'808060f1237a4866ad46691bd4ea7153'}`); xhr.upload.onprogress=(e)=>{ if(e.lengthComputable) updateProgress(pId,(e.loaded/e.total)*100); }; xhr.onload=()=>{ if(xhr.status>=200&&xhr.status<300){ resolve((xhr.response?.upload_url)||xhr.response?.url||''); } else reject(new Error(String(xhr.status))); }; xhr.onerror=()=>reject(new Error('network')); const f=new FormData(); f.append('file',file); xhr.send(f); });
+      completeProgress(pId,true); return url;
     }
-    async function trySupabase(){
+    async function uploadViaFunction(file){
+      const pId = showProgress({ label:'Uploading via Supabase Fn…', determinate:true });
       const base = (await import('../lib/supabase.js')).util_getEnv('VITE_SUPABASE_URL','VITE_SUPABASE_URL') || (await import('../lib/supabase.js')).util_getEnv('SUPABASE_URL','SUPABASE_URL');
       const anon = (await import('../lib/supabase.js')).util_getEnv('VITE_SUPABASE_ANON_KEY','VITE_SUPABASE_ANON_KEY') || (await import('../lib/supabase.js')).util_getEnv('SUPABASE_ANON_KEY','SUPABASE_ANON_KEY');
-      return await new Promise((resolve, reject)=>{
-        const xhr = new XMLHttpRequest();
-        xhr.open('POST', `${base.replace(/\/$/,'')}/functions/v1/assembly-chunk-upload`);
-        xhr.responseType = 'json';
-        xhr.setRequestHeader('Authorization', `Bearer ${anon}`);
-        xhr.setRequestHeader('apikey', anon);
-        try{ xhr.setRequestHeader('x-content-type', file.type || 'application/octet-stream'); }catch{}
-        xhr.timeout = 0;
-        xhr.upload.onprogress = (e)=>{ if(e.lengthComputable) updateProgress(pId, (e.loaded/e.total)*100); };
-        xhr.onload = ()=>{ if (xhr.status>=200 && xhr.status<300){ const u = (xhr.response?.upload_url)||xhr.response?.url||''; return resolve(u); } return reject(new Error(String(xhr.status))); };
-        xhr.onerror = ()=> reject(new Error('network'));
-        xhr.send(file);
-      });
+      const url = await new Promise((resolve,reject)=>{ const xhr=new XMLHttpRequest(); xhr.open('POST',`${base.replace(/\/$/,'')}/functions/v1/assembly-chunk-upload`); xhr.responseType='json'; xhr.setRequestHeader('Authorization',`Bearer ${anon}`); xhr.setRequestHeader('apikey',anon); xhr.upload.onprogress=(e)=>{ if(e.lengthComputable) updateProgress(pId,(e.loaded/e.total)*100); }; xhr.onload=()=>{ if(xhr.status>=200&&xhr.status<300){ resolve((xhr.response?.upload_url)||xhr.response?.url||''); } else reject(new Error(String(xhr.status))); }; xhr.onerror=()=>reject(new Error('network')); xhr.send(file); });
+      completeProgress(pId,true); return url;
     }
-    try{
-      try {
-        assemblyUploadUrl = await tryVercel();
-      } catch {
-        assemblyUploadUrl = await trySupabase();
-      }
-      if (!assemblyUploadUrl) throw new Error('no_upload_url');
-    }catch{ completeProgress(pId, false); alert('Upload failed'); return; }
-    completeProgress(pId, true);
-    const btn = document.getElementById('uploadAudioBtn');
-    const origText = btn.textContent;
-    btn.textContent = 'Transcribing…'; btn.setAttribute('disabled','true');
-    // Create a placeholder note and expand it so user sees progress
-    const tempTitle = (file.name||'Audio').replace(/\.[^/.]+$/,'');
-    const tempNote = await db_createNote(spaceId).catch(()=>null);
-    if (tempNote){ await db_updateNote(tempNote.id, { title: `${tempTitle} (transcribing…)`, content: 'Transcription in progress…' }).catch(()=>{}); try{ collapsedState.set(tempNote.id, false); }catch{} }
-    try{
+    async function uploadViaStorage(file){
+      const pId = showProgress({ label:'Uploading to Storage…', determinate:false });
+      const path = `${spaceId}/${Date.now()}_${file.name}`; const bucket = sb.storage.from('hive-attachments'); const up = await bucket.upload(path,file,{ upsert:true }); if(up.error){ completeProgress(pId,false); throw up.error; } const url=bucket.getPublicUrl(path).data.publicUrl; completeProgress(pId,true); return url;
+    }
+    async function transcribe(url, title){
       const indId = showProgress({ label:'Transcribing…', determinate:false });
-      let resp = await sb.functions.invoke('assembly', { body: { url: assemblyUploadUrl, space_id: spaceId, api_key: '808060f1237a4866ad46691bd4ea7153', title: file.name.replace(/\.[^/.]+$/,'') } });
-      if (resp.error){
-        // Fallback to alternate slug if the deployment name differs
-        resp = await sb.functions.invoke('assembly-transcribe', { body: { url: assemblyUploadUrl, space_id: spaceId, api_key: '808060f1237a4866ad46691bd4ea7153', title: file.name.replace(/\.[^/.]+$/,'') } });
-      }
-      const { data, error } = resp;
-      if (error) throw error; window.showToast && window.showToast('Transcription started');
-      // If immediate transcript returned, create a note if function didn’t already
-      if (typeof data?.transcript === 'string' && data.transcript){
-        if (tempNote){ await db_updateNote(tempNote.id, { title: tempTitle, content: data.transcript }).catch(()=>{}); }
-        else { const n = await db_createNote(spaceId); await db_updateNote(n.id, { title: tempTitle, content: data.transcript }); }
-        completeProgress(indId, true);
-      } else {
-        // Poll status if id is returned
-        if (data?.id){
-          const API_KEY = '808060f1237a4866ad46691bd4ea7153';
-          const id = data.id;
-          const deadline = Date.now() + 120000;
-          while(Date.now()<deadline){
-            await new Promise(r=>setTimeout(r, 2000));
-            const r = await fetch(`https://api.assemblyai.com/v2/transcript/${id}`, { headers:{ Authorization: API_KEY } });
-            const j = await r.json().catch(()=>({}));
-            if (j.status==='completed'){
-              if (tempNote){ await db_updateNote(tempNote.id, { title: tempTitle, content: j.text||'' }).catch(()=>{}); }
-              completeProgress(indId, true);
-              break;
-            }
-            if (j.status==='error'){ completeProgress(indId, false); break; }
-          }
-        } else { completeProgress(indId, true); }
-      }
-    }catch{ window.showToast && window.showToast('Transcription failed'); }
-    finally{ btn.textContent = origText; btn.removeAttribute('disabled'); renderSpace(root, spaceId); }
+      try{ let r = await sb.functions.invoke('assembly',{ body:{ url, space_id: spaceId, api_key:'808060f1237a4866ad46691bd4ea7153', title } }); if(r.error){ r = await sb.functions.invoke('assembly-transcribe',{ body:{ url, space_id: spaceId, api_key:'808060f1237a4866ad46691bd4ea7153', title } }); } const j=r.data; if(typeof j?.transcript==='string'){ const n=await db_createNote(spaceId); await db_updateNote(n.id,{ title, content:j.transcript }); } completeProgress(indId,true); }catch{ completeProgress(indId,false); }
+    }
+
+    menu.querySelector('[data-route="vercel"]').onclick = async()=>{ menu.style.display='none'; const f=await pickFile(); if(!f) return; const u=await uploadViaVercel(f); await transcribe(u,(f.name||'Audio').replace(/\.[^/.]+$/,'')); };
+    menu.querySelector('[data-route="supabase"]').onclick = async()=>{ menu.style.display='none'; const f=await pickFile(); if(!f) return; const u=await uploadViaFunction(f); await transcribe(u,(f.name||'Audio').replace(/\.[^/.]+$/,'')); };
+    menu.querySelector('[data-route="storage"]').onclick = async()=>{ menu.style.display='none'; const f=await pickFile(); if(!f) return; const u=await uploadViaStorage(f); await transcribe(u,(f.name||'Audio').replace(/\.[^/.]+$/,'')); };
+    menu.querySelector('[data-route="openai"]').onclick = async()=>{ menu.style.display='none'; const f=await pickFile(); if(!f) return; const pId=showProgress({ label:'OpenAI Whisper…', determinate:true }); try{ const form=new FormData(); form.append('file',f); const r=await fetch('/api/openai-whisper',{ method:'POST', headers:{ Authorization:`Bearer ${ (window.OPENAI_API_KEY||'') }` }, body: form }); const j=await r.json(); if(!r.ok) throw new Error(j?.error||'openai'); const n=await db_createNote(spaceId); await db_updateNote(n.id,{ title:(f.name||'Audio').replace(/\.[^/.]+$/,''), content:j.text||'' }); completeProgress(pId,true); }catch{ completeProgress(pId,false); } };
+    menu.querySelector('[data-route="deepgram"]').onclick = async()=>{ menu.style.display='none'; const f=await pickFile(); if(!f) return; const pId=showProgress({ label:'Deepgram…', determinate:true }); try{ const form=new FormData(); form.append('file',f); const r=await fetch('/api/deepgram-upload',{ method:'POST', headers:{ Authorization:`Bearer ${'def4729bf48ec55083d38cec18e6c314c5a4a180'}` }, body: form }); const j=await r.json(); if(!r.ok) throw new Error(j?.error||'deepgram'); const n=await db_createNote(spaceId); await db_updateNote(n.id,{ title:(f.name||'Audio').replace(/\.[^/.]+$/,''), content:j.text||'' }); completeProgress(pId,true); }catch{ completeProgress(pId,false); } };
   });
   root.querySelector('#coverBtn').addEventListener('click', async()=>{
     const res = await openModalWithExtractor('Change cover', `<div class="field"><label>Upload</label><input id="coverInput" type="file" accept="image/*"></div>`, (root)=>({ file: root.querySelector('#coverInput')?.files?.[0]||null }));
