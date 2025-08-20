@@ -70,6 +70,10 @@ app.innerHTML = `
       <button class="button" id="quickNewNoteBtn" style="width:100%"><svg class="icon"><use href="#edit"></use></svg> New Note</button>
       <button class="button" id="simplifiedViewBtn" style="width:100%"><i data-lucide="smartphone" class="icon" aria-hidden="true"></i> Simplified view</button>
       
+      <div class="section">Transcripts</div>
+      <button class="button" id="txLiveBtn" style="width:100%"><i data-lucide="radio" class="icon" aria-hidden="true"></i> Transcripts — Live</button>
+      <button class="button" id="txJobsBtn" style="width:100%"><i data-lucide="clock" class="icon" aria-hidden="true"></i> Transcripts — Jobs</button>
+      <button class="button" id="txFilesBtn" style="width:100%"><i data-lucide="hard-drive" class="icon" aria-hidden="true"></i> Transcripts — Files</button>
 
       <div class="section">Giannandrea's Library</div>
       <div class="nav-group" id="spacesList"></div>
@@ -228,6 +232,14 @@ askBtn?.addEventListener('click', ()=>{
   if (appRoot){ appRoot.classList.remove('chat-closed'); appRoot.classList.add('chat-open'); }
   setTimeout(()=>{ try{ document.getElementById('chatInput')?.focus(); }catch{} }, 0);
 });
+
+// Transcripts navigation
+const txLiveBtn = document.getElementById('txLiveBtn');
+const txJobsBtn = document.getElementById('txJobsBtn');
+const txFilesBtn = document.getElementById('txFilesBtn');
+txLiveBtn?.addEventListener('click', ()=>{ location.hash = 'transcripts/live'; });
+txJobsBtn?.addEventListener('click', ()=>{ location.hash = 'transcripts/jobs'; });
+txFilesBtn?.addEventListener('click', ()=>{ location.hash = 'transcripts/files'; });
 
 // Tour trigger
 document.getElementById('openGuide')?.addEventListener('click', async()=>{
@@ -627,6 +639,18 @@ async function renderRoute(){
     const chatsId = localStorage.getItem('hive_chats_space_id')||'';
     if (sid && chatsId && sid===chatsId){ const { renderChatsSpace } = await import('./ui/chat.js'); await renderChatsSpace(content); }
     else { await renderSpace(content, sid); }
+  }
+  else if (hash === 'transcripts/live'){
+    const { renderTxLive } = await import('./ui/transcripts.js');
+    await renderTxLive(content);
+  }
+  else if (hash === 'transcripts/jobs'){
+    const { renderTxJobs } = await import('./ui/transcripts.js');
+    await renderTxJobs(content);
+  }
+  else if (hash === 'transcripts/files'){
+    const { renderTxFiles } = await import('./ui/transcripts.js');
+    await renderTxFiles(content);
   }
   else { await renderLibrary(); }
 }
