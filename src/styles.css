@@ -184,12 +184,16 @@ body{margin:0; background:var(--bg); color:var(--text); font:14px/1.45 ui-sans-s
 
 /* Tooltips (custom hover boxes) */
 [data-tip]{position:relative}
-[data-tip]::after{content:attr(data-tip); position:absolute; left:50%; bottom:calc(100% + 8px); transform:translateX(-50%); background:var(--panel); color:var(--text); border:1px solid var(--border); padding:6px 8px; border-radius:8px; box-shadow:var(--shadow); white-space:nowrap; font-size:12px; display:none; z-index:9999; pointer-events:none}
-[data-tip]::before{content:""; position:absolute; left:50%; bottom:100%; transform:translateX(-50%); border-left:6px solid transparent; border-right:6px solid transparent; border-top:6px solid var(--panel); display:none; z-index:99; pointer-events:none}
+[data-tip]::after{content:attr(data-tip); position:absolute; left:50%; bottom:calc(100% + 8px); transform:translateX(-50%); background:var(--panel); color:var(--text); border:1px solid var(--border); padding:6px 8px; border-radius:8px; box-shadow:var(--shadow); white-space:nowrap; font-size:12px; display:none; z-index:999999; pointer-events:none}
+[data-tip]::before{content:""; position:absolute; left:50%; bottom:100%; transform:translateX(-50%); border-left:6px solid transparent; border-right:6px solid transparent; border-top:6px solid var(--panel); display:none; z-index:999998; pointer-events:none}
 [data-tip]:hover::after,[data-tip]:focus::after,[data-tip]:hover::before,[data-tip]:focus::before{display:block}
 /* Ensure tooltips appear above panels and scrims */
 .app *, .panel *, .scrim *{z-index:auto}
-.tooltip-layer{z-index:9999}
+.tooltip-layer{z-index:99999}
+
+/* Force tooltips to break out of stacking contexts */
+[data-tip]{position:relative; z-index:999999}
+[data-tip]::after, [data-tip]::before{z-index:999999!important}
 @media (prefers-reduced-motion: no-preference){
   [data-tip]::after{opacity:0; transform:translateX(-50%) translateY(4px); transition:opacity .12s ease, transform .12s ease}
   [data-tip]:hover::after,[data-tip]:focus::after{opacity:1; transform:translateX(-50%) translateY(0)}
