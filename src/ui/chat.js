@@ -23,6 +23,7 @@ export function renderChat(root){
             <button class="button ghost" id="saveChatBtn" data-tip="Save"><i data-lucide="save" class="icon" aria-hidden="true"></i></button>
             <button class="button ghost" id="openChatBtn" data-tip="History"><i data-lucide="history" class="icon" aria-hidden="true"></i></button>
             <button class="button ghost" id="clearChatBtn" data-tip="Clear"><i data-lucide="eraser" class="icon" aria-hidden="true"></i></button>
+            <button class="button ghost" id="collapseChatBtn" data-tip="Collapse/Expand Chat"><i data-lucide="minimize-2" class="icon" aria-hidden="true"></i></button>
             <button class="button ghost" id="hideChatBtn" data-tip="Hide">Hide</button>
           </div>
         </div>
@@ -92,6 +93,7 @@ export function renderChat(root){
   const chatMessagesEl = root.querySelector('#chatMessages');
   const chatInput = root.querySelector('#chatInput');
   const clearBtn = root.querySelector('#clearChatBtn');
+  const collapseBtn = root.querySelector('#collapseChatBtn');
   const hideBtn = root.querySelector('#hideChatBtn');
   const ragDebugEl = root.querySelector('#ragDebug');
   const scopeSel = root.querySelector('#spaceScope');
@@ -224,6 +226,39 @@ export function renderChat(root){
   function hideChat(){ const appRoot=document.getElementById('appRoot'); const scrim=document.getElementById('scrim'); if(appRoot){ appRoot.classList.remove('chat-open'); appRoot.classList.add('chat-closed'); } if(scrim){ scrim.style.display='none'; } }
   hideBtn.addEventListener('click', hideChat);
 
+  // Collapse/Expand chat functionality
+  collapseBtn.addEventListener('click', ()=>{
+    const appRoot = document.getElementById('appRoot');
+    const chatPanel = document.getElementById('chatPanel');
+    const composer = root.querySelector('.composer');
+    const ragDebug = root.querySelector('#ragDebug');
+    const isCollapsed = chatPanel.classList.contains('chat-collapsed');
+    
+    if (isCollapsed) {
+      // Expand
+      chatPanel.classList.remove('chat-collapsed');
+      appRoot.classList.remove('chat-panel-collapsed');
+      if (composer) composer.style.display = 'block';
+      if (ragDebug) ragDebug.style.display = ragDebug.hasAttribute('data-visible') ? 'block' : 'none';
+      collapseBtn.innerHTML = '<i data-lucide="minimize-2" class="icon" aria-hidden="true"></i>';
+      collapseBtn.setAttribute('data-tip', 'Collapse Chat');
+    } else {
+      // Collapse
+      chatPanel.classList.add('chat-collapsed');
+      appRoot.classList.add('chat-panel-collapsed');
+      if (composer) composer.style.display = 'none';
+      if (ragDebug) {
+        if (ragDebug.style.display !== 'none') ragDebug.setAttribute('data-visible', 'true');
+        ragDebug.style.display = 'none';
+      }
+      collapseBtn.innerHTML = '<i data-lucide="maximize-2" class="icon" aria-hidden="true"></i>';
+      collapseBtn.setAttribute('data-tip', 'Expand Chat');
+    }
+    
+    // Re-initialize Lucide icons for the new icon
+    try{ window.lucide && window.lucide.createIcons({ attrs: { width: 18, height: 18 } }); }catch{}
+  });
+
   // Save/Open (Supabase)
   saveBtn.addEventListener('click', async ()=>{
     const title = prompt('Chat title?', 'Untitled chat');
@@ -341,7 +376,7 @@ export function renderChat(root){
           }
           if (ragDebugEl) { ragDebugEl.textContent += `\nModel latency: ${Math.round(performance.now()-started)}ms`; }
           return j.choices?.[0]?.message?.content || '';
-        } else {
+      } else {
           console.warn('Perplexity API key not found, falling back to OpenAI');
         }
       }

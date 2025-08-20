@@ -334,5 +334,22 @@ a { color: inherit; text-decoration: none; }
 #chatMessages{min-height:0; overflow-y:auto}
 
 /* Chat panel specific styling */
-#chatPanel{height:100%; overflow:hidden; display:flex; flex-direction:column}
+#chatPanel{height:100%; overflow:hidden; display:flex; flex-direction:column; transition: all 0.3s ease}
 #chatRoot{flex:1; min-height:0; overflow:hidden}
+
+/* Chat collapse functionality */
+.app.chat-panel-collapsed{
+  grid-template-columns: 260px 1fr 6px 50%;
+}
+.app.chat-closed.chat-panel-collapsed{
+  grid-template-columns: 260px 1fr;
+}
+#chatPanel.chat-collapsed #chatRoot{
+  height: 100%;
+}
+#chatPanel.chat-collapsed .composer{
+  display: none !important;
+}
+#chatPanel.chat-collapsed .rag-debug{
+  display: none !important;
+}
