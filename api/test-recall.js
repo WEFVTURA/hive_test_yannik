@@ -28,59 +28,88 @@ export default async function handler(req){
   };
   
   const base = regionBases[region] || regionBases.us;
-  const testUrl = `${base}/v1/transcripts?limit=5`;
+  // Test multiple endpoint patterns and auth methods
+  const testVariants = [
+    { url: `${base}/v1/transcripts?limit=5`, auth: `Token ${RECALL_KEY}` },
+    { url: `${base}/api/v1/transcripts?limit=5`, auth: `Token ${RECALL_KEY}` },
+    { url: `${base}/v1/transcripts?limit=5`, auth: `Bearer ${RECALL_KEY}` },
+    { url: `${base}/v1/transcripts`, auth: `Token ${RECALL_KEY}` }
+  ];
   
-  try {
-    const response = await fetch(testUrl, {
-      headers: {
-        'Authorization': `Token ${RECALL_KEY}`,
-        'Accept': 'application/json'
-      }
-    });
-
-    const status = response.status;
-    const statusText = response.statusText;
-    const headers = {};
-    
-    // Capture important headers
-    ['content-type', 'location', 'x-ratelimit-remaining'].forEach(h => {
-      const val = response.headers.get(h);
-      if (val) headers[h] = val;
-    });
-
-    let body = '';
-    let transcripts = [];
-    
+  const results = [];
+  
+  for (const variant of testVariants) {
     try {
-      const text = await response.text();
-      body = text;
-      
-      if (response.ok) {
-        const data = JSON.parse(text);
-        transcripts = Array.isArray(data) ? data : (Array.isArray(data?.results) ? data.results : []);
-      }
-    } catch (e) {
-      body = 'Failed to read response body: ' + e.message;
-    }
+      const response = await fetch(variant.url, {
+        headers: {
+          'Authorization': variant.auth,
+          'Accept': 'application/json',
+          'Content-Type': 'application/json'
+        }
+      });
 
-    return new Response(JSON.stringify({
-      success: response.ok,
-      api_key_length: RECALL_KEY.length,
-      region_used: region,
-      base_url: base,
-      test_url: testUrl,
-      response: {
+      const status = response.status;
+      const statusText = response.statusText;
+      const headers = {};
+      
+      // Capture important headers
+      ['content-type', 'location', 'x-ratelimit-remaining'].forEach(h => {
+        const val = response.headers.get(h);
+        if (val) headers[h] = val;
+      });
+
+      let body = '';
+      let transcripts = [];
+      let isJson = false;
+      
+      try {
+        const text = await response.text();
+        body = text;
+        
+        if (response.ok && headers['content-type']?.includes('application/json')) {
+          const data = JSON.parse(text);
+          transcripts = Array.isArray(data) ? data : (Array.isArray(data?.results) ? data.results : []);
+          isJson = true;
+        }
+      } catch (e) {
+        body = 'Failed to read response body: ' + e.message;
+      }
+
+      results.push({
+        variant: `${variant.auth.split(' ')[0]} ${variant.url}`,
         status,
         statusText,
         headers,
-        bodySnippet: body.substring(0, 500),
+        bodySnippet: body.substring(0, 200),
         transcriptCount: transcripts.length,
-        firstTranscript: transcripts[0] || null
-      }
-    }, null, 2), { 
-      status: 200, 
-      headers: { ...cors, 'Content-Type': 'application/json' }
-    });
+        isJson,
+        success: response.ok && isJson && transcripts.length > 0
+      });
+      
+      // If we found a working variant, stop testing
+      if (response.ok && isJson && transcripts.length > 0) break;
+      
+    } catch (error) {
+      results.push({
+        variant: `${variant.auth.split(' ')[0]} ${variant.url}`,
+        error: error.message
+      });
+    }
+  }
+
+  return new Response(JSON.stringify({
+    api_key_length: RECALL_KEY.length,
+    region_used: region,
+    base_url: base,
+    results,
+    summary: {
+      working_variants: results.filter(r => r.success).length,
+      total_tested: results.length
+    }
+  }, null, 2), { 
+    status: 200, 
+    headers: { ...cors, 'Content-Type': 'application/json' }
+  });
 
   } catch (error) {
     return new Response(JSON.stringify({
