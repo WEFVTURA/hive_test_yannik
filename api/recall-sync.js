@@ -93,12 +93,20 @@ export default async function handler(req){
     const list = await fetchAllCandidates();
     for (const t of list){
       checked++;
-      const status = t?.status || t?.state || '';
-      if (String(status).toLowerCase() !== 'completed') continue;
+      const status = t?.status?.code || t?.status || t?.state || '';
+      if (!['completed', 'done'].includes(String(status).toLowerCase())) continue;
       const id = t?.id || t?.transcript_id || '';
       const title = (t?.meeting_title || `Recall ${id || ''}`).trim() || `Recall ${new Date().toISOString()}`;
       let text = t?.text || t?.transcript || '';
-      try{ if (!text && t?.transcript_url){ const rr = await fetch(String(t.transcript_url)); text = await rr.text(); } }catch{}
+      // Get transcript from download_url if not directly available
+      try{ 
+        if (!text && t?.data?.download_url){ 
+          const rr = await fetch(String(t.data.download_url)); 
+          const jsonData = await rr.json();
+          // Extract text from the transcript JSON structure
+          text = jsonData?.transcript || jsonData?.text || JSON.stringify(jsonData);
+        } 
+      }catch{}
       if (!text) continue;
       // Avoid naive duplicates by searching for same title prefix
       try{
