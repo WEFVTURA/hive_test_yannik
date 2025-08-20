@@ -28,35 +28,43 @@ export default async function handler(req){
   };
   
   const base = regionBases[region] || regionBases.us;
-  // Test multiple endpoint patterns based on Recall API docs
+  // Test multiple endpoint patterns and auth formats
   const testVariants = [
     { url: `${base}/api/v1/transcript/?page=1`, auth: `Token ${RECALL_KEY}` },
+    { url: `${base}/api/v1/transcript/?page=1`, auth: `Bearer ${RECALL_KEY}` },
+    { url: `${base}/api/v1/transcript/?page=1`, auth: `${RECALL_KEY}` },
     { url: `${base}/api/v1/transcripts/?page=1`, auth: `Token ${RECALL_KEY}` },
-    { url: `${base}/api/v1/transcript/`, auth: `Token ${RECALL_KEY}` },
-    { url: `${base}/api/v1/transcripts/`, auth: `Token ${RECALL_KEY}` },
-    { url: `${base}/api/v1/bot/?page=1`, auth: `Token ${RECALL_KEY}` }
+    { url: `${base}/api/v1/bot/?page=1`, auth: `Token ${RECALL_KEY}` },
+    { url: `${base}/api/v1/bot/?page=1`, auth: `Bearer ${RECALL_KEY}` }
   ];
   
   const results = [];
   
   for (const variant of testVariants) {
     try {
-      const response = await fetch(variant.url, {
-        headers: {
-          'Authorization': variant.auth,
-          'Accept': 'application/json',
-          'Content-Type': 'application/json'
-        }
-      });
+      const headers = {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
+      };
+      
+      // Add authorization header
+      if (variant.auth.includes('Token') || variant.auth.includes('Bearer')) {
+        headers['Authorization'] = variant.auth;
+      } else {
+        // Try direct API key
+        headers['Authorization'] = variant.auth;
+      }
+      
+      const response = await fetch(variant.url, { headers });
 
       const status = response.status;
       const statusText = response.statusText;
-      const headers = {};
+      const responseHeaders = {};
       
       // Capture important headers
       ['content-type', 'location', 'x-ratelimit-remaining'].forEach(h => {
         const val = response.headers.get(h);
-        if (val) headers[h] = val;
+        if (val) responseHeaders[h] = val;
       });
 
       let body = '';
@@ -67,7 +75,7 @@ export default async function handler(req){
         const text = await response.text();
         body = text;
         
-        if (response.ok && headers['content-type']?.includes('application/json')) {
+        if (response.ok && responseHeaders['content-type']?.includes('application/json')) {
           const data = JSON.parse(text);
           transcripts = Array.isArray(data) ? data : (Array.isArray(data?.results) ? data.results : []);
           isJson = true;
@@ -80,7 +88,7 @@ export default async function handler(req){
         variant: `${variant.auth.split(' ')[0]} ${variant.url}`,
         status,
         statusText,
-        headers,
+        headers: responseHeaders,
         bodySnippet: body.substring(0, 200),
         transcriptCount: transcripts.length,
         isJson,
