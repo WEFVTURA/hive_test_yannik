@@ -42,10 +42,33 @@ export default async function handler(req){
 
   let imported = 0; let checked = 0;
   try{
-    // Try generic listing; adjust if schema differs
-    const r = await fetch(`https://api.recall.ai/api/v1/transcripts`, { headers:{ Authorization:`Token ${RECALL_KEY}` } });
-    const j = await r.json().catch(()=>({}));
-    const list = Array.isArray(j)? j : (Array.isArray(j?.results)? j.results : []);
+    // Try multiple list variants + pagination
+    async function fetchAllCandidates(){
+      const headers = { Authorization:`Token ${RECALL_KEY}` };
+      const urls = [
+        'https://api.recall.ai/api/v1/transcripts?status=completed&limit=100',
+        'https://api.recall.ai/api/v1/transcripts?state=completed&limit=100',
+        'https://api.recall.ai/api/v1/transcripts?limit=100'
+      ];
+      const aggregated = [];
+      for (const base of urls){
+        let url = base;
+        let guard = 0;
+        while (url && guard < 20){
+          guard++;
+          let resp, data={};
+          try{ resp = await fetch(url, { headers }); data = await resp.json().catch(()=>({})); }catch{ data = {}; }
+          const chunk = Array.isArray(data) ? data : (Array.isArray(data?.results) ? data.results : []);
+          if (chunk.length) aggregated.push(...chunk);
+          const nextUrl = data?.next || data?.links?.next || '';
+          if (nextUrl && typeof nextUrl === 'string') url = nextUrl; else break;
+        }
+        if (aggregated.length) break;
+      }
+      return aggregated;
+    }
+
+    const list = await fetchAllCandidates();
     for (const t of list){
       checked++;
       const status = t?.status || t?.state || '';
