@@ -28,7 +28,6 @@ export function renderChat(root){
       <div class="rag-debug" id="ragDebug" style="margin-top:10px; padding:10px; background:var(--panel-2); border:1px dashed var(--border); border-radius:10px; color:var(--muted); font-size:12px; max-height:180px; overflow:auto; display:none"></div>
       <div class="composer panel">
         <div class="composer-body" style="padding:12px; display:grid; gap:8px">
-          <div class="muted">context: <span id="chatScopeLabel">All Libraries</span></div>
           <div style="display:flex; gap:8px; align-items:center">
             <label class="muted" style="font-size:12px">Mode</label>
             <span class="select-wrap"><select id="queryMode" class="select">
