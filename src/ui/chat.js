@@ -43,6 +43,24 @@ export function renderChat(root){
             <span class="select-wrap"><select id="modelSelect" class="select">
               <option value="Mistral" ${prefs.defaultModel==='Mistral'?'selected':''}>Mistral</option>
               <option value="GPT-4o" ${prefs.defaultModel==='GPT-4o'?'selected':''}>GPT-4o</option>
+              <option value="Perplexity" ${prefs.defaultModel==='Perplexity'?'selected':''}>Perplexity</option>
+            </select></span>
+            <button class="button ghost" id="toggleMoreModels" data-tip="More models via OpenRouter" style="padding:4px 8px; font-size:12px">+</button>
+          </div>
+          <div style="display:none; gap:8px; align-items:center" id="openRouterModelRow">
+            <label class="muted" style="font-size:12px">OpenRouter Model</label>
+            <span class="select-wrap" style="flex:1"><select id="openRouterModel" class="select" style="width:100%">
+              <option value="anthropic/claude-3.5-sonnet">Claude 3.5 Sonnet</option>
+              <option value="openai/gpt-4o">OpenAI GPT-4o</option>
+              <option value="openai/gpt-4o-mini">OpenAI GPT-4o Mini</option>
+              <option value="google/gemini-pro-1.5">Google Gemini Pro 1.5</option>
+              <option value="meta-llama/llama-3.1-70b-instruct">Llama 3.1 70B</option>
+              <option value="meta-llama/llama-3.1-405b-instruct">Llama 3.1 405B</option>
+              <option value="mistralai/mistral-large">Mistral Large</option>
+              <option value="mistralai/mistral-medium">Mistral Medium</option>
+              <option value="perplexity/llama-3.1-sonar-large-128k-online">Perplexity Sonar Large</option>
+              <option value="cohere/command-r-plus">Cohere Command R+</option>
+              <option value="x-ai/grok-2">xAI Grok-2</option>
             </select></span>
           </div>
           <div style="display:flex; gap:8px; align-items:center">
@@ -81,6 +99,8 @@ export function renderChat(root){
   const openBtn = root.querySelector('#openChatBtn');
   const researchModelRow = root.querySelector('#researchModelRow');
   const queryModeSelect = root.querySelector('#queryMode');
+  const toggleMoreModelsBtn = root.querySelector('#toggleMoreModels');
+  const openRouterModelRow = root.querySelector('#openRouterModelRow');
   let history = [];
   let model = prefs.defaultModel;
   let currentChatId = null;
@@ -113,8 +133,19 @@ export function renderChat(root){
       } else if (queryMode === 'rag' || queryMode === 'fts' || queryMode === 'sql' || queryMode === 'direct') {
         // Regular chat modes - show chat model
         const selectedModel = modelSelect?.value || model;
-        const modelNames = { 'Mistral': 'Mistral', 'GPT-4o': 'GPT-4o' };
-        activeModelIndicator.textContent = modelNames[selectedModel] || selectedModel;
+        const openRouterSelect = root.querySelector('#openRouterModel');
+        const isOpenRouterMode = openRouterModelRow && openRouterModelRow.style.display !== 'none';
+        
+        if (isOpenRouterMode && openRouterSelect) {
+          // Show OpenRouter model name
+          const selectedOpenRouterModel = openRouterSelect.value;
+          const modelName = selectedOpenRouterModel.split('/').pop().replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+          activeModelIndicator.textContent = modelName;
+        } else {
+          // Show regular model names
+          const modelNames = { 'Mistral': 'Mistral', 'GPT-4o': 'GPT-4o', 'Perplexity': 'Perplexity' };
+          activeModelIndicator.textContent = modelNames[selectedModel] || selectedModel;
+        }
         activeModelIndicator.style.display = 'inline-block';
       } else {
         activeModelIndicator.style.display = 'none';
@@ -133,9 +164,21 @@ export function renderChat(root){
     queryModeSelect.addEventListener('change', toggleResearchModelSelector);
   }
   
+  // Toggle OpenRouter models functionality
+  if (toggleMoreModelsBtn) {
+    toggleMoreModelsBtn.addEventListener('click', () => {
+      const isVisible = openRouterModelRow.style.display !== 'none';
+      openRouterModelRow.style.display = isVisible ? 'none' : 'flex';
+      toggleMoreModelsBtn.textContent = isVisible ? '+' : '−';
+      toggleMoreModelsBtn.setAttribute('data-tip', isVisible ? 'More models via OpenRouter' : 'Hide OpenRouter models');
+      updateActiveModelIndicator();
+    });
+  }
+
   // Listen for model selector changes
   const modelSelect = root.querySelector('#modelSelect');
   const researchModelSelect = root.querySelector('#researchModel');
+  const openRouterModelSelect = root.querySelector('#openRouterModel');
   
   if (modelSelect) {
     modelSelect.addEventListener('change', () => {
@@ -146,6 +189,10 @@ export function renderChat(root){
   
   if (researchModelSelect) {
     researchModelSelect.addEventListener('change', updateActiveModelIndicator);
+  }
+  
+  if (openRouterModelSelect) {
+    openRouterModelSelect.addEventListener('change', updateActiveModelIndicator);
   }
 
   // Ensure any legacy side hide button is removed
@@ -210,6 +257,36 @@ export function renderChat(root){
     const anon = util_getEnv('VITE_SUPABASE_ANON_KEY','VITE_SUPABASE_ANON_KEY') || util_getEnv('SUPABASE_ANON_KEY','SUPABASE_ANON_KEY');
     const started = performance.now();
     try{
+      // Check if OpenRouter model is selected
+      const isOpenRouterMode = openRouterModelRow && openRouterModelRow.style.display !== 'none';
+      const openRouterSelect = root.querySelector('#openRouterModel');
+      
+      if (isOpenRouterMode && openRouterSelect) {
+        // Use OpenRouter API
+        const selectedModel = openRouterSelect.value;
+        const openRouterKey = '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';
+        
+        const r = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${openRouterKey}`,
+            'Content-Type': 'application/json',
+            'HTTP-Referer': window.location.origin,
+            'X-Title': 'Hive Central Brain'
+          },
+          body: JSON.stringify({
+            model: selectedModel,
+            messages: [{ role: 'user', content: prompt }],
+            temperature: 0.7
+          })
+        });
+        
+        const j = await r.json();
+        if (!r.ok) { throw new Error(j?.error?.message || 'OpenRouter error'); }
+        if (ragDebugEl) { ragDebugEl.textContent += `\nModel latency: ${Math.round(performance.now()-started)}ms`; }
+        return j.choices?.[0]?.message?.content || '';
+      }
+      
       if (model === 'Mistral'){
         const mistralKey = util_getEnv('VITE_MISTRAL_API_KEY','VITE_MISTRAL_API_KEY') || util_getEnv('MISTRAL_AI_API','MISTRAL_AI_API') || '';
         if (mistralKey) {
@@ -231,8 +308,31 @@ export function renderChat(root){
         } else {
           console.warn('Mistral API key not found, falling back to OpenAI');
         }
+      } else if (model === 'Perplexity') {
+        const pplxKey = util_getEnv('VITE_PERPLEXITY','VITE_PERPLEXITY') || util_getEnv('PERPLEXITY','PERPLEXITY');
+        if (pplxKey) {
+          const r = await fetch('https://api.perplexity.ai/chat/completions', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${pplxKey}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              model: 'llama-3.1-sonar-small-128k-online',
+              messages: [{ role: 'user', content: prompt }],
+              temperature: 0.3
+            })
+          });
+          const j = await r.json();
+          if (!r.ok) { throw new Error(j?.error?.message || 'Perplexity error'); }
+          if (ragDebugEl) { ragDebugEl.textContent += `\nModel latency: ${Math.round(performance.now()-started)}ms`; }
+          return j.choices?.[0]?.message?.content || '';
+        } else {
+          console.warn('Perplexity API key not found, falling back to OpenAI');
+        }
       }
-      // Use OpenAI (or fallback for Mistral if no key)
+      
+      // Use OpenAI (or fallback for other models if no key)
       {
         const openaiKey = util_getEnv('VITE_OPENAI_API_KEY','VITE_OPENAI_API_KEY') || util_getEnv('OPEN_AI_API','OPEN_AI_API') || window.OPENAI_API_KEY || '';
         const r = await fetch('https://lmrnnfjuytygomdfujhs.supabase.co/functions/v1/openai-chat', { method:'POST', headers:{ 'Content-Type':'application/json', 'Authorization': `Bearer ${anon}`, 'apikey': anon }, body: JSON.stringify({ prompt, model:'gpt-4o-mini', openai_api_key: openaiKey }) });
