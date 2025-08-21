@@ -685,6 +685,7 @@ async function renderMeetingsHub(root){
         <i data-lucide="calendar" class="icon"></i>
         Meetings Hub
       </div>
+      <button class="button ghost" id="backToLibrary" style="margin-left:12px"><i data-lucide="arrow-left" class="icon"></i> Back to Library</button>
       <div class="search-bar" style="flex: 1; max-width: 400px; margin-left: 16px;">
         <input type="text" id="meetingsSearch" placeholder="Search meetings..." 
                style="width: 100%; padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px; font-size: 14px;">
@@ -767,39 +768,38 @@ async function renderMeetingsHub(root){
           <h3 style="margin-bottom: 16px; color: var(--primary);">💬 Meeting Transcripts</h3>
           <div id="meetingsList">
             ${notes.map(note => `
-              <div class="meeting-card" data-id="${note.id}" data-title="${(note.title || '').toLowerCase()}" data-date="${note.created_at}" 
-                   style="margin-bottom: 16px; border: 1px solid var(--border); border-radius: 12px; overflow: hidden; transition: all 0.2s;">
-                <div class="meeting-header" style="padding: 20px; background: var(--panel-1); cursor: pointer;" onclick="toggleMeetingExpand('${note.id}')">
-                  <div style="display: flex; justify-content: between; align-items: start;">
-                    <div style="flex: 1;">
-                      <h4 style="margin: 0 0 8px 0; font-size: 18px; font-weight: 600; color: var(--primary);">
-                        ${note.title?.includes('Recall') ? '🎙️' : '📝'} ${note.title || 'Untitled Meeting'}
+              <div class="meeting-card" data-id="${note.id}" data-title="${(cleanMeetingTitle(note.title) || '').toLowerCase()}" data-date="${note.created_at}" 
+                   style="max-width:1100px; margin:0 auto 16px auto; border: 1px solid var(--border); border-radius: 12px; overflow: hidden; transition: all 0.2s;">
+                <div class="meeting-header" style="padding: 16px; background: var(--panel-1);">
+                  <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 16px; align-items: start;">
+                    <div>
+                      <h4 style="margin: 0 0 6px 0; font-size: 16px; font-weight: 700; color: var(--primary);">
+                        ${note.title?.includes('Recall') ? '🎙️' : '📝'} ${cleanMeetingTitle(note.title)}
                       </h4>
-                      <div style="font-size: 14px; color: var(--muted); margin-bottom: 12px;">
-                        📅 ${new Date(note.created_at).toLocaleDateString()} at ${new Date(note.created_at).toLocaleTimeString()} 
-                        • 📊 ${(note.content?.length || 0).toLocaleString()} characters
-                        • ⏱️ ~${Math.ceil((note.content?.length || 0) / 1000)} min read
+                      <div style="font-size: 12px; color: var(--muted); margin-bottom: 10px;">
+                        📅 ${new Date(note.created_at).toLocaleDateString()} • 👥 ${extractSpeakerNames(note.content).join(', ') || 'Unknown'}
                       </div>
                       <!-- Preview -->
-                      <div class="meeting-preview" style="background: var(--panel-2); padding: 12px; border-radius: 6px; border-left: 3px solid var(--accent);">
+                      <div class="meeting-preview" style="background: var(--panel-2); padding: 10px; border-radius: 6px; border-left: 3px solid var(--accent); max-height: 150px; overflow:auto;">
                         ${formatTranscriptContent(note.content, true)}
                       </div>
+                      <div style="margin-top:8px; display:flex; gap:8px;">
+                        <button class="button sm" onclick="toggleMeetingExpand('${note.id}')"><i data-lucide="chevron-down" id="chevron-${note.id}"></i> Expand</button>
+                        <button class="button sm ghost" onclick="copyMeetingText('${note.id}')"><i data-lucide="copy"></i> Copy</button>
+                        <button class="button sm ghost" onclick="downloadMeeting('${note.id}', '${cleanMeetingTitle(note.title)}')"><i data-lucide="download"></i> Download</button>
+                        <button class="button sm danger" onclick="deleteMeeting('${note.id}')"><i data-lucide="trash-2"></i> Delete</button>
+                      </div>
                     </div>
-                    <div style="margin-left: 16px; display: flex; flex-direction: column; gap: 8px;">
-                      <button class="button ghost sm" onclick="event.stopPropagation(); toggleMeetingExpand('${note.id}')" title="Expand">
-                        <i data-lucide="chevron-down" id="chevron-${note.id}"></i>
-                      </button>
-                      <button class="button ghost sm" onclick="event.stopPropagation(); copyMeetingText('${note.id}')" title="Copy">
-                        <i data-lucide="copy"></i>
-                      </button>
-                      <button class="button ghost sm" onclick="event.stopPropagation(); downloadMeeting('${note.id}', '${note.title}')" title="Download">
-                        <i data-lucide="download"></i>
-                      </button>
+                    <div>
+                      <div style="font-weight:700; margin-bottom:6px;">🧠 Summary</div>
+                      <div id="summary-${note.id}" style="font-size:14px; line-height:1.5; background: var(--panel-2); padding: 10px; border-radius: 6px; min-height: 80px;">
+                        Generating summary...
+                      </div>
                     </div>
                   </div>
                 </div>
-                <div id="meeting-full-${note.id}" class="meeting-full" style="display: none; padding: 24px; background: var(--background); border-top: 1px solid var(--border);">
-                  <div style="max-height: 500px; overflow-y: auto; padding-right: 8px;">
+                <div id="meeting-full-${note.id}" class="meeting-full" style="display: none; padding: 16px; background: var(--background); border-top: 1px solid var(--border);">
+                  <div style="max-height: 420px; overflow-y: auto; padding-right: 8px;">
                     ${formatTranscriptContent(note.content, false)}
                   </div>
                 </div>
@@ -811,6 +811,12 @@ async function renderMeetingsHub(root){
       
       // Add functionality
       setupMeetingsHubInteractions();
+      // Fetch summaries async
+      (async()=>{
+        for (const n of notes){
+          try{ await fetchAndRenderSummary(n.id, n.title, n.content); }catch{}
+        }
+      })();
       
     } else {
       hubContent.innerHTML = `
@@ -1060,7 +1066,7 @@ function formatTranscriptContent(content, isPreview = false) {
   if (!content) return 'No content available';
   
   try {
-    const data = JSON.parse(content);
+    const data = tryParseTranscriptJson(content);
     
     // Case A: top-level array of blocks with participant + words
     if (Array.isArray(data) && data.length > 0 && data[0] && typeof data[0] === 'object' && 'participant' in data[0] && 'words' in data[0]){
@@ -1088,6 +1094,30 @@ function formatTranscriptContent(content, isPreview = false) {
   } catch (e) {
     return formatPlainTextWithSpeakers(content, isPreview);
   }
+}
+
+// Try to parse first valid JSON structure from an arbitrary string
+function tryParseTranscriptJson(raw){
+  // Fast path
+  try{ return JSON.parse(raw); }catch{}
+  // Extract the first top-level JSON array or object using a simple bracket counter
+  const startIdx = raw.search(/[\[{]/);
+  if (startIdx === -1) throw new Error('no_json');
+  let depth = 0; let endIdx = -1;
+  const open = raw[startIdx]; const close = open === '[' ? ']' : '}';
+  for (let i=startIdx;i<raw.length;i++){
+    const ch = raw[i];
+    if (ch === open) depth++;
+    else if (ch === close){ depth--; if (depth===0){ endIdx = i; break; } }
+  }
+  if (endIdx !== -1){
+    const slice = raw.slice(startIdx, endIdx+1);
+    return JSON.parse(slice);
+  }
+  // As last resort, try to find an array of word objects
+  const match = raw.match(/\[(.|\n|\r)*?\]/);
+  if (match){ return JSON.parse(match[0]); }
+  throw new Error('parse_failed');
 }
 
 // Enhanced text extraction function
@@ -1290,6 +1320,8 @@ function setupMeetingsHubInteractions() {
   document.getElementById('refreshMeetingsView')?.addEventListener('click', ()=>{
     renderMeetingsHub(document.getElementById('content'));
   });
+  // Back to library
+  document.getElementById('backToLibrary')?.addEventListener('click', ()=>{ location.hash=''; });
 }
 
 // Filter meetings in the hub
@@ -1397,6 +1429,59 @@ window.downloadMeeting = (noteId, title) => {
     URL.revokeObjectURL(url);
   }
 };
+
+// Delete transcript (note)
+window.deleteMeeting = async (noteId) => {
+  if (!confirm('Delete this transcript?')) return;
+  try{
+    const { db_deleteNote } = await import('./lib/supabase.js');
+    await db_deleteNote(noteId);
+    window.showToast && window.showToast('Deleted');
+    renderMeetingsHub(document.getElementById('content'));
+  }catch(e){ window.showToast && window.showToast('Delete failed'); }
+};
+
+// Clean title: hide internal IDs
+function cleanMeetingTitle(title){
+  if (!title) return 'Meeting';
+  return String(title).replace(/^Recall\s+[0-9a-f\-]+\s*/i,'').trim() || 'Meeting';
+}
+
+// Extract speaker names from JSON
+function extractSpeakerNames(raw){
+  try{
+    const data = tryParseTranscriptJson(raw);
+    const names = new Set();
+    if (Array.isArray(data)){
+      for (const blk of data){
+        const name = blk?.participant?.name;
+        if (name) names.add(name);
+      }
+    } else if (Array.isArray(data?.participants)){
+      for (const p of data.participants){ if (p?.name) names.add(p.name); }
+    }
+    return Array.from(names).slice(0,6);
+  }catch{ return []; }
+}
+
+// Server summary using Mistral via backend proxy (simple fetch to edge if available)
+async function fetchAndRenderSummary(noteId, title, content){
+  const el = document.getElementById(`summary-${noteId}`);
+  if (!el) return;
+  try{
+    const resp = await fetch('/api/summarize-mistral', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ title, content }) });
+    if (!resp.ok) throw new Error('summary_failed');
+    const j = await resp.json();
+    el.textContent = j.summary || 'No summary available';
+  }catch{
+    // Client fallback quick heuristic summary
+    try{
+      const txt = typeof content==='string' ? content : JSON.stringify(content);
+      const parsed = formatTranscriptContent(txt, false).replace(/<[^>]+>/g,'');
+      el.textContent = (parsed.split(/\n+/).slice(0,3).join(' ').substring(0,500)) || '—';
+    }catch{ el.textContent = '—'; }
+  }
+}
 
 // Helper functions for meeting views
 window.expandNote = (noteId, element) => {
