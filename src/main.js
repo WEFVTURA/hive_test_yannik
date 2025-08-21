@@ -575,24 +575,28 @@ async function renderLibrary(){
   const list = document.getElementById('spacesList');
   if (list) {
     list.innerHTML = `
-    <div class="nav-header" style="display:flex; align-items:center; justify-content:space-between; padding:10px 12px; background:var(--panel-2)">
-      <div style="display:flex; align-items:center; gap:8px"><svg class="icon"><use href="#folder"></use></svg><span>Library</span></div>
-      <div class="badge">${spaces.length}</div>
-    </div>
-    <div class="nav-items" id="navItems"></div>`;
-  const navItems = document.getElementById('navItems');
-  navItems.innerHTML = spaces.slice(0,4).map(s=>`<div class="nav-item" data-id="${s.id}"><div style="display:flex; align-items:center; gap:8px"><svg class="icon"><use href="#book"></use></svg><span>${s.name}</span></div><button class="button ghost sm" data-space-menu="${s.id}" title="Options">⋯</button></div>`).join('');
-  navItems.querySelectorAll('[data-id]').forEach(el=>{ el.addEventListener('click', ()=>{ location.hash = 'space/'+el.getAttribute('data-id'); }); });
-  // Prevent row navigation when clicking the options button
-  navItems.querySelectorAll('[data-space-menu]').forEach(btn=>{
-    btn.addEventListener('click', async (e)=>{
-      e.stopPropagation();
-      const id = btn.getAttribute('data-space-menu');
-      const space = spaces.find(s=>s.id===id);
-      if (!space) return;
-      await openSpaceOptions(space);
-    });
-  });
+      <div class="nav-header" style="display:flex; align-items:center; justify-content:space-between; padding:10px 12px; background:var(--panel-2)">
+        <div style="display:flex; align-items:center; gap:8px"><svg class="icon"><use href="#folder"></use></svg><span>Library</span></div>
+        <div class="badge">${spaces.length}</div>
+      </div>
+      <div class="nav-items" id="navItems"></div>`;
+    
+    const navItems = document.getElementById('navItems');
+    if (navItems) {
+      navItems.innerHTML = spaces.slice(0,4).map(s=>`<div class="nav-item" data-id="${s.id}"><div style="display:flex; align-items:center; gap:8px"><svg class="icon"><use href="#book"></use></svg><span>${s.name}</span></div><button class="button ghost sm" data-space-menu="${s.id}" title="Options">⋯</button></div>`).join('');
+      navItems.querySelectorAll('[data-id]').forEach(el=>{ el.addEventListener('click', ()=>{ location.hash = 'space/'+el.getAttribute('data-id'); }); });
+      // Prevent row navigation when clicking the options button
+      navItems.querySelectorAll('[data-space-menu]').forEach(btn=>{
+        btn.addEventListener('click', async (e)=>{
+          e.stopPropagation();
+          const id = btn.getAttribute('data-space-menu');
+          const space = spaces.find(s=>s.id===id);
+          if (!space) return;
+          await openSpaceOptions(space);
+        });
+      });
+    }
+  }
 
   const grid = document.getElementById('grid');
   // Promote baseline spaces first: Deep Research, Meetings, Chats
