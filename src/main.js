@@ -821,7 +821,7 @@ async function renderMeetingsHub(root){
                         ${note.title?.includes('Recall') ? '🎙️' : '📝'} ${cleanMeetingTitle(note.title)}
                       </h4>
                       <div style="font-size: 12px; color: var(--muted); margin-bottom: 10px;">
-                        📅 ${new Date(note.created_at).toLocaleDateString()} • 👥 ${extractSpeakerNames(note.content).join(', ') || 'Unknown'}
+                        📅 ${new Date(note.created_at).toLocaleDateString()}
                       </div>
                       <!-- Preview -->
                       <div class="meeting-preview" style="background: var(--panel-2); padding: 10px; border-radius: 6px; border-left: 3px solid var(--accent); max-height: 150px; overflow:auto;">
@@ -1109,8 +1109,17 @@ async function renderMeetingsSearch(root){
 function formatTranscriptContent(content, isPreview = false) {
   if (!content) return 'No content available';
   
+  // Check if content is plain text or JSON
+  const contentStr = typeof content === 'string' ? content : JSON.stringify(content);
+  const isLikelyJSON = contentStr.trim().startsWith('[') || contentStr.trim().startsWith('{');
+  
+  if (!isLikelyJSON) {
+    // Plain text transcript - just format it nicely
+    return formatPlainText(contentStr, isPreview);
+  }
+  
   try {
-    const data = tryParseTranscriptJson(content);
+    const data = tryParseTranscriptJson(contentStr);
     
     // Case A: top-level array of blocks with participant + words
     if (Array.isArray(data) && data.length > 0 && data[0] && typeof data[0] === 'object' && 'participant' in data[0] && 'words' in data[0]){
