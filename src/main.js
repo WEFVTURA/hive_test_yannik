@@ -730,7 +730,10 @@ async function renderMeetingsHub(root){
         Meetings Hub
       </div>
       <button class="button ghost" id="backToLibrary" style="margin-left:12px"><i data-lucide="arrow-left" class="icon"></i> Back to Library</button>
-      <button class="button" id="directImportBtn" style="margin-left:8px" title="Import Transcript">
+      <button class="button primary" id="transcriptListBtn" style="margin-left:8px" title="Browse and Import Transcripts">
+        <i data-lucide="list" class="icon"></i> Transcript List
+      </button>
+      <button class="button" id="directImportBtn" style="margin-left:8px" title="Manual Import">
         <i data-lucide="file-plus" class="icon"></i> Import Transcript
       </button>
       <div class="search-bar" style="flex: 1; max-width: 400px; margin-left: 16px;">
