@@ -517,6 +517,44 @@ createSpaceBtn?.addEventListener('click', async ()=>{
   }catch(e){ window.showToast && window.showToast('Failed to create space'); }
 });
 
+// Render just the spaces list in the sidebar
+async function renderSpacesList(){
+  try {
+    const { db_listSpaces } = await import('./lib/supabase.js');
+    let spaces = await db_listSpaces().catch(()=>[]);
+    if (currentQuery) spaces = spaces.filter(s => (s.name||'').toLowerCase().includes(currentQuery));
+
+    const list = document.getElementById('spacesList');
+    if (list) {
+      list.innerHTML = `
+        <div class="nav-header" style="display:flex; align-items:center; justify-content:space-between; padding:10px 12px; background:var(--panel-2)">
+          <div style="display:flex; align-items:center; gap:8px"><svg class="icon"><use href="#folder"></use></svg><span>Library</span></div>
+          <div style="display:flex; align-items:center; gap:6px">
+            <button class="button ghost sm" id="cardsView" title="Cards"><svg class="icon sm"><use href="#grid"></use></svg></button>
+            <button class="button ghost sm" id="listView" title="List"><svg class="icon sm"><use href="#list"></use></svg></button>
+          </div>
+        </div>
+        <div class="nav-items" id="navItems"></div>`;
+      
+      const navItems = document.getElementById('navItems');
+      if (navItems) {
+        navItems.innerHTML = spaces.slice(0,4).map(s=>`<div class="nav-item" data-id="${s.id}"><div style="display:flex; align-items:center; gap:8px"><svg class="icon"><use href="#book"></use></svg><span>${s.name}</span></div><button class="button ghost sm" data-space-menu="${s.id}" title="Options">⋯</button></div>`).join('');
+        navItems.querySelectorAll('[data-id]').forEach(el=>{ el.addEventListener('click', ()=>{ location.hash = 'space/'+el.getAttribute('data-id'); }); });
+        // Add space menu event listeners
+        navItems.querySelectorAll('[data-space-menu]').forEach(btn=>{
+          btn.addEventListener('click', async (e)=>{
+            e.stopPropagation();
+            const spaceId = btn.getAttribute('data-space-menu');
+            await openSpaceOptions(spaceId);
+          });
+        });
+      }
+    }
+  } catch (error) {
+    console.error('Failed to render spaces list:', error);
+  }
+}
+
 async function renderLibrary(){
   content.setAttribute('data-view','library');
   content.innerHTML = `
@@ -684,8 +722,11 @@ async function renderMeetingsDashboard(root){
                   ${new Date(note.created_at).toLocaleDateString()} • ${Math.round((note.content?.length || 0) / 100)} min read
                 </div>
                 <div class="note-preview" style="display: none; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border);">
-                  <div style="max-height: 200px; overflow-y: auto; font-size: 14px; line-height: 1.4;">
-                    ${(note.content || '').substring(0, 500)}${(note.content?.length || 0) > 500 ? '...' : ''}
+                  <div style="max-height: 200px; overflow-y: auto; font-size: 14px; line-height: 1.4; white-space: pre-wrap;">
+                    ${(() => {
+                      const formatted = formatTranscriptContent(note.content || '');
+                      return formatted.substring(0, 500) + (formatted.length > 500 ? '...' : '');
+                    })()}
                   </div>
                 </div>
               </div>
@@ -768,7 +809,7 @@ async function renderMeetingsList(root){
               </div>
               <div id="content-${note.id}" class="meeting-content" style="display: none; padding-top: 12px; border-top: 1px solid var(--border);">
                 <div style="max-height: 300px; overflow-y: auto; font-size: 14px; line-height: 1.5; white-space: pre-wrap;">
-                  ${note.content || 'No content available'}
+                  ${formatTranscriptContent(note.content || '')}
                 </div>
                 <div style="margin-top: 12px; display: flex; gap: 8px;">
                   <button class="button sm" onclick="copyToClipboard('${note.id}')">Copy</button>
@@ -841,6 +882,44 @@ async function renderMeetingsSearch(root){
   document.getElementById('meetingSearchInput').addEventListener('keypress', (e) => {
     if (e.key === 'Enter') performMeetingSearch();
   });
+}
+
+// Helper function to format transcript content
+function formatTranscriptContent(content) {
+  if (!content) return 'No content available';
+  
+  // Try to parse as JSON (Recall format)
+  try {
+    const data = JSON.parse(content);
+    
+    // Check if it's a Recall transcript with words/segments
+    if (data.words && Array.isArray(data.words)) {
+      // Extract text from words array
+      return data.words.map(word => word.text || word.word || '').join(' ').trim();
+    }
+    
+    // Check if it's a transcript with segments/chunks
+    if (data.segments && Array.isArray(data.segments)) {
+      return data.segments.map(seg => seg.text || '').join(' ').trim();
+    }
+    
+    // Check if it's already parsed with a transcript field
+    if (data.transcript) {
+      return data.transcript;
+    }
+    
+    // Check if it has a text field
+    if (data.text) {
+      return data.text;
+    }
+    
+    // If it's JSON but unrecognized format, return formatted JSON
+    return JSON.stringify(data, null, 2);
+    
+  } catch (e) {
+    // Not JSON, return as-is (might be plain text transcript)
+    return content;
+  }
 }
 
 // Helper functions for meeting views
@@ -1037,14 +1116,21 @@ async function renderRoute(){
   }
   else if (hash === 'meetings/dashboard'){
     await renderMeetingsDashboard(content);
+    await renderSpacesList();
   }
   else if (hash === 'meetings/list'){
     await renderMeetingsList(content);
+    await renderSpacesList();
   }
   else if (hash === 'meetings/search'){
     await renderMeetingsSearch(content);
+    await renderSpacesList();
   }
-  else { await renderLibrary(); }
+  else { 
+    await renderLibrary(); 
+    // Also render the spaces sidebar
+    await renderSpacesList();
+  }
 }
 
 window.addEventListener('hashchange', renderRoute);
