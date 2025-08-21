@@ -2615,8 +2615,14 @@ ${t.transcript_preview}
 window.importTranscriptDirect = async (transcriptId, idx) => {
   const transcript = window.transcriptListData?.[idx];
   if (!transcript?.full_transcript) {
-    window.showToast && window.showToast('No transcript content to import');
+    alert('No transcript content to import');
     return;
+  }
+  
+  const btn = event.target.closest('button');
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<i data-lucide="loader" class="icon spinning"></i> Importing...';
   }
   
   try {
@@ -2633,15 +2639,22 @@ window.importTranscriptDirect = async (transcriptId, idx) => {
     const result = await response.json();
     
     if (result.success) {
-      window.showToast && window.showToast('Transcript imported successfully!');
+      alert('Transcript imported successfully!');
       setTimeout(() => {
         location.hash = 'meetings/hub';
       }, 1500);
     } else {
-      window.showToast && window.showToast(`Import failed: ${result.error}`);
+      alert(`Import failed: ${result.error || 'Unknown error'}`);
+      console.error('Import error:', result);
     }
   } catch (e) {
-    window.showToast && window.showToast(`Error: ${e.message}`);
+    alert(`Error: ${e.message}`);
+    console.error('Import exception:', e);
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = '<i data-lucide="download" class="icon"></i> Import to Meetings';
+    }
   }
 };
 
@@ -2867,8 +2880,14 @@ ${bot.transcript_preview}
 window.importBotTranscript = async (botId, idx) => {
   const bot = window.botListData?.[idx];
   if (!bot?.full_transcript) {
-    window.showToast && window.showToast('No transcript content to import');
+    alert('No transcript content to import');
     return;
+  }
+  
+  const btn = event.target.closest('button');
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<i data-lucide="loader" class="icon spinning"></i> Importing...';
   }
   
   try {
@@ -2878,22 +2897,29 @@ window.importBotTranscript = async (botId, idx) => {
       body: JSON.stringify({
         title: bot.meeting_title || `Bot ${botId}`,
         content: bot.full_transcript,
-        source: 'bot-api'
+        source: 'Recall'
       })
     });
     
     const result = await response.json();
     
     if (result.success) {
-      window.showToast && window.showToast('Transcript imported successfully!');
+      alert('Transcript imported successfully!');
       setTimeout(() => {
         location.hash = 'meetings/hub';
       }, 1500);
     } else {
-      window.showToast && window.showToast(`Import failed: ${result.error}`);
+      alert(`Import failed: ${result.error || 'Unknown error'}`);
+      console.error('Import error:', result);
     }
   } catch (e) {
-    window.showToast && window.showToast(`Error: ${e.message}`);
+    alert(`Error: ${e.message}`);
+    console.error('Import exception:', e);
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = '<i data-lucide="download" class="icon"></i> Import Transcript';
+    }
   }
 };
 

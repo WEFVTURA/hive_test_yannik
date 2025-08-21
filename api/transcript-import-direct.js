@@ -34,10 +34,20 @@ export default async function handler(req){
     
     // Get or create Meetings space
     let spaceId = '';
-    const spacesResp = await fetch(`${SUPABASE_URL}/rest/v1/spaces?select=id,name&name=ilike.meetings`, {
+    const spacesResp = await fetch(`${SUPABASE_URL}/rest/v1/spaces?select=id,name&name=eq.Meetings`, {
       headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` }
     });
-    const spaces = await spacesResp.json().catch(() => []);
+    
+    if (!spacesResp.ok) {
+      const errorText = await spacesResp.text();
+      return jres({ 
+        error: 'Failed to fetch spaces', 
+        details: errorText,
+        status: spacesResp.status 
+      }, 500, cors);
+    }
+    
+    const spaces = await spacesResp.json();
     
     if (spaces.length > 0) {
       spaceId = spaces[0].id;
@@ -48,11 +58,22 @@ export default async function handler(req){
         headers: {
           'Content-Type': 'application/json',
           apikey: SERVICE_KEY,
-          Authorization: `Bearer ${SERVICE_KEY}`
+          Authorization: `Bearer ${SERVICE_KEY}`,
+          'Prefer': 'return=representation'
         },
         body: JSON.stringify({ name: 'Meetings', visibility: 'private' })
       });
-      const created = await createResp.json().catch(() => ({}));
+      
+      if (!createResp.ok) {
+        const errorText = await createResp.text();
+        return jres({ 
+          error: 'Failed to create Meetings space', 
+          details: errorText,
+          status: createResp.status 
+        }, 500, cors);
+      }
+      
+      const created = await createResp.json();
       spaceId = created?.[0]?.id || created?.id || '';
     }
     
@@ -66,7 +87,8 @@ export default async function handler(req){
       headers: {
         'Content-Type': 'application/json',
         apikey: SERVICE_KEY,
-        Authorization: `Bearer ${SERVICE_KEY}`
+        Authorization: `Bearer ${SERVICE_KEY}`,
+        'Prefer': 'return=representation'
       },
       body: JSON.stringify({
         space_id: spaceId,
