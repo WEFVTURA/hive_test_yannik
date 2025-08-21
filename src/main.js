@@ -1434,8 +1434,8 @@ window.downloadMeeting = (noteId, title) => {
 window.deleteMeeting = async (noteId) => {
   if (!confirm('Delete this transcript?')) return;
   try{
-    const { db_deleteNote } = await import('./lib/supabase.js');
-    await db_deleteNote(noteId);
+    const r = await fetch('/api/delete-note', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ id: noteId }) });
+    if (!r.ok) throw new Error('api_failed');
     window.showToast && window.showToast('Deleted');
     renderMeetingsHub(document.getElementById('content'));
   }catch(e){ window.showToast && window.showToast('Delete failed'); }
@@ -1472,13 +1472,17 @@ async function fetchAndRenderSummary(noteId, title, content){
     const resp = await fetch('/api/summarize-mistral', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ title, content }) });
     if (!resp.ok) throw new Error('summary_failed');
     const j = await resp.json();
-    el.textContent = j.summary || 'No summary available';
+    const summary = j.summary || '';
+    el.textContent = summary || 'No summary available';
+    // Persist once server-side for re-use
+    try{ await fetch('/api/save-summary', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ id: noteId, summary }) }); }catch{}
   }catch{
     // Client fallback quick heuristic summary
     try{
       const txt = typeof content==='string' ? content : JSON.stringify(content);
       const parsed = formatTranscriptContent(txt, false).replace(/<[^>]+>/g,'');
       el.textContent = (parsed.split(/\n+/).slice(0,3).join(' ').substring(0,500)) || '—';
+      try{ await fetch('/api/save-summary', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ id: noteId, summary: el.textContent }) }); }catch{}
     }catch{ el.textContent = '—'; }
   }
 }
