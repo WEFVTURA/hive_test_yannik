@@ -1983,21 +1983,62 @@ function formatStructuredTranscript(data) {
   if (!Array.isArray(data)) return formatIntelligentTranscript(JSON.stringify(data));
   
   let html = '';
+  const speakerMap = new Map(); // Track unique speakers
   
   for (const segment of data) {
-    const speaker = segment.speaker || segment.participant?.name || segment.speaker_name || 
-                   (segment.speaker_id !== undefined ? `Speaker ${segment.speaker_id}` : 'Unknown');
+    // Extract speaker name from various possible locations
+    let speaker = '';
     
+    // Check for participant object (Recall format)
+    if (segment.participant) {
+      speaker = segment.participant.name || segment.participant.display_name || 
+                segment.participant.email || `Participant ${segment.participant.id || 'Unknown'}`;
+    }
+    // Check for direct speaker fields
+    else if (segment.speaker) {
+      speaker = segment.speaker;
+    }
+    else if (segment.speaker_name) {
+      speaker = segment.speaker_name;
+    }
+    // Check for speaker_id
+    else if (segment.speaker_id !== undefined && segment.speaker_id !== null) {
+      // Try to map speaker_id to a name if we've seen it before
+      const speakerId = segment.speaker_id.toString();
+      if (speakerMap.has(speakerId)) {
+        speaker = speakerMap.get(speakerId);
+      } else {
+        speaker = `Speaker ${segment.speaker_id}`;
+        speakerMap.set(speakerId, speaker);
+      }
+    }
+    // Default fallback
+    else {
+      speaker = 'Unknown Speaker';
+    }
+    
+    // Extract text content
     let text = '';
     if (segment.text) {
       text = segment.text;
     } else if (segment.words && Array.isArray(segment.words)) {
       text = segment.words.map(w => w.text || w.word || w).join(' ');
+    } else if (typeof segment === 'string') {
+      text = segment;
     }
     
-    if (text) {
+    if (text && text.trim()) {
       html += renderSpeakerBlock(speaker, text);
     }
+  }
+  
+  // If no content was generated, show debug info
+  if (!html && data.length > 0) {
+    console.log('Debug: Sample segment structure:', data[0]);
+    html = `<div style="color: var(--muted); padding: 12px; background: var(--panel-2); border-radius: 8px;">
+      <p>Transcript data found but unable to parse. Sample structure:</p>
+      <pre style="font-size: 11px; margin-top: 8px;">${JSON.stringify(data[0], null, 2).substring(0, 500)}</pre>
+    </div>`;
   }
   
   return html || '<p style="color: var(--muted);">No transcript content found</p>';

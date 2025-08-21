@@ -159,21 +159,12 @@ export default async function handler(req){
                   if (downloadResp.ok) {
                     const downloadData = await downloadResp.json();
                     
-                    // Parse the downloaded transcript data
-                    if (Array.isArray(downloadData)) {
-                      text = downloadData.map(seg => {
-                        const speaker = seg.speaker || seg.speaker_name || `Speaker ${seg.speaker_id || 'Unknown'}`;
-                        const words = seg.text || (seg.words ? seg.words.map(w => w.text || w.word || w).join(' ') : '');
-                        return words ? `${speaker}: ${words}` : '';
-                      }).filter(line => line).join('\n\n');
-                    } else if (downloadData.segments) {
-                      text = downloadData.segments.map(seg => {
-                        const speaker = seg.speaker || `Speaker ${seg.speaker_id || 'Unknown'}`;
-                        const words = seg.text || (seg.words ? seg.words.map(w => w.text || w.word || w).join(' ') : '');
-                        return `${speaker}: ${words}`;
-                      }).join('\n\n');
-                    } else if (downloadData.transcript) {
-                      text = downloadData.transcript;
+                    // Store the raw JSON data to preserve speaker names
+                    // The frontend will format it properly
+                    if (Array.isArray(downloadData) || (downloadData && typeof downloadData === 'object')) {
+                      text = JSON.stringify(downloadData);
+                    } else {
+                      text = downloadData;
                     }
                   }
                 } catch(e) {

@@ -198,21 +198,21 @@ export default async function handler(req){
                         isArray: Array.isArray(downloadData)
                       };
                       
-                      // Parse the downloaded transcript data
-                      if (Array.isArray(downloadData)) {
-                        transcriptText = downloadData.map(seg => {
-                          const speaker = seg.speaker || seg.speaker_name || `Speaker ${seg.speaker_id || 'Unknown'}`;
-                          const text = seg.text || (seg.words ? seg.words.map(w => w.text || w.word || w).join(' ') : '');
-                          return text ? `${speaker}: ${text}` : '';
-                        }).filter(line => line).join('\n\n');
-                      } else if (downloadData.segments) {
-                        transcriptText = downloadData.segments.map(seg => {
-                          const speaker = seg.speaker || `Speaker ${seg.speaker_id || 'Unknown'}`;
-                          const text = seg.text || (seg.words ? seg.words.map(w => w.text || w.word || w).join(' ') : '');
-                          return `${speaker}: ${text}`;
-                        }).join('\n\n');
-                      } else if (downloadData.transcript) {
-                        transcriptText = downloadData.transcript;
+                      // Store raw data for proper formatting in frontend
+                      transcriptStructure = {
+                        source: 'download_url',
+                        url: transcript.data.download_url.split('?')[0],
+                        type: typeof downloadData,
+                        isArray: Array.isArray(downloadData),
+                        hasRawData: true
+                      };
+                      
+                      // For now, store the raw JSON data as the transcript
+                      // The frontend will format it properly with actual speaker names
+                      if (Array.isArray(downloadData) || (downloadData && typeof downloadData === 'object')) {
+                        transcriptText = JSON.stringify(downloadData);
+                      } else {
+                        transcriptText = downloadData;
                       }
                     }
                   } catch(e) {
