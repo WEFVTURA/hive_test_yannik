@@ -639,8 +639,63 @@ export async function renderSpace(root, spaceId){
           const hasSpeakers = response.has_speakers || !!response.speaker_transcript || !!response.utterances;
           const title = `${(f.name||'Audio').replace(/\.[^/.]+$/,'')}${hasSpeakers ? ' (with speakers)' : ''}`;
           
+          // Store initial transcript with speaker numbers
           await db_updateNote(n.id, { title, content });
           completeProgress(pId, true);
+          
+          // If we have speakers, offer to identify them
+          if (hasSpeakers) {
+            const { extractSpeakers, createSpeakerModal, extractSpeakerMap, replaceSpeakerNames, generateSpeakerMetadata, storeSpeakerHistory } = await import('../lib/speakerManager.js');
+            const speakers = extractSpeakers(content);
+            
+            if (speakers.length > 0) {
+              // Show speaker identification modal
+              setTimeout(async () => {
+                const { openModal } = await import('./modal.js');
+                
+                const modalResult = await new Promise((resolve) => {
+                  const modal = openModal(createSpeakerModal(speakers), {
+                    className: 'speaker-modal-wrapper',
+                    closeOnOverlay: false
+                  });
+                  
+                  const modalEl = document.querySelector('.modal.active');
+                  
+                  modalEl.querySelector('#saveSpeakers').onclick = () => {
+                    const speakerMap = extractSpeakerMap(modalEl);
+                    modal.close();
+                    resolve({ saved: true, speakerMap });
+                  };
+                  
+                  modalEl.querySelector('#skipSpeakers').onclick = () => {
+                    modal.close();
+                    resolve({ saved: false });
+                  };
+                });
+                
+                if (modalResult.saved && Object.keys(modalResult.speakerMap).length > 0) {
+                  // Update transcript with real names
+                  const updatedContent = replaceSpeakerNames(content, modalResult.speakerMap);
+                  const metadata = generateSpeakerMetadata(modalResult.speakerMap);
+                  
+                  // Update the note with speaker names and metadata
+                  await db_updateNote(n.id, {
+                    content: updatedContent,
+                    metadata: metadata,
+                    tags: metadata.tags
+                  });
+                  
+                  // Store for future reference
+                  storeSpeakerHistory(modalResult.speakerMap);
+                  
+                  window.showToast && window.showToast(`✅ Updated with ${Object.keys(modalResult.speakerMap).length} speaker names`, 'speaker-success');
+                  
+                  // Refresh the view
+                  renderSpace(root, spaceId);
+                }
+              }, 500); // Small delay to let the first save complete
+            }
+          }
           
           // Show duration if available
           const duration = response.metadata?.duration;

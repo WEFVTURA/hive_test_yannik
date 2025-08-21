@@ -395,3 +395,206 @@ a { color: inherit; text-decoration: none; }
 ::-webkit-scrollbar-track{background:transparent}
 ::-webkit-scrollbar-thumb{background:linear-gradient(180deg, var(--panel-2), var(--panel)); border:1px solid var(--border); border-radius:999px}
 ::-webkit-scrollbar-thumb:hover{background:linear-gradient(180deg, var(--panel-2), var(--panel-2))}
+/* Speaker Identification Styles */
+
+.speaker-modal {
+  max-width: 500px;
+  padding: 0;
+}
+
+.modal-header {
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--border-light, #e0e0e0);
+}
+
+.modal-header h3 {
+  margin: 0 0 8px 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.modal-subtitle {
+  margin: 0;
+  color: var(--text-muted, #666);
+  font-size: 14px;
+}
+
+.speaker-fields {
+  padding: 20px 24px;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.speaker-field {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding: 12px;
+  background: var(--bg-subtle, #f9f9f9);
+  border-radius: 8px;
+  border: 1px solid var(--border-light, #e0e0e0);
+}
+
+.speaker-label {
+  min-width: 80px;
+  font-weight: 500;
+  color: var(--primary, #2196F3);
+  font-size: 14px;
+}
+
+.speaker-inputs {
+  flex: 1;
+  display: flex;
+  gap: 8px;
+}
+
+.speaker-inputs input {
+  flex: 1;
+  padding: 8px 12px;
+  border: 1px solid var(--border, #ddd);
+  border-radius: 4px;
+  font-size: 14px;
+  background: white;
+}
+
+.speaker-inputs input:focus {
+  outline: none;
+  border-color: var(--primary, #2196F3);
+  box-shadow: 0 0 0 2px rgba(33, 150, 243, 0.1);
+}
+
+.speaker-name {
+  min-width: 150px;
+}
+
+.speaker-email {
+  min-width: 200px;
+}
+
+.modal-actions {
+  padding: 16px 24px;
+  border-top: 1px solid var(--border-light, #e0e0e0);
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  background: var(--bg-subtle, #f9f9f9);
+}
+
+.modal-actions .button {
+  padding: 8px 16px;
+  border-radius: 4px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.modal-actions .button.primary {
+  background: var(--primary, #2196F3);
+  color: white;
+  border: none;
+}
+
+.modal-actions .button.primary:hover {
+  background: var(--primary-dark, #1976D2);
+}
+
+.modal-actions .button.secondary {
+  background: white;
+  color: var(--text-muted, #666);
+  border: 1px solid var(--border, #ddd);
+}
+
+.modal-actions .button.secondary:hover {
+  background: var(--bg-subtle, #f9f9f9);
+}
+
+/* Inline speaker button for notes */
+.speaker-identify-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  margin: 8px 0;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+}
+
+.speaker-identify-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
+
+/* Speaker tags in notes */
+.speaker-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 8px 0;
+}
+
+.speaker-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  background: var(--primary-light, #E3F2FD);
+  color: var(--primary, #2196F3);
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.speaker-tag.has-email {
+  background: var(--success-light, #E8F5E9);
+  color: var(--success, #4CAF50);
+}
+
+/* Toast notification for speaker updates */
+.toast.speaker-success {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+  .speaker-field {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(255, 255, 255, 0.1);
+  }
+  
+  .speaker-inputs input {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.15);
+    color: white;
+  }
+  
+  .speaker-inputs input::placeholder {
+    color: rgba(255, 255, 255, 0.4);
+  }
+  
+  .modal-header {
+    border-bottom-color: rgba(255, 255, 255, 0.1);
+  }
+  
+  .modal-actions {
+    background: rgba(0, 0, 0, 0.2);
+    border-top-color: rgba(255, 255, 255, 0.1);
+  }
+  
+  .speaker-tag {
+    background: rgba(33, 150, 243, 0.2);
+  }
+  
+  .speaker-tag.has-email {
+    background: rgba(76, 175, 80, 0.2);
+  }
+}
