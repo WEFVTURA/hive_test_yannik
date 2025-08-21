@@ -67,13 +67,19 @@ export default async function handler(req){
   // Fetch all Recall transcripts
   const allTranscripts = [];
   const errors = [];
+  const debugInfo = {
+    region: region,
+    base: base,
+    attempts: []
+  };
   
   try {
     // Try multiple endpoints
     const endpoints = [
       `${base}/api/v1/bot/`,
       `${base}/api/v1/transcript/`,
-      `${base}/api/v1/transcripts/`
+      `${base}/api/v1/transcripts/`,
+      `${base}/api/v2/bot/`
     ];
     
     for (const endpoint of endpoints) {
@@ -91,21 +97,33 @@ export default async function handler(req){
             }
           });
           
+          debugInfo.attempts.push({
+            url: url,
+            status: response.status,
+            statusText: response.statusText
+          });
+          
           if (!response.ok) {
             errors.push(`${endpoint}: ${response.status} ${response.statusText}`);
             break;
           }
           
           const data = await response.json();
-          const items = Array.isArray(data) ? data : (data.results || []);
+          const items = Array.isArray(data) ? data : (data.results || data.data || []);
+          
+          // Add ALL items first to see what we're getting
+          debugInfo.attempts[debugInfo.attempts.length - 1].itemCount = items.length;
+          debugInfo.attempts[debugInfo.attempts.length - 1].sampleItem = items.length > 0 ? JSON.stringify(items[0]).slice(0, 200) : 'no items';
           
           // Filter for completed bots/transcripts
           const completed = items.filter(item => {
             const status = item?.status?.code || item?.status || item?.state || '';
             const statusStr = String(status).toLowerCase();
-            return statusStr === 'done' || statusStr === 'completed' || statusStr === 'finished';
+            // Also check for 'done' status which Recall uses
+            return statusStr === 'done' || statusStr === 'completed' || statusStr === 'finished' || status === 'done';
           });
           
+          debugInfo.attempts[debugInfo.attempts.length - 1].completedCount = completed.length;
           allTranscripts.push(...completed);
           
           // Check for pagination
@@ -249,7 +267,7 @@ export default async function handler(req){
     },
     processed: processedTitles.slice(0, 10), // Show first 10
     errors: errors.slice(0, 5), // Show first 5 errors
-    region: region,
+    debug: debugInfo,
     timestamp: new Date().toISOString()
   }, 200, cors);
 }
