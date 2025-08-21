@@ -647,20 +647,15 @@ async function renderMeetingsDashboard(root){
   lucide.createIcons();
   
   try {
-    const { getSupabase } = await import('./lib/supabase.js');
-    const sb = getSupabase();
+    // Fetch meeting data from backend API
+    const response = await fetch('/api/meetings-data');
+    const data = await response.json();
     
-    // Get meetings space ID
-    const meetingsId = localStorage.getItem('hive_meetings_space_id') || '';
+    if (!data.success) {
+      throw new Error(data.message || 'Failed to load meetings');
+    }
     
-    // Fetch all notes from meetings space
-    const { data: notes, error } = await sb
-      .from('notes')
-      .select('*')
-      .eq('space_id', meetingsId)
-      .order('created_at', { ascending: false });
-    
-    if (error) throw error;
+    const notes = data.notes || [];
     
     const dashContent = document.getElementById('meetingsDashContent');
     if (notes && notes.length > 0) {
@@ -735,18 +730,15 @@ async function renderMeetingsList(root){
   lucide.createIcons();
   
   try {
-    const { getSupabase } = await import('./lib/supabase.js');
-    const sb = getSupabase();
+    // Fetch meeting data from backend API
+    const response = await fetch('/api/meetings-data');
+    const data = await response.json();
     
-    const meetingsId = localStorage.getItem('hive_meetings_space_id') || '';
+    if (!data.success) {
+      throw new Error(data.message || 'Failed to load meetings');
+    }
     
-    const { data: notes, error } = await sb
-      .from('notes')
-      .select('*')
-      .eq('space_id', meetingsId)
-      .order('created_at', { ascending: false });
-    
-    if (error) throw error;
+    const notes = data.notes || [];
     
     const listContent = document.getElementById('meetingsListContent');
     if (notes && notes.length > 0) {
@@ -944,18 +936,15 @@ async function performMeetingSearch() {
   results.innerHTML = '<div class="loading">Searching...</div>';
   
   try {
-    const { getSupabase } = await import('./lib/supabase.js');
-    const sb = getSupabase();
+    // Fetch meeting data from backend API
+    const response = await fetch('/api/meetings-data');
+    const data = await response.json();
     
-    const meetingsId = localStorage.getItem('hive_meetings_space_id') || '';
+    if (!data.success) {
+      throw new Error(data.message || 'Failed to load meetings');
+    }
     
-    const { data: notes, error } = await sb
-      .from('notes')
-      .select('*')
-      .eq('space_id', meetingsId)
-      .order('created_at', { ascending: false });
-    
-    if (error) throw error;
+    const notes = data.notes || [];
     
     const filtered = notes.filter(note => 
       (note.title || '').toLowerCase().includes(query) ||
