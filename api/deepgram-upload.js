@@ -66,7 +66,26 @@ export default async function handler(req){
       headers['Content-Type'] = 'application/json';
       requestBody = JSON.stringify({ url: useUrl });
     } else if (directBody) {
-      headers['Content-Type'] = 'audio/*';
+      // Detect audio format from file
+      let contentType = 'audio/*';
+      
+      // If it's a File object, use its type
+      if (directBody.type) {
+        contentType = directBody.type;
+      }
+      
+      // Map common audio types to ensure compatibility
+      const typeMap = {
+        'audio/x-m4a': 'audio/mp4',
+        'audio/m4a': 'audio/mp4',
+        'application/octet-stream': 'audio/*'
+      };
+      
+      if (typeMap[contentType]) {
+        contentType = typeMap[contentType];
+      }
+      
+      headers['Content-Type'] = contentType;
       requestBody = directBody;
     }
     

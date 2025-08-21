@@ -603,25 +603,72 @@ export async function renderSpace(root, spaceId){
     menu.querySelector('[data-route="deepgram"]').onclick = async()=>{
       menu.style.display='none';
       const f = await pickFile(); if(!f) return;
-      const url = await uploadViaStorage(f);
-      const pId = showProgress({ label:'Deepgram…', determinate:false });
+      
+      // Prepare audio file for Deepgram
+      const { prepareAudioForDeepgram, getAudioMetadata } = await import('../lib/audioConverter.js');
+      const preparedFile = await prepareAudioForDeepgram(f);
+      const metadata = await getAudioMetadata(preparedFile);
+      
+      const pId = showProgress({ label:`Transcribing ${metadata.humanDuration || 'audio'}...`, determinate:true });
+      
       try{
-        const r = await fetch('/api/deepgram-upload',{
-          method:'POST',
-          headers:{ Authorization:`Bearer ${'def4729bf48ec55083d38cec18e6c314c5a4a180'}`, 'Content-Type':'application/json' },
-          body: JSON.stringify({ url, space_id: spaceId, title: (f.name||'Audio').replace(/\.[^/.]+$/,'') })
+        // Send file directly to Deepgram
+        const formData = new FormData();
+        formData.append('file', preparedFile);
+        
+        // Use XMLHttpRequest for progress tracking
+        const response = await new Promise((resolve, reject) => {
+          const xhr = new XMLHttpRequest();
+          xhr.open('POST', '/api/deepgram-upload');
+          xhr.setRequestHeader('Authorization', `Bearer ${window.DEEPGRAM_API_KEY || 'd07d3f107acd0c8e6b9faf97ed1ff8295b900119'}`);
+          
+          xhr.upload.onprogress = (e) => {
+            if (e.lengthComputable) {
+              updateProgress(pId, (e.loaded / e.total) * 70); // 0-70% for upload
+            }
+          };
+          
+          xhr.onload = () => {
+            if (xhr.status >= 200 && xhr.status < 300) {
+              try {
+                resolve(JSON.parse(xhr.responseText));
+              } catch {
+                reject(new Error('Invalid response'));
+              }
+            } else {
+              reject(new Error(xhr.responseText || `Error ${xhr.status}`));
+            }
+          };
+          
+          xhr.onerror = () => reject(new Error('Network error'));
+          xhr.send(formData);
         });
-        const j = await r.json();
-        if (!r.ok) throw new Error(j?.error||'deepgram');
-        if (j?.text){
+        
+        updateProgress(pId, 90); // Processing complete
+        
+        if (response?.text || response?.speaker_transcript || response?.formatted_transcript){
           const n = await db_createNote(spaceId);
-          await db_updateNote(n.id,{ title:(f.name||'Audio').replace(/\.[^/.]+$/,''), content:j.text||'' });
-          completeProgress(pId,true); window.showToast && window.showToast('Transcript saved'); renderSpace(root, spaceId);
+          
+          // Use speaker transcript if available
+          const content = response.speaker_transcript || response.formatted_transcript || response.text || '';
+          const hasSpeakers = !!response.speaker_transcript || !!response.utterances;
+          const title = `${(f.name||'Audio').replace(/\.[^/.]+$/,'')}${hasSpeakers ? ' (with speakers)' : ''}`;
+          
+          await db_updateNote(n.id, { title, content });
+          completeProgress(pId, true);
+          window.showToast && window.showToast(hasSpeakers ? 'Transcript with speakers saved' : 'Transcript saved');
+          renderSpace(root, spaceId);
+        } else if (response?.accepted) {
+          // Accepted for async processing
+          completeProgress(pId, true);
+          window.showToast && window.showToast('Deepgram processing... transcript will appear via webhook');
         } else {
-          // Accepted async; poll Deepgram webhook result via optimistic toast
-          completeProgress(pId,true); window.showToast && window.showToast('Deepgram processing… transcript will appear shortly');
+          throw new Error('No transcript received');
         }
-      }catch{ completeProgress(pId,false); }
+      }catch(error){ 
+        completeProgress(pId, false);
+        window.showToast && window.showToast(`Transcription failed: ${error.message}`);
+      }
     };
   });
   root.querySelector('#coverBtn').addEventListener('click', async()=>{
