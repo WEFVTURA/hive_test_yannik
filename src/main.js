@@ -873,8 +873,34 @@ async function renderMeetingsHub(root){
                   </div>
                 </div>
                 <div id="meeting-full-${note.id}" class="meeting-full" style="display: none; padding: 16px; background: var(--background); border-top: 1px solid var(--border);">
-                  <div style="max-height: 420px; overflow-y: auto; padding-right: 8px;">
-                    ${formatTranscriptContent(note.content, false)}
+                  <!-- Editable Title and Speaker Tags -->
+                  <div style="margin-bottom: 16px; padding: 16px; background: var(--panel-1); border-radius: 8px;">
+                    <div style="margin-bottom: 12px;">
+                      <label style="display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px;">Meeting Title</label>
+                      <input type="text" id="title-${note.id}" value="${cleanMeetingTitle(note.title)}" 
+                        style="width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 4px; 
+                        font-size: 16px; font-weight: 600; background: var(--background); color: var(--text);"
+                        onchange="updateMeetingTitle('${note.id}', this.value)">
+                    </div>
+                    
+                    <div>
+                      <label style="display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px;">
+                        Participants (click to add)
+                      </label>
+                      <div id="speakers-${note.id}" style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px;">
+                        <!-- Speaker tags will be added here -->
+                      </div>
+                      <button class="button sm ghost" onclick="addSpeakerTag('${note.id}')">
+                        <i data-lucide="user-plus"></i> Add Participant
+                      </button>
+                    </div>
+                  </div>
+                  
+                  <!-- Formatted Transcript -->
+                  <div style="max-height: 500px; overflow-y: auto; padding-right: 8px;">
+                    <div id="transcript-content-${note.id}">
+                      ${formatEnhancedTranscript(note.content, note.id)}
+                    </div>
                   </div>
                   
                   <!-- Summary section under transcript -->
@@ -1837,6 +1863,296 @@ window.toggleSummary = (noteId) => {
   
   lucide.createIcons();
 };
+
+// Enhanced transcript formatting with proper structure
+function formatEnhancedTranscript(content, noteId) {
+  if (!content) return '<p style="color: var(--muted);">No transcript content available</p>';
+  
+  const contentStr = typeof content === 'string' ? content : JSON.stringify(content);
+  
+  // Check if it's already formatted with speaker labels
+  if (contentStr.includes('Speaker:') || contentStr.includes('Speaker 1:') || contentStr.includes('Speaker 2:')) {
+    return formatSpeakerBasedTranscript(contentStr);
+  }
+  
+  // Try to parse as JSON for structured data
+  try {
+    const data = JSON.parse(contentStr);
+    
+    // Handle array of speaker blocks
+    if (Array.isArray(data)) {
+      return formatStructuredTranscript(data);
+    }
+    
+    // Handle object with transcript field
+    if (data.transcript) {
+      return formatStructuredTranscript(data.transcript);
+    }
+    
+    // Handle words array
+    if (data.words && Array.isArray(data.words)) {
+      return formatWordsTranscript(data.words);
+    }
+  } catch(e) {
+    // Not JSON, treat as plain text
+  }
+  
+  // Default to plain text formatting
+  return formatPlainTranscript(contentStr);
+}
+
+// Format speaker-based transcript
+function formatSpeakerBasedTranscript(text) {
+  const lines = text.split('\n');
+  let html = '';
+  let currentSpeaker = '';
+  let currentContent = [];
+  
+  for (const line of lines) {
+    const speakerMatch = line.match(/^(Speaker\s*\d*|[A-Za-z\s]+):\s*(.+)/);
+    
+    if (speakerMatch) {
+      // Save previous speaker's content
+      if (currentSpeaker && currentContent.length > 0) {
+        html += renderSpeakerBlock(currentSpeaker, currentContent.join(' '));
+      }
+      
+      // Start new speaker
+      currentSpeaker = speakerMatch[1].trim();
+      currentContent = [speakerMatch[2].trim()];
+    } else if (line.trim()) {
+      // Continue current speaker's content
+      currentContent.push(line.trim());
+    }
+  }
+  
+  // Add last speaker's content
+  if (currentSpeaker && currentContent.length > 0) {
+    html += renderSpeakerBlock(currentSpeaker, currentContent.join(' '));
+  }
+  
+  return html || formatPlainTranscript(text);
+}
+
+// Format structured transcript from JSON
+function formatStructuredTranscript(data) {
+  if (!Array.isArray(data)) return formatPlainTranscript(JSON.stringify(data));
+  
+  let html = '';
+  
+  for (const segment of data) {
+    const speaker = segment.speaker || segment.participant?.name || segment.speaker_name || 
+                   (segment.speaker_id !== undefined ? `Speaker ${segment.speaker_id}` : 'Unknown');
+    
+    let text = '';
+    if (segment.text) {
+      text = segment.text;
+    } else if (segment.words && Array.isArray(segment.words)) {
+      text = segment.words.map(w => w.text || w.word || w).join(' ');
+    }
+    
+    if (text) {
+      html += renderSpeakerBlock(speaker, text);
+    }
+  }
+  
+  return html || '<p style="color: var(--muted);">No transcript content found</p>';
+}
+
+// Format words-based transcript
+function formatWordsTranscript(words) {
+  const text = words.map(w => w.text || w.word || '').join(' ');
+  return formatPlainTranscript(text);
+}
+
+// Format plain text transcript
+function formatPlainTranscript(text) {
+  // Remove excessive whitespace and format paragraphs
+  const cleaned = text
+    .replace(/\s+/g, ' ')
+    .replace(/([.!?])\s+/g, '$1\n\n')
+    .trim();
+  
+  const paragraphs = cleaned.split(/\n\n+/).filter(p => p.trim());
+  
+  return paragraphs.map((p, i) => `
+    <div style="margin-bottom: 16px; padding: 12px; background: var(--panel-2); border-radius: 8px;">
+      <div style="font-size: 12px; color: var(--muted); margin-bottom: 6px;">Segment ${i + 1}</div>
+      <div style="line-height: 1.7; color: var(--text);">${escapeHtml(p)}</div>
+    </div>
+  `).join('');
+}
+
+// Render a speaker block with nice formatting
+function renderSpeakerBlock(speaker, text) {
+  // Clean up the text
+  const cleanText = text
+    .replace(/\s+/g, ' ')
+    .replace(/([.!?])\s+([A-Z])/g, '$1</p><p>$2')
+    .trim();
+  
+  // Get speaker color based on name
+  const speakerColor = getSpeakerColor(speaker);
+  
+  return `
+    <div style="margin-bottom: 20px; padding: 16px; background: linear-gradient(135deg, var(--panel-2), var(--panel-1)); 
+                border-radius: 12px; border-left: 4px solid ${speakerColor};">
+      <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px;">
+        <div style="width: 32px; height: 32px; border-radius: 50%; background: ${speakerColor}; 
+                    display: flex; align-items: center; justify-content: center; color: white; font-weight: 600;">
+          ${speaker.charAt(0).toUpperCase()}
+        </div>
+        <div>
+          <div style="font-weight: 600; color: var(--primary); font-size: 14px;">${escapeHtml(speaker)}</div>
+          <div style="font-size: 11px; color: var(--muted);">Participant</div>
+        </div>
+      </div>
+      <div style="line-height: 1.8; color: var(--text); font-size: 14px;">
+        <p style="margin: 0;">${cleanText}</p>
+      </div>
+    </div>
+  `;
+}
+
+// Get consistent color for speaker
+function getSpeakerColor(speaker) {
+  const colors = [
+    '#3b82f6', // blue
+    '#10b981', // green
+    '#f59e0b', // amber
+    '#ef4444', // red
+    '#8b5cf6', // violet
+    '#ec4899', // pink
+    '#14b8a6', // teal
+    '#f97316'  // orange
+  ];
+  
+  let hash = 0;
+  for (let i = 0; i < speaker.length; i++) {
+    hash = speaker.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  
+  return colors[Math.abs(hash) % colors.length];
+}
+
+// Escape HTML to prevent XSS
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+// Update meeting title
+window.updateMeetingTitle = async (noteId, newTitle) => {
+  try {
+    // Update in database
+    const sb = getSupabase();
+    const { error } = await sb
+      .from('notes')
+      .update({ title: `[Recall] ${newTitle}` })
+      .eq('id', noteId);
+    
+    if (error) throw error;
+    
+    // Update in cache
+    const note = window.notesCache?.find(n => n.id === noteId);
+    if (note) {
+      note.title = `[Recall] ${newTitle}`;
+    }
+    
+    // Update in UI
+    const headerTitle = document.querySelector(`[data-id="${noteId}"] h4`);
+    if (headerTitle) {
+      headerTitle.innerHTML = `${note.title?.includes('Recall') ? '🎙️' : '📝'} ${newTitle}`;
+    }
+    
+    window.showToast && window.showToast('Title updated successfully');
+  } catch(e) {
+    alert('Failed to update title: ' + e.message);
+  }
+};
+
+// Add speaker tag
+window.addSpeakerTag = (noteId) => {
+  const name = prompt('Enter participant name:');
+  if (!name) return;
+  
+  const email = prompt('Enter participant email (optional):');
+  
+  const speakersDiv = document.getElementById(`speakers-${noteId}`);
+  if (!speakersDiv) return;
+  
+  const tagId = `speaker-${noteId}-${Date.now()}`;
+  const color = getSpeakerColor(name);
+  
+  const tag = document.createElement('div');
+  tag.id = tagId;
+  tag.style.cssText = `
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 6px 12px; background: ${color}20; border: 1px solid ${color}40;
+    border-radius: 20px; font-size: 13px;
+  `;
+  
+  tag.innerHTML = `
+    <div style="width: 20px; height: 20px; border-radius: 50%; background: ${color}; 
+                display: flex; align-items: center; justify-content: center; color: white; font-size: 10px;">
+      ${name.charAt(0).toUpperCase()}
+    </div>
+    <div>
+      <div style="font-weight: 500;">${escapeHtml(name)}</div>
+      ${email ? `<div style="font-size: 11px; color: var(--muted);">${escapeHtml(email)}</div>` : ''}
+    </div>
+    <button onclick="removeSpeakerTag('${tagId}')" style="
+      background: none; border: none; color: var(--muted); cursor: pointer;
+      padding: 0; margin-left: 4px; display: flex; align-items: center;
+    ">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <line x1="18" y1="6" x2="6" y2="18"></line>
+        <line x1="6" y1="6" x2="18" y2="18"></line>
+      </svg>
+    </button>
+  `;
+  
+  speakersDiv.appendChild(tag);
+  
+  // Save speakers to note metadata
+  saveSpeakersToNote(noteId);
+};
+
+// Remove speaker tag
+window.removeSpeakerTag = (tagId) => {
+  const tag = document.getElementById(tagId);
+  if (tag) {
+    tag.remove();
+    // Extract noteId from tagId
+    const noteId = tagId.split('-')[1];
+    saveSpeakersToNote(noteId);
+  }
+};
+
+// Save speakers to note metadata
+async function saveSpeakersToNote(noteId) {
+  const speakersDiv = document.getElementById(`speakers-${noteId}`);
+  if (!speakersDiv) return;
+  
+  const speakers = [];
+  const tags = speakersDiv.querySelectorAll('[id^="speaker-"]');
+  
+  tags.forEach(tag => {
+    const nameDiv = tag.querySelector('div > div:first-child');
+    const emailDiv = tag.querySelector('div > div:last-child');
+    
+    if (nameDiv) {
+      speakers.push({
+        name: nameDiv.textContent,
+        email: emailDiv?.textContent || ''
+      });
+    }
+  });
+  
+  // Save to database (would need to add metadata column to notes table)
+  console.log('Speakers for note', noteId, speakers);
+}
 
 // Format summary content for display
 function formatSummaryContent(summary) {
