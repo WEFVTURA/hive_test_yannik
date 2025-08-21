@@ -41,51 +41,68 @@ export async function renderTxFiles(root){
       <div id="txFilesStatus" class="muted" style="margin-top:8px"></div>
     </div>`;
   document.getElementById('pickAudioBtn').addEventListener('click', async()=>{
-    const { showProgress, completeProgress } = await import('./progress.js');
-    const { getSupabase } = await import('../lib/supabase.js');
+    const { showProgress, completeProgress, updateProgress } = await import('./progress.js');
     const { db_createNote, db_updateNote } = await import('../lib/supabase.js');
     const pickFile = ()=>new Promise(r=>{ const i=document.createElement('input'); i.type='file'; i.accept='audio/*'; i.onchange=()=>r(i.files?.[0]||null); i.click(); });
     const file = await pickFile(); if(!file) return;
-    const sb = getSupabase();
-    const bucket = sb.storage.from('hive-attachments');
-    const path = `${Date.now()}_${file.name}`;
-    const pId = showProgress({ label:'Uploading…', determinate:true });
+    
+    const pId = showProgress({ label:'Transcribing audio...', determinate:true });
     try{
-      const signed = await bucket.createSignedUploadUrl(path).catch(()=>null);
-      if (signed?.data?.signedUrl){
-        await new Promise((resolve,reject)=>{ const xhr=new XMLHttpRequest(); xhr.open('POST', signed.data.signedUrl); xhr.upload.onprogress=(e)=>{ if(e.lengthComputable) (import('./progress.js')).then(m=>m.updateProgress(pId,(e.loaded/e.total)*100)); }; xhr.onload=()=> (xhr.status>=200&&xhr.status<300)?resolve(null):reject(new Error('upload')); xhr.onerror=()=>reject(new Error('network')); const form=new FormData(); form.append('file',file); xhr.send(form); });
-      } else {
-        const up = await bucket.upload(path,file,{ upsert:true }); if (up.error) throw up.error;
-      }
-      completeProgress(pId,true);
-      const url = bucket.getPublicUrl(path).data.publicUrl;
-      const r = await fetch('/api/deepgram-upload',{ 
-        method:'POST', 
-        headers:{ 
-          Authorization:`Bearer ${ (window.DEEPGRAM_API_KEY||'') }`, 
-          'Content-Type':'application/json' 
-        }, 
-        body: JSON.stringify({ 
-          url,
-          space_id: localStorage.getItem('hive_meetings_space_id') || null,
-          title: (file.name||'Audio').replace(/\.[^/.]+$/,'')
-        }) 
-      });
-      const j = await r.json();
+      // Send file directly to Deepgram
+      const formData = new FormData();
+      formData.append('file', file);
       
-      if (j?.text || j?.speaker_transcript || j?.formatted_transcript) { 
-        const n = await db_createNote(localStorage.getItem('hive_meetings_space_id')||null); 
+      // Update progress during upload
+      const xhr = new XMLHttpRequest();
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable) {
+          updateProgress(pId, (e.loaded / e.total) * 50); // 0-50% for upload
+        }
+      };
+      
+      const response = await new Promise((resolve, reject) => {
+        xhr.open('POST', '/api/deepgram-upload');
+        xhr.setRequestHeader('Authorization', `Bearer ${window.DEEPGRAM_API_KEY || ''}`);
+        
+        xhr.onload = () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            resolve(JSON.parse(xhr.responseText));
+          } else {
+            reject(new Error(xhr.responseText));
+          }
+        };
+        xhr.onerror = () => reject(new Error('Network error'));
+        
+        xhr.send(formData);
+      });
+      
+      updateProgress(pId, 75); // 75% after upload complete
+      
+      if (response?.text || response?.speaker_transcript || response?.formatted_transcript) { 
+        // Save transcript to Supabase
+        const n = await db_createNote(localStorage.getItem('hive_meetings_space_id') || null); 
         
         // Use speaker transcript if available, otherwise formatted or regular
-        const content = j.speaker_transcript || j.formatted_transcript || j.text || '';
-        const hasSpeakers = !!j.speaker_transcript || !!j.utterances;
+        const content = response.speaker_transcript || response.formatted_transcript || response.text || '';
+        const hasSpeakers = !!response.speaker_transcript || !!response.utterances;
         const title = `${(file.name||'Audio').replace(/\.[^/.]+$/,'')}${hasSpeakers ? ' (with speakers)' : ''}`;
         
         await db_updateNote(n.id, { title, content }); 
+        
+        completeProgress(pId, true);
         document.getElementById('txFilesStatus').textContent = hasSpeakers ? 'Transcript with speakers saved.' : 'Transcript saved.'; 
       }
-      else { document.getElementById('txFilesStatus').textContent='Deepgram accepted job; waiting for webhook.'; }
-    }catch{ completeProgress(pId,false); document.getElementById('txFilesStatus').textContent='Upload failed.'; }
+      else if (response?.accepted) { 
+        completeProgress(pId, true);
+        document.getElementById('txFilesStatus').textContent = 'Deepgram accepted job; waiting for webhook.'; 
+      }
+      else {
+        throw new Error('No transcript received');
+      }
+    }catch(error){ 
+      completeProgress(pId, false); 
+      document.getElementById('txFilesStatus').textContent = `Transcription failed: ${error.message || 'Unknown error'}`; 
+    }
   });
 }
 
