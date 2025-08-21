@@ -1454,8 +1454,8 @@ Check browser console for full details.`);
     btn.disabled = true;
     
     try {
-      // Call the manual sync endpoint
-      const response = await fetch('/api/recall-sync-manual', {
+      // Call the new v2 sync endpoint that properly lists bots first
+      const response = await fetch('/api/recall-sync-v2', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' }
       });
