@@ -515,7 +515,10 @@ createSpaceBtn?.addEventListener('click', async ()=>{
 async function renderSpacesList(){
   try {
     const { db_listSpaces } = await import('./lib/supabase.js');
-    let spaces = await db_listSpaces().catch(()=>[]);
+    let spaces = await db_listSpaces().catch((err) => {
+      console.error('Failed to load spaces:', err);
+      return [];
+    });
     if (currentQuery) spaces = spaces.filter(s => (s.name||'').toLowerCase().includes(currentQuery));
 
     const list = document.getElementById('spacesList');
@@ -563,11 +566,15 @@ async function renderLibrary(){
     </div>
     <div class="card-grid" id="grid"></div>`;
 
+  // Load spaces for both the sidebar and main content
+  const { db_listSpaces } = await import('./lib/supabase.js');
   let spaces = await db_listSpaces().catch(()=>[]);
   if (currentQuery) spaces = spaces.filter(s => (s.name||'').toLowerCase().includes(currentQuery));
 
+  // Render sidebar spaces
   const list = document.getElementById('spacesList');
-  list.innerHTML = `
+  if (list) {
+    list.innerHTML = `
     <div class="nav-header" style="display:flex; align-items:center; justify-content:space-between; padding:10px 12px; background:var(--panel-2)">
       <div style="display:flex; align-items:center; gap:8px"><svg class="icon"><use href="#folder"></use></svg><span>Library</span></div>
       <div class="badge">${spaces.length}</div>
@@ -1045,6 +1052,11 @@ function formatTranscriptContent(content, isPreview = false) {
       return formatRecallTranscript(data.words, isPreview);
     }
     
+    // Alternative: check if it's an array of word objects directly
+    if (Array.isArray(data) && data.length > 0 && data[0].text) {
+      return formatRecallTranscript(data, isPreview);
+    }
+    
     // Check if it's a transcript with segments/chunks
     if (data.segments && Array.isArray(data.segments)) {
       return data.segments.map(seg => seg.text || '').join('\n\n').trim();
@@ -1060,8 +1072,22 @@ function formatTranscriptContent(content, isPreview = false) {
       return formatPlainText(data.text, isPreview);
     }
     
-    // If it's JSON but unrecognized format, return formatted JSON
-    return `<pre style="font-size: 12px; color: var(--muted);">${JSON.stringify(data, null, 2)}</pre>`;
+    // If it's JSON but unrecognized format, try to extract text from any array
+    if (Array.isArray(data)) {
+      const extractedText = data.map(item => {
+        if (typeof item === 'string') return item;
+        if (item.text) return item.text;
+        if (item.word) return item.word;
+        return '';
+      }).filter(Boolean).join(' ');
+      
+      if (extractedText.length > 10) {
+        return formatPlainText(extractedText, isPreview);
+      }
+    }
+    
+    // Last resort: return formatted JSON
+    return `<pre style="font-size: 12px; color: var(--muted); max-height: 300px; overflow-y: auto;">${JSON.stringify(data, null, 2)}</pre>`;
     
   } catch (e) {
     // Not JSON, return formatted plain text
@@ -1081,8 +1107,8 @@ function formatRecallTranscript(words, isPreview = false) {
   for (let i = 0; i < words.length; i++) {
     const word = words[i];
     const text = word.text || word.word || '';
-    const speaker = word.speaker || word.participant_id || 'Speaker';
-    const timestamp = word.start_timestamp || word.start || 0;
+    const speaker = word.speaker || word.participant_id || `Speaker ${i % 2 + 1}`;
+    const timestamp = word.start_timestamp?.absolute || word.start_timestamp?.relative || word.start || 0;
     
     // Detect speaker changes or significant time gaps (5+ seconds)
     const timeDiff = timestamp - lastTimestamp;
