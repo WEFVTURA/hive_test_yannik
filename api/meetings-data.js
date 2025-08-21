@@ -23,6 +23,13 @@ export default async function handler(req){
   }
 
   try {
+    // Debug info to help diagnose issues
+    const debugInfo = {
+      supabase_url: SUPABASE_URL.substring(0, 30) + '...',
+      has_service_key: Boolean(SERVICE_KEY),
+      timestamp: new Date().toISOString()
+    };
+
     // Get meetings space ID by searching for a space named "Meetings"
     let meetingsSpaceId = '';
     
@@ -30,42 +37,78 @@ export default async function handler(req){
     const spacesResp = await fetch(`${SUPABASE_URL}/rest/v1/spaces?select=id,name&name=eq.Meetings`, { 
       headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` } 
     });
+    
+    debugInfo.spaces_fetch_status = spacesResp.status;
     const spaces = await spacesResp.json().catch(() => []);
+    debugInfo.spaces_found_exact = spaces.length || 0;
     
     if (Array.isArray(spaces) && spaces.length > 0) {
       meetingsSpaceId = spaces[0].id;
+      debugInfo.space_source = 'exact_match';
     } else {
       // Try case-insensitive search
       const spacesResp2 = await fetch(`${SUPABASE_URL}/rest/v1/spaces?select=id,name&name=ilike.meetings`, { 
         headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` } 
       });
       const spaces2 = await spacesResp2.json().catch(() => []);
+      debugInfo.spaces_found_ilike = spaces2.length || 0;
       
       if (Array.isArray(spaces2) && spaces2.length > 0) {
         meetingsSpaceId = spaces2[0].id;
+        debugInfo.space_source = 'case_insensitive';
       }
     }
 
     if (!meetingsSpaceId) {
-      return jres({ error: 'Meetings space not found', notes: [] }, 404, cors);
+      // Also try to list all spaces for debugging
+      const allSpacesResp = await fetch(`${SUPABASE_URL}/rest/v1/spaces?select=id,name`, { 
+        headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` } 
+      });
+      const allSpaces = await allSpacesResp.json().catch(() => []);
+      debugInfo.all_spaces = allSpaces.map(s => ({ id: s.id, name: s.name }));
+      
+      return jres({ 
+        error: 'Meetings space not found', 
+        notes: [],
+        debug: debugInfo
+      }, 404, cors);
     }
+
+    debugInfo.meetings_space_id = meetingsSpaceId;
 
     // Fetch all notes from the meetings space
     const notesResp = await fetch(`${SUPABASE_URL}/rest/v1/notes?select=*&space_id=eq.${meetingsSpaceId}&order=created_at.desc`, { 
       headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` } 
     });
     
+    debugInfo.notes_fetch_status = notesResp.status;
+    
     if (!notesResp.ok) {
-      throw new Error(`Failed to fetch notes: ${notesResp.status}`);
+      const errorText = await notesResp.text();
+      debugInfo.notes_error = errorText;
+      throw new Error(`Failed to fetch notes: ${notesResp.status} - ${errorText}`);
     }
     
     const notes = await notesResp.json();
+    debugInfo.notes_type = Array.isArray(notes) ? 'array' : typeof notes;
+    debugInfo.notes_count = Array.isArray(notes) ? notes.length : 0;
+    
+    // Add some sample note info for debugging
+    if (Array.isArray(notes) && notes.length > 0) {
+      debugInfo.sample_note = {
+        id: notes[0].id,
+        title: notes[0].title?.substring(0, 50),
+        content_length: notes[0].content?.length || 0,
+        created_at: notes[0].created_at
+      };
+    }
 
     return jres({ 
       success: true, 
       space_id: meetingsSpaceId,
       notes: Array.isArray(notes) ? notes : [],
-      total: Array.isArray(notes) ? notes.length : 0
+      total: Array.isArray(notes) ? notes.length : 0,
+      debug: debugInfo
     }, 200, cors);
 
   } catch (error) {

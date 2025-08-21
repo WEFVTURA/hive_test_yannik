@@ -730,6 +730,12 @@ async function renderMeetingsHub(root){
       <button class="button primary" id="syncRecallBtn" style="margin-left:8px">
         <i data-lucide="refresh-cw" class="icon"></i> Sync Recall
       </button>
+      <button class="button" id="directImportBtn" style="margin-left:8px" title="Direct Import">
+        <i data-lucide="file-plus" class="icon"></i> Import
+      </button>
+      <button class="button" id="batchImportBtn" style="margin-left:8px" title="Batch Import">
+        <i data-lucide="folder-plus" class="icon"></i> Batch
+      </button>
       <button class="button ghost" id="debugBtn" style="margin-left:8px" title="Debug APIs">
         🐛 Debug
       </button>
@@ -752,8 +758,17 @@ async function renderMeetingsHub(root){
     const response = await fetch('/api/meetings-data');
     const data = await response.json();
     
+    // Log debug info to console
+    console.log('Meetings data response:', {
+      success: data.success,
+      total: data.total,
+      space_id: data.space_id,
+      debug: data.debug,
+      notes_count: data.notes?.length || 0
+    });
+    
     if (!data.success) {
-      throw new Error(data.message || 'Failed to load meetings');
+      throw new Error(data.error || data.message || 'Failed to load meetings');
     }
     
     const notes = data.notes || [];
@@ -1379,6 +1394,16 @@ function setupMeetingsHubInteractions() {
   // Back to library
   document.getElementById('backToLibrary')?.addEventListener('click', ()=>{ location.hash=''; });
   
+  // Direct Import button
+  document.getElementById('directImportBtn')?.addEventListener('click', () => {
+    location.hash = 'meetings/import';
+  });
+  
+  // Batch Import button
+  document.getElementById('batchImportBtn')?.addEventListener('click', () => {
+    location.hash = 'meetings/batch';
+  });
+  
   // Debug button
   document.getElementById('debugBtn')?.addEventListener('click', async () => {
     const btn = document.getElementById('debugBtn');
@@ -1669,6 +1694,320 @@ window.toggleMeetingContent = (noteId) => {
   }
 };
 
+// Alternative Import View #1: Direct Transcript Import
+async function renderTranscriptImport(root) {
+  root.innerHTML = `
+    <div class="content-head">
+      <div class="title">
+        <i data-lucide="file-plus" class="icon"></i>
+        Direct Transcript Import
+      </div>
+      <button class="button ghost" id="backToHub" style="margin-left:12px">
+        <i data-lucide="arrow-left" class="icon"></i> Back to Hub
+      </button>
+    </div>
+    <div class="content-body">
+      <div style="max-width: 800px; margin: 0 auto; padding: 24px;">
+        <div class="card" style="padding: 24px; border-radius: 12px; border: 1px solid var(--border);">
+          <h3 style="margin-bottom: 16px;">Import Single Transcript</h3>
+          
+          <div class="field" style="margin-bottom: 16px;">
+            <label>Meeting Title</label>
+            <input id="transcriptTitle" type="text" placeholder="e.g., Team Standup - Dec 20" 
+                   style="width: 100%; padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px;">
+          </div>
+          
+          <div class="field" style="margin-bottom: 16px;">
+            <label>Transcript Content</label>
+            <textarea id="transcriptContent" rows="10" placeholder="Paste your transcript here..."
+                      style="width: 100%; padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px; font-family: monospace; font-size: 13px;"></textarea>
+          </div>
+          
+          <div class="field" style="margin-bottom: 16px;">
+            <label>Source (optional)</label>
+            <select id="transcriptSource" style="padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px;">
+              <option value="manual">Manual Entry</option>
+              <option value="zoom">Zoom</option>
+              <option value="teams">Microsoft Teams</option>
+              <option value="meet">Google Meet</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+          
+          <div style="display: flex; gap: 12px;">
+            <button class="button primary" id="importBtn">
+              <i data-lucide="upload" class="icon"></i> Import Transcript
+            </button>
+            <button class="button ghost" id="clearBtn">Clear Form</button>
+          </div>
+          
+          <div id="importStatus" style="margin-top: 16px; padding: 12px; border-radius: 6px; display: none;"></div>
+        </div>
+        
+        <!-- File Upload Option -->
+        <div class="card" style="margin-top: 24px; padding: 24px; border-radius: 12px; border: 1px solid var(--border);">
+          <h3 style="margin-bottom: 16px;">Import from File</h3>
+          <input type="file" id="fileInput" accept=".txt,.vtt,.srt,.json" style="margin-bottom: 12px;">
+          <button class="button" id="fileImportBtn">
+            <i data-lucide="file-text" class="icon"></i> Import from File
+          </button>
+        </div>
+      </div>
+    </div>
+  `;
+  
+  lucide.createIcons();
+  
+  // Event handlers
+  document.getElementById('backToHub')?.addEventListener('click', () => {
+    location.hash = 'meetings/hub';
+  });
+  
+  document.getElementById('clearBtn')?.addEventListener('click', () => {
+    document.getElementById('transcriptTitle').value = '';
+    document.getElementById('transcriptContent').value = '';
+    document.getElementById('transcriptSource').value = 'manual';
+  });
+  
+  document.getElementById('importBtn')?.addEventListener('click', async () => {
+    const title = document.getElementById('transcriptTitle').value.trim();
+    const content = document.getElementById('transcriptContent').value.trim();
+    const source = document.getElementById('transcriptSource').value;
+    const statusEl = document.getElementById('importStatus');
+    
+    if (!title || !content) {
+      statusEl.style.display = 'block';
+      statusEl.style.background = 'var(--danger-bg)';
+      statusEl.innerHTML = '⚠️ Please provide both title and content';
+      return;
+    }
+    
+    statusEl.style.display = 'block';
+    statusEl.style.background = 'var(--info-bg)';
+    statusEl.innerHTML = '⏳ Importing transcript...';
+    
+    try {
+      const response = await fetch('/api/transcript-import-direct', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title, content, source })
+      });
+      
+      const result = await response.json();
+      
+      if (result.success) {
+        statusEl.style.background = 'var(--success-bg)';
+        statusEl.innerHTML = '✅ Transcript imported successfully!';
+        setTimeout(() => {
+          location.hash = 'meetings/hub';
+        }, 1500);
+      } else {
+        statusEl.style.background = 'var(--danger-bg)';
+        statusEl.innerHTML = `❌ Import failed: ${result.error}`;
+      }
+    } catch (e) {
+      statusEl.style.background = 'var(--danger-bg)';
+      statusEl.innerHTML = `❌ Import error: ${e.message}`;
+    }
+  });
+  
+  document.getElementById('fileImportBtn')?.addEventListener('click', async () => {
+    const fileInput = document.getElementById('fileInput');
+    const file = fileInput.files[0];
+    
+    if (!file) {
+      window.showToast && window.showToast('Please select a file');
+      return;
+    }
+    
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      const content = e.target.result;
+      const title = file.name.replace(/\.[^/.]+$/, '');
+      
+      document.getElementById('transcriptTitle').value = title;
+      document.getElementById('transcriptContent').value = content;
+      
+      // Auto-import
+      document.getElementById('importBtn').click();
+    };
+    reader.readAsText(file);
+  });
+}
+
+// Alternative Import View #2: Batch Import
+async function renderBatchImport(root) {
+  root.innerHTML = `
+    <div class="content-head">
+      <div class="title">
+        <i data-lucide="folder-plus" class="icon"></i>
+        Batch Transcript Import
+      </div>
+      <button class="button ghost" id="backToHub" style="margin-left:12px">
+        <i data-lucide="arrow-left" class="icon"></i> Back to Hub
+      </button>
+    </div>
+    <div class="content-body">
+      <div style="max-width: 900px; margin: 0 auto; padding: 24px;">
+        <div class="card" style="padding: 24px; border-radius: 12px; border: 1px solid var(--border);">
+          <h3 style="margin-bottom: 16px;">Batch Import Multiple Transcripts</h3>
+          
+          <div id="transcriptList" style="margin-bottom: 24px;">
+            <!-- Dynamic transcript entries will be added here -->
+          </div>
+          
+          <div style="display: flex; gap: 12px; margin-bottom: 24px;">
+            <button class="button" id="addTranscriptBtn">
+              <i data-lucide="plus" class="icon"></i> Add Transcript
+            </button>
+            <button class="button primary" id="importAllBtn">
+              <i data-lucide="upload-cloud" class="icon"></i> Import All
+            </button>
+            <button class="button ghost" id="clearAllBtn">Clear All</button>
+          </div>
+          
+          <div id="batchStatus" style="padding: 16px; border-radius: 8px; display: none;"></div>
+        </div>
+        
+        <!-- JSON Import -->
+        <div class="card" style="margin-top: 24px; padding: 24px; border-radius: 12px; border: 1px solid var(--border);">
+          <h3 style="margin-bottom: 16px;">Import from JSON</h3>
+          <p style="color: var(--muted); margin-bottom: 12px;">
+            Format: [{"title": "Meeting 1", "content": "..."}, ...]
+          </p>
+          <textarea id="jsonInput" rows="6" placeholder='[{"title": "Meeting Title", "content": "Transcript content..."}]'
+                    style="width: 100%; padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px; font-family: monospace; font-size: 12px;"></textarea>
+          <button class="button" id="jsonImportBtn" style="margin-top: 12px;">
+            <i data-lucide="code" class="icon"></i> Import from JSON
+          </button>
+        </div>
+      </div>
+    </div>
+  `;
+  
+  lucide.createIcons();
+  
+  let transcriptCounter = 0;
+  
+  const addTranscriptEntry = () => {
+    transcriptCounter++;
+    const entryId = `transcript-${transcriptCounter}`;
+    const entryHtml = `
+      <div id="${entryId}" class="transcript-entry" style="border: 1px solid var(--border); padding: 16px; border-radius: 8px; margin-bottom: 12px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+          <h4>Transcript #${transcriptCounter}</h4>
+          <button class="button sm danger" onclick="document.getElementById('${entryId}').remove()">
+            <i data-lucide="x" class="icon"></i> Remove
+          </button>
+        </div>
+        <input type="text" placeholder="Meeting Title" class="transcript-title" 
+               style="width: 100%; padding: 6px 10px; border: 1px solid var(--border); border-radius: 4px; margin-bottom: 8px;">
+        <textarea rows="4" placeholder="Transcript content..." class="transcript-content"
+                  style="width: 100%; padding: 6px 10px; border: 1px solid var(--border); border-radius: 4px; font-size: 13px;"></textarea>
+      </div>
+    `;
+    
+    document.getElementById('transcriptList').insertAdjacentHTML('beforeend', entryHtml);
+    lucide.createIcons();
+  };
+  
+  // Event handlers
+  document.getElementById('backToHub')?.addEventListener('click', () => {
+    location.hash = 'meetings/hub';
+  });
+  
+  document.getElementById('addTranscriptBtn')?.addEventListener('click', addTranscriptEntry);
+  
+  document.getElementById('clearAllBtn')?.addEventListener('click', () => {
+    document.getElementById('transcriptList').innerHTML = '';
+    transcriptCounter = 0;
+  });
+  
+  document.getElementById('importAllBtn')?.addEventListener('click', async () => {
+    const entries = document.querySelectorAll('.transcript-entry');
+    const transcripts = [];
+    
+    entries.forEach(entry => {
+      const title = entry.querySelector('.transcript-title').value.trim();
+      const content = entry.querySelector('.transcript-content').value.trim();
+      
+      if (title && content) {
+        transcripts.push({ title, content, source: 'batch' });
+      }
+    });
+    
+    if (transcripts.length === 0) {
+      window.showToast && window.showToast('No valid transcripts to import');
+      return;
+    }
+    
+    const statusEl = document.getElementById('batchStatus');
+    statusEl.style.display = 'block';
+    statusEl.style.background = 'var(--info-bg)';
+    statusEl.innerHTML = `⏳ Importing ${transcripts.length} transcript(s)...`;
+    
+    try {
+      const response = await fetch('/api/transcript-import-batch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ transcripts })
+      });
+      
+      const result = await response.json();
+      
+      if (result.success) {
+        statusEl.style.background = 'var(--success-bg)';
+        statusEl.innerHTML = `✅ Import complete! ${result.imported} imported, ${result.failed} failed`;
+        
+        if (result.errors && result.errors.length > 0) {
+          statusEl.innerHTML += '<br>Errors: ' + result.errors.join('<br>');
+        }
+        
+        setTimeout(() => {
+          location.hash = 'meetings/hub';
+        }, 2000);
+      } else {
+        statusEl.style.background = 'var(--danger-bg)';
+        statusEl.innerHTML = `❌ Import failed: ${result.error}`;
+      }
+    } catch (e) {
+      statusEl.style.background = 'var(--danger-bg)';
+      statusEl.innerHTML = `❌ Import error: ${e.message}`;
+    }
+  });
+  
+  document.getElementById('jsonImportBtn')?.addEventListener('click', () => {
+    const jsonInput = document.getElementById('jsonInput').value.trim();
+    
+    try {
+      const transcripts = JSON.parse(jsonInput);
+      
+      if (!Array.isArray(transcripts)) {
+        throw new Error('Input must be an array');
+      }
+      
+      // Clear existing entries
+      document.getElementById('transcriptList').innerHTML = '';
+      transcriptCounter = 0;
+      
+      // Add entries from JSON
+      transcripts.forEach(t => {
+        addTranscriptEntry();
+        const lastEntry = document.querySelector('.transcript-entry:last-child');
+        lastEntry.querySelector('.transcript-title').value = t.title || '';
+        lastEntry.querySelector('.transcript-content').value = t.content || '';
+      });
+      
+      window.showToast && window.showToast(`Loaded ${transcripts.length} transcript(s)`);
+    } catch (e) {
+      window.showToast && window.showToast(`Invalid JSON: ${e.message}`);
+    }
+  });
+  
+  // Add initial entry
+  addTranscriptEntry();
+}
+
 window.copyToClipboard = async (noteId) => {
   const content = document.getElementById(`content-${noteId}`);
   if (content) {
@@ -1844,6 +2183,14 @@ async function renderRoute(){
   }
   else if (hash === 'meetings/hub'){
     await renderMeetingsHub(content);
+    await renderSpacesList();
+  }
+  else if (hash === 'meetings/import'){
+    await renderTranscriptImport(content);
+    await renderSpacesList();
+  }
+  else if (hash === 'meetings/batch'){
+    await renderBatchImport(content);
     await renderSpacesList();
   }
   else { 
