@@ -322,7 +322,7 @@ export function renderChat(root){
       }
       
       if (model === 'Mistral'){
-        const mistralKey = util_getEnv('VITE_MISTRAL_API_KEY','VITE_MISTRAL_API_KEY') || util_getEnv('MISTRAL_AI_API','MISTRAL_AI_API') || '';
+        const mistralKey = window.MISTRAL_API_KEY || util_getEnv('VITE_MISTRAL_API_KEY','VITE_MISTRAL_API_KEY') || util_getEnv('MISTRAL_AI_API','MISTRAL_AI_API') || '';
         if (mistralKey) {
           const r = await fetch('https://api.mistral.ai/v1/chat/completions', { 
             method:'POST', 
@@ -382,7 +382,7 @@ export function renderChat(root){
       
       // Use OpenAI (or fallback for other models if no key)
       {
-        const openaiKey = util_getEnv('VITE_OPENAI_API_KEY','VITE_OPENAI_API_KEY') || util_getEnv('OPEN_AI_API','OPEN_AI_API') || window.OPENAI_API_KEY || '';
+        const openaiKey = window.OPENAI_API_KEY || util_getEnv('VITE_OPENAI_API_KEY','VITE_OPENAI_API_KEY') || util_getEnv('OPEN_AI_API','OPEN_AI_API') || '';
         const r = await fetch('https://lmrnnfjuytygomdfujhs.supabase.co/functions/v1/openai-chat', { method:'POST', headers:{ 'Content-Type':'application/json', 'Authorization': `Bearer ${anon}`, 'apikey': anon }, body: JSON.stringify({ prompt, model:'gpt-4o-mini', openai_api_key: openaiKey }) });
         const j = await r.json(); if(!r.ok){ throw new Error(j?.error||'openai error'); } if(ragDebugEl){ ragDebugEl.textContent += `\nModel latency: ${Math.round(performance.now()-started)}ms`; } return j.reply||'';
       }
@@ -539,7 +539,7 @@ export function renderChat(root){
             }
           } else if (selectedModel === 'mistral-large') {
             // Mistral Large for Deep Research
-            const mistralKey = util_getEnv('VITE_MISTRAL_API_KEY','VITE_MISTRAL_API_KEY') || util_getEnv('MISTRAL_AI_API','MISTRAL_AI_API') || '';
+            const mistralKey = window.MISTRAL_API_KEY || util_getEnv('VITE_MISTRAL_API_KEY','VITE_MISTRAL_API_KEY') || util_getEnv('MISTRAL_AI_API','MISTRAL_AI_API') || '';
             if (mistralKey) {
               const sys = 'You are an expert research assistant with advanced reasoning capabilities. Provide a comprehensive, well-researched analysis with multiple perspectives, detailed evidence, and actionable insights. Structure your response with clear sections, bullet points, and supporting data.';
               const requestBody = { 
@@ -570,7 +570,7 @@ export function renderChat(root){
             }
           } else {
             // Default: Mistral AI for Deep Research
-            const mistralKey = util_getEnv('VITE_MISTRAL_API_KEY','VITE_MISTRAL_API_KEY') || util_getEnv('MISTRAL_AI_API','MISTRAL_AI_API') || '';
+            const mistralKey = window.MISTRAL_API_KEY || util_getEnv('VITE_MISTRAL_API_KEY','VITE_MISTRAL_API_KEY') || util_getEnv('MISTRAL_AI_API','MISTRAL_AI_API') || '';
             if (mistralKey) {
               const sys = 'You are an expert research assistant. Provide a comprehensive, well-researched analysis with multiple perspectives and actionable insights. Structure your response with clear sections and bullet points.';
               const requestBody = { 
@@ -609,7 +609,7 @@ export function renderChat(root){
             if (activeModelIndicator) {
               activeModelIndicator.textContent = 'Mistral AI (fallback)';
             }
-            const mistralKey = util_getEnv('VITE_MISTRAL_API_KEY','VITE_MISTRAL_API_KEY') || util_getEnv('MISTRAL_AI_API','MISTRAL_AI_API') || '';
+            const mistralKey = window.MISTRAL_API_KEY || util_getEnv('VITE_MISTRAL_API_KEY','VITE_MISTRAL_API_KEY') || util_getEnv('MISTRAL_AI_API','MISTRAL_AI_API') || '';
             if (mistralKey) {
               try {
                 const requestBody = { 

@@ -11,6 +11,35 @@ import { ragIndex } from './lib/rag.js';
 initModals();
 const prefs = getPrefs();
 
+// Initialize API keys from environment variables for client-side use
+(function initAPIKeys(){
+  try {
+    // Set window variables from Vite environment variables
+    if (import.meta.env.VITE_OPENAI_API_KEY) {
+      window.OPENAI_API_KEY = import.meta.env.VITE_OPENAI_API_KEY;
+    }
+    if (import.meta.env.VITE_MISTRAL_API_KEY) {
+      window.MISTRAL_API_KEY = import.meta.env.VITE_MISTRAL_API_KEY;
+    }
+    if (import.meta.env.VITE_DEEPGRAM_API_KEY) {
+      window.DEEPGRAM_API_KEY = import.meta.env.VITE_DEEPGRAM_API_KEY;
+    }
+    if (import.meta.env.VITE_PERPLEXITY) {
+      window.PERPLEXITY_API_KEY = import.meta.env.VITE_PERPLEXITY;
+    }
+    
+    // Debug log (remove in production)
+    console.log('API Keys initialized:', {
+      openai: !!window.OPENAI_API_KEY,
+      mistral: !!window.MISTRAL_API_KEY,
+      deepgram: !!window.DEEPGRAM_API_KEY,
+      perplexity: !!window.PERPLEXITY_API_KEY
+    });
+  } catch(e) {
+    console.warn('Failed to initialize API keys:', e);
+  }
+})();
+
 // Lightweight global debug logger so logs are captured even before Settings is opened
 (function initDebugLogger(){
 	try{
