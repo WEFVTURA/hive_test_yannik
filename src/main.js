@@ -730,6 +730,9 @@ async function renderMeetingsHub(root){
       <button class="button primary" id="syncRecallBtn" style="margin-left:8px">
         <i data-lucide="refresh-cw" class="icon"></i> Sync Recall
       </button>
+      <button class="button primary" id="recallBrowserBtn" style="margin-left:8px" title="Browse Recall Transcripts">
+        <i data-lucide="database" class="icon"></i> Browse Recall
+      </button>
       <button class="button" id="directImportBtn" style="margin-left:8px" title="Direct Import">
         <i data-lucide="file-plus" class="icon"></i> Import
       </button>
@@ -1404,6 +1407,11 @@ function setupMeetingsHubInteractions() {
     location.hash = 'meetings/batch';
   });
   
+  // Recall Browser button
+  document.getElementById('recallBrowserBtn')?.addEventListener('click', () => {
+    location.hash = 'meetings/recall';
+  });
+  
   // Debug button
   document.getElementById('debugBtn')?.addEventListener('click', async () => {
     const btn = document.getElementById('debugBtn');
@@ -2008,6 +2016,284 @@ async function renderBatchImport(root) {
   addTranscriptEntry();
 }
 
+// Recall Browser - Direct connection to Recall API
+async function renderRecallBrowser(root) {
+  root.innerHTML = `
+    <div class="content-head">
+      <div class="title">
+        <i data-lucide="database" class="icon"></i>
+        Recall Transcript Browser
+      </div>
+      <button class="button ghost" id="backToHub" style="margin-left:12px">
+        <i data-lucide="arrow-left" class="icon"></i> Back to Hub
+      </button>
+      <button class="button primary" id="refreshRecallBtn" style="margin-left:auto">
+        <i data-lucide="refresh-cw" class="icon"></i> Refresh
+      </button>
+    </div>
+    <div class="content-body">
+      <div style="padding: 24px;">
+        <!-- Loading state -->
+        <div id="recallLoading" style="text-align: center; padding: 48px;">
+          <div class="loading">Connecting to Recall API...</div>
+        </div>
+        
+        <!-- Transcript list -->
+        <div id="recallContent" style="display: none;">
+          <div style="margin-bottom: 24px; padding: 16px; background: var(--panel-1); border-radius: 8px;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <h3 style="margin: 0;">Available Transcripts</h3>
+              <div style="display: flex; gap: 12px;">
+                <button class="button sm" id="selectAllBtn">Select All</button>
+                <button class="button sm" id="deselectAllBtn">Deselect All</button>
+                <button class="button primary" id="importSelectedBtn">
+                  <i data-lucide="download" class="icon"></i> Import Selected
+                </button>
+              </div>
+            </div>
+          </div>
+          
+          <div id="transcriptList" style="display: grid; gap: 16px;">
+            <!-- Transcripts will be loaded here -->
+          </div>
+        </div>
+        
+        <!-- Error state -->
+        <div id="recallError" style="display: none; text-align: center; padding: 48px;">
+          <i data-lucide="alert-circle" style="width: 48px; height: 48px; color: var(--danger);"></i>
+          <h3>Failed to load transcripts</h3>
+          <p id="errorMessage" style="color: var(--muted);"></p>
+          <button class="button" onclick="location.reload()">Retry</button>
+        </div>
+      </div>
+    </div>
+  `;
+  
+  lucide.createIcons();
+  
+  // Load transcripts from Recall
+  loadRecallTranscripts();
+  
+  // Event handlers
+  document.getElementById('backToHub')?.addEventListener('click', () => {
+    location.hash = 'meetings/hub';
+  });
+  
+  document.getElementById('refreshRecallBtn')?.addEventListener('click', () => {
+    loadRecallTranscripts();
+  });
+  
+  async function loadRecallTranscripts() {
+    const loadingEl = document.getElementById('recallLoading');
+    const contentEl = document.getElementById('recallContent');
+    const errorEl = document.getElementById('recallError');
+    
+    loadingEl.style.display = 'block';
+    contentEl.style.display = 'none';
+    errorEl.style.display = 'none';
+    
+    try {
+      const response = await fetch('/api/recall-list-transcripts');
+      const data = await response.json();
+      
+      if (!data.success) {
+        throw new Error(data.error || 'Failed to load transcripts');
+      }
+      
+      const transcripts = data.transcripts || [];
+      const listEl = document.getElementById('transcriptList');
+      
+      if (transcripts.length === 0) {
+        listEl.innerHTML = `
+          <div style="text-align: center; padding: 48px; color: var(--muted);">
+            <i data-lucide="inbox" style="width: 48px; height: 48px;"></i>
+            <h3>No transcripts found</h3>
+            <p>Complete some meetings with Recall bot first</p>
+          </div>
+        `;
+      } else {
+        listEl.innerHTML = transcripts.map((t, idx) => `
+          <div class="transcript-item" data-id="${t.id}" style="border: 1px solid var(--border); border-radius: 12px; padding: 16px; background: var(--panel-1);">
+            <div style="display: flex; gap: 16px;">
+              <input type="checkbox" class="transcript-checkbox" data-idx="${idx}" style="width: 20px; height: 20px;">
+              
+              <div style="flex: 1;">
+                <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 12px;">
+                  <div>
+                    <h4 style="margin: 0 0 4px 0; color: var(--primary);">
+                      ${t.title}
+                    </h4>
+                    <div style="font-size: 12px; color: var(--muted);">
+                      📅 ${new Date(t.created_at).toLocaleString()} 
+                      ${t.participants > 0 ? `· 👥 ${t.participants} participants` : ''}
+                      ${t.duration ? `· ${t.duration}` : ''}
+                    </div>
+                  </div>
+                  <span class="badge ${t.has_transcript ? 'success' : 'warning'}" style="padding: 4px 8px; border-radius: 4px; font-size: 11px;">
+                    ${t.has_transcript ? '✅ Has Transcript' : '⚠️ No Transcript'}
+                  </span>
+                </div>
+                
+                ${t.meeting_url ? `
+                  <div style="font-size: 12px; color: var(--muted); margin-bottom: 8px;">
+                    🔗 ${t.meeting_url.substring(0, 50)}...
+                  </div>
+                ` : ''}
+                
+                ${t.transcript_preview ? `
+                  <div style="margin-bottom: 12px;">
+                    <div style="font-weight: 600; margin-bottom: 6px; font-size: 13px;">Preview:</div>
+                    <div class="transcript-preview" style="background: var(--panel-2); padding: 12px; border-radius: 6px; font-size: 12px; line-height: 1.5; max-height: 100px; overflow: hidden; position: relative;">
+                      ${t.transcript_preview}
+                      ${t.transcript_length > 500 ? '<div style="position: absolute; bottom: 0; left: 0; right: 0; height: 30px; background: linear-gradient(transparent, var(--panel-2));"></div>' : ''}
+                    </div>
+                    <div style="font-size: 11px; color: var(--muted); margin-top: 4px;">
+                      📝 ${t.transcript_length} characters
+                    </div>
+                  </div>
+                ` : `
+                  <div style="padding: 12px; background: var(--panel-2); border-radius: 6px; color: var(--muted); font-size: 12px;">
+                    No transcript preview available
+                  </div>
+                `}
+                
+                <div style="display: flex; gap: 8px;">
+                  <button class="button sm" onclick="viewFullTranscript(${idx})">
+                    <i data-lucide="eye" class="icon"></i> View Full
+                  </button>
+                  <button class="button sm ghost" onclick="copyTranscript(${idx})">
+                    <i data-lucide="copy" class="icon"></i> Copy
+                  </button>
+                </div>
+              </div>
+            </div>
+            
+            <!-- Hidden full transcript data -->
+            <div id="transcript-full-${idx}" style="display: none;">
+              ${t.full_transcript || 'No transcript available'}
+            </div>
+          </div>
+        `).join('');
+      }
+      
+      loadingEl.style.display = 'none';
+      contentEl.style.display = 'block';
+      lucide.createIcons();
+      
+      // Store transcripts for later use
+      window.recallTranscripts = transcripts;
+      
+    } catch (error) {
+      loadingEl.style.display = 'none';
+      errorEl.style.display = 'block';
+      document.getElementById('errorMessage').textContent = error.message;
+    }
+  }
+  
+  // Select/Deselect all
+  document.getElementById('selectAllBtn')?.addEventListener('click', () => {
+    document.querySelectorAll('.transcript-checkbox').forEach(cb => cb.checked = true);
+  });
+  
+  document.getElementById('deselectAllBtn')?.addEventListener('click', () => {
+    document.querySelectorAll('.transcript-checkbox').forEach(cb => cb.checked = false);
+  });
+  
+  // Import selected transcripts
+  document.getElementById('importSelectedBtn')?.addEventListener('click', async () => {
+    const selected = [];
+    document.querySelectorAll('.transcript-checkbox:checked').forEach(cb => {
+      const idx = parseInt(cb.getAttribute('data-idx'));
+      if (window.recallTranscripts && window.recallTranscripts[idx]) {
+        const t = window.recallTranscripts[idx];
+        if (t.full_transcript) {
+          selected.push({
+            title: t.title,
+            content: t.full_transcript,
+            source: 'recall'
+          });
+        }
+      }
+    });
+    
+    if (selected.length === 0) {
+      window.showToast && window.showToast('No transcripts selected');
+      return;
+    }
+    
+    const btn = document.getElementById('importSelectedBtn');
+    const originalText = btn.innerHTML;
+    btn.innerHTML = '<i data-lucide="loader" class="icon spinning"></i> Importing...';
+    btn.disabled = true;
+    
+    try {
+      const response = await fetch('/api/transcript-import-batch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ transcripts: selected })
+      });
+      
+      const result = await response.json();
+      
+      if (result.success) {
+        window.showToast && window.showToast(`Imported ${result.imported} transcript(s)`);
+        setTimeout(() => {
+          location.hash = 'meetings/hub';
+        }, 1500);
+      } else {
+        window.showToast && window.showToast(`Import failed: ${result.error}`);
+      }
+    } catch (e) {
+      window.showToast && window.showToast(`Error: ${e.message}`);
+    } finally {
+      btn.innerHTML = originalText;
+      btn.disabled = false;
+      lucide.createIcons();
+    }
+  });
+}
+
+// Helper functions for Recall browser
+window.viewFullTranscript = (idx) => {
+  const transcript = window.recallTranscripts?.[idx];
+  if (!transcript) return;
+  
+  const modal = document.createElement('div');
+  modal.style.cssText = `
+    position: fixed; inset: 0; background: rgba(0,0,0,0.8); 
+    z-index: 1000; display: flex; align-items: center; justify-content: center;
+  `;
+  
+  modal.innerHTML = `
+    <div style="background: var(--panel); border-radius: 12px; max-width: 90%; max-height: 90%; 
+                overflow: hidden; display: flex; flex-direction: column;">
+      <div style="padding: 16px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between;">
+        <h3 style="margin: 0;">${transcript.title}</h3>
+        <button onclick="this.closest('div[style*=fixed]').remove()" style="background: none; border: none; cursor: pointer; font-size: 24px;">×</button>
+      </div>
+      <div style="padding: 16px; overflow-y: auto; max-height: 70vh;">
+        <pre style="white-space: pre-wrap; font-family: monospace; font-size: 13px; line-height: 1.6;">
+${transcript.full_transcript || 'No transcript available'}
+        </pre>
+      </div>
+    </div>
+  `;
+  
+  document.body.appendChild(modal);
+};
+
+window.copyTranscript = async (idx) => {
+  const transcript = window.recallTranscripts?.[idx];
+  if (!transcript?.full_transcript) return;
+  
+  try {
+    await navigator.clipboard.writeText(transcript.full_transcript);
+    window.showToast && window.showToast('Transcript copied to clipboard');
+  } catch (e) {
+    window.showToast && window.showToast('Failed to copy transcript');
+  }
+};
+
 window.copyToClipboard = async (noteId) => {
   const content = document.getElementById(`content-${noteId}`);
   if (content) {
@@ -2191,6 +2477,10 @@ async function renderRoute(){
   }
   else if (hash === 'meetings/batch'){
     await renderBatchImport(content);
+    await renderSpacesList();
+  }
+  else if (hash === 'meetings/recall'){
+    await renderRecallBrowser(content);
     await renderSpacesList();
   }
   else { 
