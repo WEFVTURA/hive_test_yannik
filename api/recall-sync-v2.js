@@ -83,23 +83,49 @@ export default async function handler(req){
   const processedTitles = [];
   
   try {
-    // Step 1: List all bots
-    const botsUrl = `${base}/api/v1/bot/?limit=100`;
-    const botsResponse = await fetch(botsUrl, {
-      headers: {
-        'Authorization': `Token ${RECALL_KEY}`,
-        'Accept': 'application/json'
-      }
-    });
+    // Step 1: List all bots (with pagination)
+    const allBots = [];
+    let nextUrl = `${base}/api/v1/bot/?limit=100`;
+    let pageCount = 0;
     
-    if (!botsResponse.ok) {
-      debugInfo.errors.push(`Failed to list bots: ${botsResponse.status} ${botsResponse.statusText}`);
-      return jres({ error: 'Failed to list bots', debug: debugInfo }, 500, cors);
+    while (nextUrl && pageCount < 10) { // Max 10 pages to prevent infinite loop
+      pageCount++;
+      
+      const botsResponse = await fetch(nextUrl, {
+        headers: {
+          'Authorization': `Token ${RECALL_KEY}`,
+          'Accept': 'application/json'
+        }
+      });
+      
+      if (!botsResponse.ok) {
+        debugInfo.errors.push(`Failed to list bots on page ${pageCount}: ${botsResponse.status} ${botsResponse.statusText}`);
+        break;
+      }
+      
+      const botsData = await botsResponse.json();
+      
+      // Debug first page structure
+      if (pageCount === 1) {
+        debugInfo.raw_response_keys = Object.keys(botsData);
+        debugInfo.is_array = Array.isArray(botsData);
+        debugInfo.has_results = 'results' in botsData;
+        debugInfo.has_next = 'next' in botsData;
+      }
+      
+      const pageBots = Array.isArray(botsData) ? botsData : (botsData.results || []);
+      allBots.push(...pageBots);
+      
+      // Check for next page
+      nextUrl = botsData.next || null;
+      if (nextUrl && !nextUrl.startsWith('http')) {
+        nextUrl = `${base}${nextUrl}`;
+      }
     }
     
-    const botsData = await botsResponse.json();
-    const bots = Array.isArray(botsData) ? botsData : (botsData.results || []);
+    const bots = allBots;
     debugInfo.bots_found = bots.length;
+    debugInfo.pages_fetched = pageCount;
     
     // Step 2: For each bot, check if it's completed and get its transcript
     for (const bot of bots) {
@@ -107,8 +133,19 @@ export default async function handler(req){
         const botId = bot.id;
         const status = bot.status?.code || bot.status || '';
         
-        // Only process completed bots
-        if (status !== 'done' && status !== 'completed') {
+        // Track bot statuses for debugging
+        if (!debugInfo.bot_statuses) {
+          debugInfo.bot_statuses = {};
+        }
+        debugInfo.bot_statuses[status] = (debugInfo.bot_statuses[status] || 0) + 1;
+        
+        // Only process completed bots - check multiple status formats
+        const isCompleted = status === 'done' || 
+                          status === 'completed' || 
+                          status === 'finished' ||
+                          status === 'complete';
+        
+        if (!isCompleted) {
           continue;
         }
         
@@ -244,6 +281,7 @@ export default async function handler(req){
     },
     processed: processedTitles.slice(0, 10),
     errors: debugInfo.errors.slice(0, 5),
+    debug: debugInfo,  // Include full debug info
     region: region,
     timestamp: new Date().toISOString()
   }, 200, cors);
