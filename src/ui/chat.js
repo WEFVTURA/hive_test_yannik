@@ -323,6 +323,8 @@ export function renderChat(root){
       
       if (model === 'Mistral'){
         const mistralKey = window.MISTRAL_API_KEY || util_getEnv('VITE_MISTRAL_API_KEY','VITE_MISTRAL_API_KEY') || util_getEnv('MISTRAL','MISTRAL') || util_getEnv('MISTRAL_AI_API','MISTRAL_AI_API') || '';
+        
+        // Try direct API call if we have a key
         if (mistralKey) {
           const r = await fetch('https://api.mistral.ai/v1/chat/completions', { 
             method:'POST', 
@@ -340,7 +342,27 @@ export function renderChat(root){
           if(ragDebugEl){ ragDebugEl.textContent += `\nModel latency: ${Math.round(performance.now()-started)}ms`; } 
           return j.choices?.[0]?.message?.content||'';
         } else {
-          console.warn('Mistral API key not found, falling back to OpenAI');
+          // Use server-side proxy that has access to environment variables
+          console.log('Using Mistral proxy endpoint (server-side API key)');
+          try {
+            const r = await fetch('/api/mistral-chat-proxy', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                model: 'mistral-medium-latest',
+                messages: [{role: 'user', content: prompt}]
+              })
+            });
+            const j = await r.json();
+            if (!r.ok) { 
+              console.error('Mistral proxy error:', j);
+              throw new Error(j?.error || 'Mistral proxy error'); 
+            }
+            if(ragDebugEl){ ragDebugEl.textContent += `\nModel latency: ${Math.round(performance.now()-started)}ms (via proxy)`; }
+            return j.choices?.[0]?.message?.content || '';
+          } catch (e) {
+            console.warn('Mistral proxy failed, falling back to OpenAI:', e);
+          }
         }
       } else if (model === 'Perplexity') {
         const pplxKey = util_getEnv('VITE_PERPLEXITY','VITE_PERPLEXITY') || util_getEnv('PERPLEXITY','PERPLEXITY') || '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';
