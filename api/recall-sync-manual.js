@@ -18,12 +18,17 @@ export default async function handler(req){
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
   
   // Get environment variables
-  const RECALL_KEY = process.env.RECALL_API_KEY || process.env.RECALL_KEY || '';
+  const RECALL_KEY = process.env.RECALL_API_KEY || process.env.RECALL_KEY || process.env.RECALL || '';
   const SUPABASE_URL = process.env.SUPABASE_URL || '';
   const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SERVICE_KEY || '';
   
   if (!RECALL_KEY || !SUPABASE_URL || !SERVICE_KEY){
-    return jres({ error: 'Missing configuration' }, 500, cors);
+    return jres({ 
+      error: 'Missing configuration',
+      has_recall: Boolean(RECALL_KEY),
+      has_supabase_url: Boolean(SUPABASE_URL),
+      has_service_key: Boolean(SERVICE_KEY)
+    }, 500, cors);
   }
   
   // Determine region
@@ -112,8 +117,12 @@ export default async function handler(req){
           const items = Array.isArray(data) ? data : (data.results || data.data || []);
           
           // Add ALL items first to see what we're getting
-          debugInfo.attempts[debugInfo.attempts.length - 1].itemCount = items.length;
-          debugInfo.attempts[debugInfo.attempts.length - 1].sampleItem = items.length > 0 ? JSON.stringify(items[0]).slice(0, 200) : 'no items';
+          const attemptInfo = debugInfo.attempts[debugInfo.attempts.length - 1];
+          attemptInfo.itemCount = items.length;
+          attemptInfo.hasResults = 'results' in data;
+          attemptInfo.hasData = 'data' in data;
+          attemptInfo.responseKeys = Object.keys(data).slice(0, 10);
+          attemptInfo.sampleItem = items.length > 0 ? JSON.stringify(items[0]).slice(0, 200) : 'no items';
           
           // Filter for completed bots/transcripts
           const completed = items.filter(item => {

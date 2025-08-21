@@ -7,10 +7,20 @@ export default async function handler(req){
   if (req.method !== 'POST') return jres({ error:'method_not_allowed' }, 405);
   try{
     const { title='', content='' } = await req.json();
+    // Check all possible env var names
     const key = process.env.MISTRAL_API_KEY || process.env.MISTRAL || process.env.VITE_MISTRAL_API_KEY || '';
+    
+    // Debug: Check which env vars are actually available
+    const envDebug = {
+      has_MISTRAL_API_KEY: Boolean(process.env.MISTRAL_API_KEY),
+      has_MISTRAL: Boolean(process.env.MISTRAL),
+      has_VITE_MISTRAL_API_KEY: Boolean(process.env.VITE_MISTRAL_API_KEY),
+      key_length: key ? key.length : 0
+    };
+    
     if (!key) {
-      console.error('Missing Mistral API key - checked MISTRAL_API_KEY, MISTRAL, VITE_MISTRAL_API_KEY');
-      return jres({ error:'missing_mistral_key', checked: ['MISTRAL_API_KEY', 'MISTRAL', 'VITE_MISTRAL_API_KEY'] }, 500);
+      console.error('Missing Mistral API key', envDebug);
+      return jres({ error:'missing_mistral_key', debug: envDebug }, 500);
     }
     const prompt = `You are a concise meeting summarizer. Summarize the following meeting transcript into 5 bullet points, include key decisions and action items. Title: ${title}. Transcript (truncated):\n` + String(content).slice(0, 12000);
     const body = { model: 'mistral-large-latest', messages: [ { role:'user', content: prompt } ] };
