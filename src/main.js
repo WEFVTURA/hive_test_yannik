@@ -733,6 +733,9 @@ async function renderMeetingsHub(root){
       <button class="button primary" id="recallBrowserBtn" style="margin-left:8px" title="Browse Recall Transcripts">
         <i data-lucide="database" class="icon"></i> Browse Recall
       </button>
+      <button class="button primary" id="transcriptListBtn" style="margin-left:8px" title="Transcript List">
+        <i data-lucide="list" class="icon"></i> Transcript List
+      </button>
       <button class="button" id="directImportBtn" style="margin-left:8px" title="Direct Import">
         <i data-lucide="file-plus" class="icon"></i> Import
       </button>
@@ -1410,6 +1413,11 @@ function setupMeetingsHubInteractions() {
   // Recall Browser button
   document.getElementById('recallBrowserBtn')?.addEventListener('click', () => {
     location.hash = 'meetings/recall';
+  });
+  
+  // Transcript List button
+  document.getElementById('transcriptListBtn')?.addEventListener('click', () => {
+    location.hash = 'transcripts';
   });
   
   // Debug button
@@ -2376,6 +2384,250 @@ window.copyTranscript = async (idx) => {
   }
 };
 
+// Transcript List View - Direct from Recall API
+async function renderTranscriptList(root) {
+  root.innerHTML = `
+    <div class="content-head">
+      <div class="title">
+        <i data-lucide="list" class="icon"></i>
+        Transcript List (Direct API)
+      </div>
+      <button class="button ghost" id="backToHub" style="margin-left:12px">
+        <i data-lucide="arrow-left" class="icon"></i> Back to Hub
+      </button>
+      <button class="button primary" id="refreshTranscriptsBtn" style="margin-left:auto">
+        <i data-lucide="refresh-cw" class="icon"></i> Refresh
+      </button>
+    </div>
+    <div class="content-body">
+      <div style="padding: 24px;">
+        <div id="transcriptLoading" style="text-align: center; padding: 48px;">
+          <div class="loading">Fetching transcripts from Recall API...</div>
+        </div>
+        
+        <div id="transcriptContent" style="display: none;">
+          <div style="margin-bottom: 24px; padding: 16px; background: var(--panel-1); border-radius: 8px;">
+            <h3 style="margin: 0 0 8px 0;">Available Transcripts</h3>
+            <p style="margin: 0; color: var(--muted); font-size: 13px;">
+              Using /api/v1/transcript/ endpoint directly
+            </p>
+          </div>
+          
+          <div id="transcriptListContainer">
+            <!-- Transcripts will be loaded here -->
+          </div>
+        </div>
+        
+        <div id="transcriptError" style="display: none; text-align: center; padding: 48px;">
+          <i data-lucide="alert-circle" style="width: 48px; height: 48px; color: var(--danger);"></i>
+          <h3>Failed to load transcripts</h3>
+          <p id="errorMsg" style="color: var(--muted);"></p>
+          <div id="debugInfo" style="margin-top: 16px; padding: 16px; background: var(--panel-2); border-radius: 8px; text-align: left; font-family: monospace; font-size: 12px; max-width: 600px; margin-left: auto; margin-right: auto;">
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+  
+  lucide.createIcons();
+  
+  // Load transcripts
+  loadTranscripts();
+  
+  // Event handlers
+  document.getElementById('backToHub')?.addEventListener('click', () => {
+    location.hash = 'meetings/hub';
+  });
+  
+  document.getElementById('refreshTranscriptsBtn')?.addEventListener('click', () => {
+    loadTranscripts();
+  });
+  
+  async function loadTranscripts() {
+    const loadingEl = document.getElementById('transcriptLoading');
+    const contentEl = document.getElementById('transcriptContent');
+    const errorEl = document.getElementById('transcriptError');
+    
+    loadingEl.style.display = 'block';
+    contentEl.style.display = 'none';
+    errorEl.style.display = 'none';
+    
+    try {
+      const response = await fetch('/api/recall-transcript-list');
+      const data = await response.json();
+      
+      console.log('Transcript List API response:', data);
+      
+      if (!data.success) {
+        throw new Error(data.error || 'Failed to load transcripts');
+      }
+      
+      const transcripts = data.transcripts || [];
+      const container = document.getElementById('transcriptListContainer');
+      
+      if (transcripts.length === 0) {
+        container.innerHTML = `
+          <div style="text-align: center; padding: 48px; color: var(--muted);">
+            <i data-lucide="file-x" style="width: 48px; height: 48px;"></i>
+            <h3>No transcripts found</h3>
+            <p>The /api/v1/transcript/ endpoint returned no results</p>
+            <div style="margin-top: 16px; padding: 12px; background: var(--panel-2); border-radius: 8px;">
+              <strong>Debug Info:</strong><br>
+              Base URL: ${data.debug?.base || 'unknown'}<br>
+              Endpoint: ${data.debug?.endpoint || 'unknown'}<br>
+              Attempts: ${data.debug?.attempts?.length || 0}
+            </div>
+          </div>
+        `;
+      } else {
+        container.innerHTML = `
+          <div style="margin-bottom: 16px; padding: 12px; background: var(--success-bg); border-radius: 8px;">
+            ✅ Found ${transcripts.length} transcript(s) from Recall API
+          </div>
+          <div style="display: grid; gap: 16px;">
+            ${transcripts.map((t, idx) => `
+              <div class="transcript-card" style="border: 1px solid var(--border); border-radius: 12px; padding: 16px; background: var(--panel-1);">
+                <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 12px;">
+                  <div>
+                    <h4 style="margin: 0 0 4px 0; color: var(--primary);">
+                      ${t.title || 'Untitled Transcript'}
+                    </h4>
+                    <div style="font-size: 12px; color: var(--muted);">
+                      ID: ${t.id}<br>
+                      Recording ID: ${t.recording_id || 'N/A'}<br>
+                      Created: ${new Date(t.created_at).toLocaleString()}<br>
+                      Status: ${t.status}
+                    </div>
+                  </div>
+                  <span class="badge ${t.has_transcript ? 'success' : 'warning'}" 
+                        style="padding: 6px 10px; border-radius: 6px; font-size: 12px;">
+                    ${t.has_transcript ? '✅ Has Content' : '⚠️ No Content'}
+                  </span>
+                </div>
+                
+                ${t.meeting_url ? `
+                  <div style="font-size: 12px; color: var(--muted); margin-bottom: 12px;">
+                    🔗 ${t.meeting_url}
+                  </div>
+                ` : ''}
+                
+                ${t.transcript_preview ? `
+                  <div style="margin-bottom: 12px;">
+                    <div style="font-weight: 600; margin-bottom: 6px; font-size: 13px;">Preview:</div>
+                    <div style="background: var(--panel-2); padding: 12px; border-radius: 6px; font-size: 12px; line-height: 1.5; max-height: 150px; overflow: auto;">
+                      <pre style="white-space: pre-wrap; margin: 0; font-family: inherit;">
+${t.transcript_preview}
+                      </pre>
+                    </div>
+                    <div style="font-size: 11px; color: var(--muted); margin-top: 4px;">
+                      📝 ${t.transcript_length} characters total
+                    </div>
+                  </div>
+                ` : `
+                  <div style="padding: 12px; background: var(--panel-2); border-radius: 6px; color: var(--muted); font-size: 12px;">
+                    No transcript content available
+                  </div>
+                `}
+                
+                <div style="display: flex; gap: 8px;">
+                  ${t.has_transcript ? `
+                    <button class="button sm primary" onclick="importTranscriptDirect('${t.id}', ${idx})">
+                      <i data-lucide="download" class="icon"></i> Import to Meetings
+                    </button>
+                  ` : ''}
+                  <button class="button sm ghost" onclick="viewTranscriptDebug(${idx})">
+                    <i data-lucide="code" class="icon"></i> View Debug
+                  </button>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        `;
+      }
+      
+      loadingEl.style.display = 'none';
+      contentEl.style.display = 'block';
+      lucide.createIcons();
+      
+      // Store for access
+      window.transcriptListData = transcripts;
+      
+    } catch (error) {
+      loadingEl.style.display = 'none';
+      errorEl.style.display = 'block';
+      document.getElementById('errorMsg').textContent = error.message;
+      document.getElementById('debugInfo').innerHTML = `
+        <strong>Error Details:</strong><br>
+        ${error.message}<br><br>
+        <strong>Stack:</strong><br>
+        ${error.stack || 'No stack trace'}
+      `;
+    }
+  }
+}
+
+// Helper functions for Transcript List
+window.importTranscriptDirect = async (transcriptId, idx) => {
+  const transcript = window.transcriptListData?.[idx];
+  if (!transcript?.full_transcript) {
+    window.showToast && window.showToast('No transcript content to import');
+    return;
+  }
+  
+  try {
+    const response = await fetch('/api/transcript-import-direct', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title: transcript.title || `Transcript ${transcriptId}`,
+        content: transcript.full_transcript,
+        source: 'recall-api'
+      })
+    });
+    
+    const result = await response.json();
+    
+    if (result.success) {
+      window.showToast && window.showToast('Transcript imported successfully!');
+      setTimeout(() => {
+        location.hash = 'meetings/hub';
+      }, 1500);
+    } else {
+      window.showToast && window.showToast(`Import failed: ${result.error}`);
+    }
+  } catch (e) {
+    window.showToast && window.showToast(`Error: ${e.message}`);
+  }
+};
+
+window.viewTranscriptDebug = (idx) => {
+  const transcript = window.transcriptListData?.[idx];
+  if (!transcript) return;
+  
+  const modal = document.createElement('div');
+  modal.style.cssText = `
+    position: fixed; inset: 0; background: rgba(0,0,0,0.8); 
+    z-index: 1000; display: flex; align-items: center; justify-content: center;
+  `;
+  
+  modal.innerHTML = `
+    <div style="background: var(--panel); border-radius: 12px; max-width: 90%; max-height: 90%; 
+                overflow: hidden; display: flex; flex-direction: column;">
+      <div style="padding: 16px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between;">
+        <h3 style="margin: 0;">Debug Info - Transcript ${transcript.id}</h3>
+        <button onclick="this.closest('div[style*=fixed]').remove()" style="background: none; border: none; cursor: pointer; font-size: 24px;">×</button>
+      </div>
+      <div style="padding: 16px; overflow-y: auto; max-height: 70vh;">
+        <pre style="white-space: pre-wrap; font-family: monospace; font-size: 12px; line-height: 1.4;">
+${JSON.stringify(transcript, null, 2)}
+        </pre>
+      </div>
+    </div>
+  `;
+  
+  document.body.appendChild(modal);
+};
+
 window.copyToClipboard = async (noteId) => {
   const content = document.getElementById(`content-${noteId}`);
   if (content) {
@@ -2563,6 +2815,10 @@ async function renderRoute(){
   }
   else if (hash === 'meetings/recall'){
     await renderRecallBrowser(content);
+    await renderSpacesList();
+  }
+  else if (hash === 'transcripts'){
+    await renderTranscriptList(content);
     await renderSpacesList();
   }
   else { 
