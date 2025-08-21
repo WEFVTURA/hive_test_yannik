@@ -4,7 +4,7 @@ export function getPrefs(){
 	let p = {};
 	try{ p = JSON.parse(localStorage.getItem(KEY)||'{}'); }catch{}
 	return {
-		profileName: p.profileName || 'User',
+		profileName: p.profileName || localStorage.getItem('hive_user_name') || 'User',
 		defaultModel: p.defaultModel || 'Mistral',
 		searchProvider: p.searchProvider || 'mistral',
 		topK: Number.isFinite(p.topK) ? p.topK : 6,
@@ -122,9 +122,14 @@ export async function openSettingsModal(){
 		document.documentElement.setAttribute('data-theme', map[val]||'dark');
 	});
 
-	scrim.querySelector('#saveBtn').onclick = ()=>{
+	scrim.querySelector('#saveBtn').onclick = async ()=>{
+		const nameInput = scrim.querySelector('#pName');
+		if(nameInput && nameInput.value) {
+			localStorage.setItem('hive_user_name', nameInput.value);
+		}
 		const next = {
 			...p,
+			profileName: nameInput?.value || p.profileName,
 			defaultModel: scrim.querySelector('#sModel').value,
 			searchProvider: scrim.querySelector('#sProvider').value,
 			topK: parseInt(scrim.querySelector('#sTopK').value,10)||6,
@@ -208,11 +213,20 @@ export async function openProfileModal(){
 		const name = scrim.querySelector('#pName').value || '';
 		try{ 
 			await profile_upsert(me.id, { full_name: name });
+			// Store the name for future use
+			if(name) {
+				localStorage.setItem('hive_user_name', name);
+				// Update prefs
+				const prefs = getPrefs();
+				prefs.profileName = name;
+				savePrefs(prefs);
+			}
 			// Update sidebar brand immediately
-			const brandEl = document.querySelector('.brand');
-			if (brandEl){ brandEl.textContent = name || brandEl.textContent; }
+			const brandEls = document.querySelectorAll('.brand');
+			brandEls.forEach(el => { if(el) el.textContent = name || 'User'; });
 		}catch{}
 		close();
+		location.reload(); // Reload to apply changes everywhere
 	};
 }
 

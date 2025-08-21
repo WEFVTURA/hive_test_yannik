@@ -801,7 +801,7 @@ async function renderMeetingsHub(root){
           <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 12px;">
             <span style="font-weight: 600;">Filter:</span>
             <button class="button sm filter-btn active" data-filter="all">All (${notes.length})</button>
-            <button class="button sm filter-btn" data-filter="recall">Recall (${notes.filter(n => n.title?.includes('Recall')).length})</button>
+            <button class="button sm filter-btn" data-filter="transcripts">Transcripts (${notes.filter(n => n.title?.includes('[Meeting]')).length})</button>
             <button class="button sm filter-btn" data-filter="today">Today (${notes.filter(n => new Date(n.created_at).toDateString() === new Date().toDateString()).length})</button>
             <button class="button sm filter-btn" data-filter="week">This Week (${notes.filter(n => n.created_at > new Date(Date.now() - 7*24*60*60*1000).toISOString()).length})</button>
             <div style="margin-left: auto; display: flex; gap: 8px;">
@@ -832,7 +832,7 @@ async function renderMeetingsHub(root){
                   <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 16px; align-items: start;">
                     <div>
                       <h4 style="margin: 0 0 6px 0; font-size: 16px; font-weight: 700; color: var(--primary);">
-                        ${note.title?.includes('Recall') ? '🎙️' : '📝'} ${cleanMeetingTitle(note.title)}
+                        ${note.title?.includes('[Meeting]') ? '🎙️' : '📝'} ${cleanMeetingTitle(note.title)}
                       </h4>
                       <div style="font-size: 12px; color: var(--muted); margin-bottom: 10px;">
                         📅 ${new Date(note.created_at).toLocaleDateString()}
@@ -987,8 +987,8 @@ async function renderMeetingsDashboard(root){
             <div style="color: var(--muted);">Total Meetings</div>
           </div>
           <div class="stat-card" style="padding: 16px; border: 1px solid var(--border); border-radius: 8px;">
-            <div style="font-size: 24px; font-weight: 700; color: var(--primary);">${notes.filter(n => n.title?.includes('Recall')).length}</div>
-            <div style="color: var(--muted);">Recall Transcripts</div>
+            <div style="font-size: 24px; font-weight: 700; color: var(--primary);">${notes.filter(n => n.title?.includes('[Meeting]')).length}</div>
+            <div style="color: var(--muted);">Meeting Transcripts</div>
           </div>
           <div class="stat-card" style="padding: 16px; border: 1px solid var(--border); border-radius: 8px;">
             <div style="font-size: 24px; font-weight: 700; color: var(--primary);">${notes.filter(n => n.created_at > new Date(Date.now() - 7*24*60*60*1000).toISOString()).length}</div>
@@ -1138,7 +1138,7 @@ async function renderMeetingsSearch(root){
           <input type="text" id="meetingSearchInput" placeholder="Search through all your meeting transcripts..." 
                  style="width: 100%; padding: 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 16px;">
           <div style="margin-top: 8px; display: flex; gap: 8px; flex-wrap: wrap;">
-            <button class="button sm" onclick="searchMeetings('Recall')">Recall Transcripts</button>
+            <button class="button sm" onclick="searchMeetings('transcripts')">Meeting Transcripts</button>
             <button class="button sm" onclick="searchMeetings('today')">Today</button>
             <button class="button sm" onclick="searchMeetings('this week')">This Week</button>
             <button class="button sm" onclick="searchMeetings('')">All</button>
@@ -1621,8 +1621,8 @@ function filterMeetingsHub() {
     
     // Apply filter
     switch (activeFilter) {
-      case 'recall':
-        matchesFilter = isRecall;
+      case 'transcripts':
+        matchesFilter = title.includes('[Meeting]');
         break;
       case 'today':
         matchesFilter = meetingDate.toDateString() === today.toDateString();
@@ -1772,7 +1772,7 @@ window.deleteMeeting = async (noteId) => {
 // Clean title: hide internal IDs
 function cleanMeetingTitle(title){
   if (!title) return 'Meeting';
-  return String(title).replace(/^Recall\s+[0-9a-f\-]+\s*/i,'').trim() || 'Meeting';
+  return String(title).replace(/^\[Meeting\]\s*/i,'').replace(/^\[Recall\]\s*/i,'').replace(/^Recall\s+[0-9a-f\-]+\s*/i,'').trim() || 'Meeting';
 }
 
 // Extract speaker names from JSON
@@ -1898,33 +1898,45 @@ function formatEnhancedTranscript(content, noteId) {
   
   const contentStr = typeof content === 'string' ? content : JSON.stringify(content);
   
-  // Check if it's already formatted with speaker labels (look for more patterns)
-  if (contentStr.includes('Speaker:') || contentStr.includes('Speaker 1:') || 
-      contentStr.includes('Speaker 2:') || contentStr.includes('Speaker Unknown:') ||
-      contentStr.includes('Unknown:')) {
-    return formatSpeakerBasedTranscript(contentStr);
-  }
-  
-  // Try to parse as JSON for structured data
+  // First, always try to parse as JSON since we're storing raw JSON from download URLs
   try {
-    const data = JSON.parse(contentStr);
+    let data = JSON.parse(contentStr);
     
-    // Handle array of speaker blocks
+    // Handle double-stringified JSON (happens when JSON is stored as string in DB)
+    if (typeof data === 'string') {
+      try {
+        data = JSON.parse(data);
+      } catch(e2) {
+        // It's actually a string transcript, not JSON
+      }
+    }
+    
+    // Handle array of speaker blocks (this is the primary format from Zoom recordings)
     if (Array.isArray(data)) {
-      return formatStructuredTranscript(data);
+      const formatted = formatStructuredTranscript(data);
+      if (formatted && !formatted.includes('No transcript content')) {
+        return formatted;
+      }
     }
     
     // Handle object with transcript field
-    if (data.transcript) {
+    if (data && typeof data === 'object' && data.transcript) {
       return formatStructuredTranscript(data.transcript);
     }
     
     // Handle words array
-    if (data.words && Array.isArray(data.words)) {
+    if (data && data.words && Array.isArray(data.words)) {
       return formatWordsTranscript(data.words);
     }
   } catch(e) {
-    // Not JSON, treat as plain text
+    // Not JSON, check for speaker patterns in text
+  }
+  
+  // Check if it's already formatted with speaker labels
+  if (contentStr.includes('Speaker:') || contentStr.includes('Speaker 1:') || 
+      contentStr.includes('Speaker 2:') || contentStr.includes('Speaker Unknown:') ||
+      contentStr.includes('Unknown:') || contentStr.match(/^[A-Z][a-z]+ [A-Z][a-z]+:/m)) {
+    return formatSpeakerBasedTranscript(contentStr);
   }
   
   // For plain text, try to detect speaker patterns or format nicely
@@ -2008,19 +2020,39 @@ function formatIntelligentTranscript(text) {
 
 // Format structured transcript from JSON
 function formatStructuredTranscript(data) {
-  if (!Array.isArray(data)) return formatIntelligentTranscript(JSON.stringify(data));
+  if (!Array.isArray(data)) {
+    // Try to handle as object
+    if (data && typeof data === 'object') {
+      if (data.segments) return formatStructuredTranscript(data.segments);
+      if (data.transcript) return formatStructuredTranscript(data.transcript);
+    }
+    return formatIntelligentTranscript(JSON.stringify(data));
+  }
   
   let html = '';
   const speakerMap = new Map(); // Track unique speakers
+  let lastSpeaker = null;
+  let accumulatedText = [];
+  
+  // Helper to flush accumulated text
+  const flushSpeaker = () => {
+    if (lastSpeaker && accumulatedText.length > 0) {
+      html += renderSpeakerBlock(lastSpeaker, accumulatedText.join(' '));
+      accumulatedText = [];
+    }
+  };
   
   for (const segment of data) {
     // Extract speaker name from various possible locations
     let speaker = '';
     
-    // Check for participant object (Recall format)
+    // Check for participant object (primary format from Zoom meetings)
     if (segment.participant) {
-      speaker = segment.participant.name || segment.participant.display_name || 
-                segment.participant.email || `Participant ${segment.participant.id || 'Unknown'}`;
+      const p = segment.participant;
+      // Prioritize actual name over email or ID
+      speaker = p.name || p.display_name || p.full_name || 
+                (p.email ? p.email.split('@')[0] : '') || 
+                `Participant ${p.id || 'Unknown'}`;
     }
     // Check for direct speaker fields
     else if (segment.speaker) {
@@ -2042,7 +2074,7 @@ function formatStructuredTranscript(data) {
     }
     // Default fallback
     else {
-      speaker = 'Unknown Speaker';
+      speaker = 'Speaker';
     }
     
     // Extract text content
@@ -2055,9 +2087,20 @@ function formatStructuredTranscript(data) {
       text = segment;
     }
     
+    // Group consecutive segments from the same speaker
     if (text && text.trim()) {
-      html += renderSpeakerBlock(speaker, text);
+      if (speaker === lastSpeaker) {
+        accumulatedText.push(text.trim());
+      } else {
+        flushSpeaker();
+        lastSpeaker = speaker;
+        accumulatedText = [text.trim()];
+      }
     }
+  }
+  
+  // Flush any remaining text
+  flushSpeaker();
   }
   
   // If no content was generated, show debug info
@@ -2161,7 +2204,7 @@ window.updateMeetingTitle = async (noteId, newTitle) => {
     const { error } = await sb
       .from('notes')
       .update({ 
-        title: `[Recall] ${newTitle}`,
+        title: `[Meeting] ${newTitle}`,
         metadata: metadata
       })
       .eq('id', noteId);
@@ -2171,7 +2214,7 @@ window.updateMeetingTitle = async (noteId, newTitle) => {
     // Update in cache
     const note = window.notesCache?.find(n => n.id === noteId);
     if (note) {
-      note.title = `[Recall] ${newTitle}`;
+      note.title = `[Meeting] ${newTitle}`;
       note.metadata = metadata;
     }
     
@@ -3876,8 +3919,20 @@ async function hydrateProfileUI(){
 	}catch{}
 	if (brandEl){
 		const fallbackName = (me?.email||'User');
-		brandEl.textContent = fullName || brandEl.textContent || fallbackName;
+		const displayName = fullName || fallbackName;
+		brandEl.textContent = displayName;
+		// Store the name for use in prefs
+		if (fullName) {
+			localStorage.setItem('hive_user_name', fullName);
+		}
 	}
+	// Update all brand elements
+	const allBrandEls = document.querySelectorAll('.brand');
+	allBrandEls.forEach(el => {
+		if (el && el !== brandEl) {
+			el.textContent = fullName || (me?.email||'User');
+		}
+	});
 	if (avatarEl){
 		if (avatarUrl){
 			avatarEl.style.backgroundImage = `url('${avatarUrl}')`;
