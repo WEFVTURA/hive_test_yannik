@@ -2030,6 +2030,9 @@ async function renderRecallBrowser(root) {
       <button class="button primary" id="refreshRecallBtn" style="margin-left:auto">
         <i data-lucide="refresh-cw" class="icon"></i> Refresh
       </button>
+      <button class="button ghost" id="testRecallBtn" style="margin-left:8px">
+        🔍 Test API
+      </button>
     </div>
     <div class="content-body">
       <div style="padding: 24px;">
@@ -2083,6 +2086,57 @@ async function renderRecallBrowser(root) {
     loadRecallTranscripts();
   });
   
+  document.getElementById('testRecallBtn')?.addEventListener('click', async () => {
+    const btn = document.getElementById('testRecallBtn');
+    btn.textContent = '⏳ Testing...';
+    
+    try {
+      // Test multiple endpoints
+      const tests = [
+        { name: 'Recordings API', url: '/api/recall-fetch-recordings' },
+        { name: 'List Transcripts', url: '/api/recall-list-transcripts' },
+        { name: 'List Bots', url: '/api/recall-list-bots' },
+        { name: 'Test Connection', url: '/api/recall-test-connection' }
+      ];
+      
+      let results = '🔍 API Test Results:\n\n';
+      
+      for (const test of tests) {
+        const resp = await fetch(test.url);
+        const data = await resp.json();
+        
+        results += `${test.name}:\n`;
+        results += `  Status: ${resp.ok ? '✅' : '❌'}\n`;
+        
+        if (test.name === 'Recordings API') {
+          results += `  Transcripts found: ${data.transcripts?.length || 0}\n`;
+          results += `  Bots found: ${data.bot_count || 0}\n`;
+          results += `  Recordings found: ${data.recording_count || 0}\n`;
+        } else if (test.name === 'List Transcripts') {
+          results += `  Total bots: ${data.total_bots || 0}\n`;
+          results += `  Transcripts: ${data.transcripts?.length || 0}\n`;
+        } else if (test.name === 'List Bots') {
+          results += `  Bots: ${data.total || 0}\n`;
+          results += `  Completed: ${data.completed || 0}\n`;
+        } else if (test.name === 'Test Connection') {
+          results += `  Has key: ${data.has_key ? '✅' : '❌'}\n`;
+          results += `  Working endpoint: ${data.working_endpoint || 'none'}\n`;
+          results += `  Bot count: ${data.bot_count || 0}\n`;
+        }
+        
+        results += '\n';
+      }
+      
+      console.log('Full API test results:', { tests });
+      alert(results);
+      
+    } catch(e) {
+      alert(`Test failed: ${e.message}`);
+    } finally {
+      btn.textContent = '🔍 Test API';
+    }
+  });
+  
   async function loadRecallTranscripts() {
     const loadingEl = document.getElementById('recallLoading');
     const contentEl = document.getElementById('recallContent');
@@ -2093,8 +2147,15 @@ async function renderRecallBrowser(root) {
     errorEl.style.display = 'none';
     
     try {
-      const response = await fetch('/api/recall-list-transcripts');
-      const data = await response.json();
+      // First try the new recordings endpoint
+      let response = await fetch('/api/recall-fetch-recordings');
+      let data = await response.json();
+      
+      // If that fails or returns no transcripts, fall back to the original endpoint
+      if (!data.success || !data.transcripts || data.transcripts.length === 0) {
+        response = await fetch('/api/recall-list-transcripts');
+        data = await response.json();
+      }
       
       if (!data.success) {
         throw new Error(data.error || 'Failed to load transcripts');
