@@ -1440,7 +1440,7 @@ function setupMeetingsHubInteractions() {
     btn.innerHTML = '⏳ Testing...';
     
     try {
-      const resp = await fetch('/api/recall-test-auth');
+      const resp = await fetch('/api/test-recall-auth');
       const data = await resp.json();
       
       const modal = document.createElement('div');
