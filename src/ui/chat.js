@@ -333,7 +333,7 @@ export function renderChat(root){
               'Content-Type':'application/json' 
             }, 
             body: JSON.stringify({ 
-              model:'mistral-medium-latest', 
+              model:'mistral-large-latest', 
               messages:[{role:'user',content:prompt}] 
             }) 
           });
@@ -349,7 +349,7 @@ export function renderChat(root){
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
-                model: 'mistral-medium-latest',
+                model: 'mistral-large-latest',
                 messages: [{role: 'user', content: prompt}]
               })
             });
@@ -596,7 +596,7 @@ export function renderChat(root){
             if (mistralKey) {
               const sys = 'You are an expert research assistant. Provide a comprehensive, well-researched analysis with multiple perspectives and actionable insights. Structure your response with clear sections and bullet points.';
               const requestBody = { 
-                model: 'mistral-medium-latest', 
+                model: 'mistral-large-latest', 
                 temperature: 0.4, 
                 messages: [
                   { role: 'system', content: sys },
@@ -635,7 +635,7 @@ export function renderChat(root){
             if (mistralKey) {
               try {
                 const requestBody = { 
-                  model: 'mistral-medium-latest', 
+                  model: 'mistral-large-latest', 
                   temperature: 0.4, 
                   messages: [
                     { role: 'system', content: 'You are an expert research assistant. Provide comprehensive analysis.' },
