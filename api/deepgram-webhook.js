@@ -19,14 +19,55 @@ export default async function handler(req){
 
   const spaceId = (new URL(req.url)).searchParams.get('space_id') || body?.space_id || '';
   const title = (new URL(req.url)).searchParams.get('title') || body?.title || `Deepgram ${new Date().toLocaleString()}`;
-  const text = body?.results?.channels?.[0]?.alternatives?.[0]?.transcript
-    || body?.results?.channels?.[0]?.alternatives?.[0]?.paragraphs?.transcript
-    || body?.transcript || '';
+  // Enhanced extraction with speaker diarization
+  let text = '';
+  let metadata = {};
+  
+  // Try to get speaker-formatted transcript first
+  if (body?.results?.utterances && Array.isArray(body.results.utterances)) {
+    const speakerTranscript = body.results.utterances
+      .map(u => `Speaker ${u.speaker}: ${u.transcript}`)
+      .join('\n\n');
+    if (speakerTranscript) {
+      text = speakerTranscript;
+      metadata.has_speakers = true;
+    }
+  }
+  
+  // Fallback to paragraphs or regular transcript
+  if (!text) {
+    text = body?.results?.channels?.[0]?.alternatives?.[0]?.paragraphs?.transcript
+      || body?.results?.channels?.[0]?.alternatives?.[0]?.transcript
+      || body?.transcript || '';
+  }
+  
+  // Store additional metadata if available
+  if (body?.metadata) {
+    metadata.duration = body.metadata.duration;
+    metadata.channels = body.metadata.channels;
+    metadata.request_id = body.metadata.request_id;
+  }
 
   if (!text){ return new Response(JSON.stringify({ ok:true, saved:false }), { status:200, headers:{...cors,'Content-Type':'application/json'} }); }
 
   try{
-    await fetch(`${SUPABASE_URL}/rest/v1/notes`, { method:'POST', headers:{ 'Content-Type':'application/json', apikey:SERVICE_KEY, Authorization:`Bearer ${SERVICE_KEY}` }, body: JSON.stringify({ space_id: spaceId||null, title, content: text }) });
+    // Include metadata in the title if we have speaker info
+    const enhancedTitle = metadata.has_speakers ? `${title} (with speakers)` : title;
+    
+    await fetch(`${SUPABASE_URL}/rest/v1/notes`, { 
+      method: 'POST', 
+      headers: { 
+        'Content-Type': 'application/json', 
+        apikey: SERVICE_KEY, 
+        Authorization: `Bearer ${SERVICE_KEY}` 
+      }, 
+      body: JSON.stringify({ 
+        space_id: spaceId || null, 
+        title: enhancedTitle, 
+        content: text,
+        metadata: metadata // Store additional info if your schema supports it
+      }) 
+    });
   }catch{}
 
   return new Response(JSON.stringify({ ok:true, saved:true }), { status:200, headers:{...cors,'Content-Type':'application/json'} });

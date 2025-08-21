@@ -59,9 +59,31 @@ export async function renderTxFiles(root){
       }
       completeProgress(pId,true);
       const url = bucket.getPublicUrl(path).data.publicUrl;
-      const r = await fetch('/api/deepgram-upload',{ method:'POST', headers:{ Authorization:`Bearer ${ (window.DEEPGRAM_API_KEY||'') }`, 'Content-Type':'application/json' }, body: JSON.stringify({ url }) });
+      const r = await fetch('/api/deepgram-upload',{ 
+        method:'POST', 
+        headers:{ 
+          Authorization:`Bearer ${ (window.DEEPGRAM_API_KEY||'') }`, 
+          'Content-Type':'application/json' 
+        }, 
+        body: JSON.stringify({ 
+          url,
+          space_id: localStorage.getItem('hive_meetings_space_id') || null,
+          title: (file.name||'Audio').replace(/\.[^/.]+$/,'')
+        }) 
+      });
       const j = await r.json();
-      if (j?.text){ const n=await db_createNote(localStorage.getItem('hive_meetings_space_id')||null); await db_updateNote(n.id,{ title:(file.name||'Audio').replace(/\.[^/.]+$/,''), content:j.text||'' }); document.getElementById('txFilesStatus').textContent='Transcript saved.'; }
+      
+      if (j?.text || j?.speaker_transcript || j?.formatted_transcript) { 
+        const n = await db_createNote(localStorage.getItem('hive_meetings_space_id')||null); 
+        
+        // Use speaker transcript if available, otherwise formatted or regular
+        const content = j.speaker_transcript || j.formatted_transcript || j.text || '';
+        const hasSpeakers = !!j.speaker_transcript || !!j.utterances;
+        const title = `${(file.name||'Audio').replace(/\.[^/.]+$/,'')}${hasSpeakers ? ' (with speakers)' : ''}`;
+        
+        await db_updateNote(n.id, { title, content }); 
+        document.getElementById('txFilesStatus').textContent = hasSpeakers ? 'Transcript with speakers saved.' : 'Transcript saved.'; 
+      }
       else { document.getElementById('txFilesStatus').textContent='Deepgram accepted job; waiting for webhook.'; }
     }catch{ completeProgress(pId,false); document.getElementById('txFilesStatus').textContent='Upload failed.'; }
   });
