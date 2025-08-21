@@ -71,9 +71,7 @@ app.innerHTML = `
       <button class="button" id="simplifiedViewBtn" style="width:100%"><i data-lucide="smartphone" class="icon" aria-hidden="true"></i> Simplified view</button>
       
       <div class="section">Transcripts</div>
-      <button class="button" id="meetingsDashBtn" style="width:100%"><i data-lucide="calendar" class="icon" aria-hidden="true"></i> Meetings Dashboard</button>
-      <button class="button" id="meetingsListBtn" style="width:100%"><i data-lucide="list" class="icon" aria-hidden="true"></i> Meeting Notes</button>
-      <button class="button" id="meetingsSearchBtn" style="width:100%"><i data-lucide="search" class="icon" aria-hidden="true"></i> Meeting Search</button>
+      <button class="button" id="meetingsHubBtn" style="width:100%"><i data-lucide="calendar" class="icon" aria-hidden="true"></i> Meetings Hub</button>
 
       <div class="section">Giannandrea's Library</div>
       <div class="nav-group" id="spacesList"></div>
@@ -234,12 +232,8 @@ askBtn?.addEventListener('click', ()=>{
 });
 
 // Meetings navigation
-const meetingsDashBtn = document.getElementById('meetingsDashBtn');
-const meetingsListBtn = document.getElementById('meetingsListBtn');
-const meetingsSearchBtn = document.getElementById('meetingsSearchBtn');
-meetingsDashBtn?.addEventListener('click', ()=>{ location.hash = 'meetings/dashboard'; });
-meetingsListBtn?.addEventListener('click', ()=>{ location.hash = 'meetings/list'; });
-meetingsSearchBtn?.addEventListener('click', ()=>{ location.hash = 'meetings/search'; });
+const meetingsHubBtn = document.getElementById('meetingsHubBtn');
+meetingsHubBtn?.addEventListener('click', ()=>{ location.hash = 'meetings/hub'; });
 
 // Tour trigger
 document.getElementById('openGuide')?.addEventListener('click', async()=>{
@@ -666,7 +660,164 @@ async function openSpaceOptions(space){
   renderRoute();
 }
 
-// Meeting transcript views
+// Comprehensive Meetings Hub (combines dashboard, list, and search)
+async function renderMeetingsHub(root){
+  root.innerHTML = `
+    <div class="content-head">
+      <div class="title">
+        <i data-lucide="calendar" class="icon"></i>
+        Meetings Hub
+      </div>
+      <div class="search-bar" style="flex: 1; max-width: 400px; margin-left: 16px;">
+        <input type="text" id="meetingsSearch" placeholder="Search meetings..." 
+               style="width: 100%; padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px; font-size: 14px;">
+      </div>
+    </div>
+    <div class="content-body">
+      <div id="meetingsHubContent">
+        <div class="loading">Loading meetings...</div>
+      </div>
+    </div>
+  `;
+  
+  lucide.createIcons();
+  
+  try {
+    // Fetch meeting data from backend API
+    const response = await fetch('/api/meetings-data');
+    const data = await response.json();
+    
+    if (!data.success) {
+      throw new Error(data.message || 'Failed to load meetings');
+    }
+    
+    const notes = data.notes || [];
+    
+    const hubContent = document.getElementById('meetingsHubContent');
+    if (notes && notes.length > 0) {
+      // Render comprehensive view
+      hubContent.innerHTML = `
+        <!-- Stats Dashboard -->
+        <div class="stats-section" style="margin-bottom: 32px;">
+          <h3 style="margin-bottom: 16px; color: var(--primary);">📊 Overview</h3>
+          <div class="stats-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px;">
+            <div class="stat-card" style="padding: 16px; border: 1px solid var(--border); border-radius: 8px; text-align: center;">
+              <div style="font-size: 28px; font-weight: 700; color: var(--primary);">${notes.length}</div>
+              <div style="color: var(--muted); font-size: 14px;">Total Meetings</div>
+            </div>
+            <div class="stat-card" style="padding: 16px; border: 1px solid var(--border); border-radius: 8px; text-align: center;">
+              <div style="font-size: 28px; font-weight: 700; color: var(--accent);">${notes.filter(n => n.title?.includes('Recall')).length}</div>
+              <div style="color: var(--muted); font-size: 14px;">Recall Transcripts</div>
+            </div>
+            <div class="stat-card" style="padding: 16px; border: 1px solid var(--border); border-radius: 8px; text-align: center;">
+              <div style="font-size: 28px; font-weight: 700; color: var(--success);">${notes.filter(n => n.created_at > new Date(Date.now() - 7*24*60*60*1000).toISOString()).length}</div>
+              <div style="color: var(--muted); font-size: 14px;">This Week</div>
+            </div>
+            <div class="stat-card" style="padding: 16px; border: 1px solid var(--border); border-radius: 8px; text-align: center;">
+              <div style="font-size: 28px; font-weight: 700; color: var(--warning);">${Math.round(notes.reduce((acc, n) => acc + (n.content?.length || 0), 0) / 1000)}K</div>
+              <div style="color: var(--muted); font-size: 14px;">Total Characters</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Filter Controls -->
+        <div class="filter-section" style="margin-bottom: 24px; padding: 16px; background: var(--panel-2); border-radius: 8px;">
+          <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+            <span style="font-weight: 600;">Filter:</span>
+            <button class="button sm filter-btn active" data-filter="all">All (${notes.length})</button>
+            <button class="button sm filter-btn" data-filter="recall">Recall (${notes.filter(n => n.title?.includes('Recall')).length})</button>
+            <button class="button sm filter-btn" data-filter="today">Today (${notes.filter(n => new Date(n.created_at).toDateString() === new Date().toDateString()).length})</button>
+            <button class="button sm filter-btn" data-filter="week">This Week (${notes.filter(n => n.created_at > new Date(Date.now() - 7*24*60*60*1000).toISOString()).length})</button>
+            <div style="margin-left: auto; display: flex; gap: 8px;">
+              <select id="sortMeetings" style="padding: 6px 8px; border: 1px solid var(--border); border-radius: 4px; font-size: 12px;">
+                <option value="date-desc">📅 Newest First</option>
+                <option value="date-asc">📅 Oldest First</option>
+                <option value="title">📝 Title A-Z</option>
+                <option value="size">📊 By Size</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- Meetings List -->
+        <div class="meetings-section">
+          <h3 style="margin-bottom: 16px; color: var(--primary);">💬 Meeting Transcripts</h3>
+          <div id="meetingsList">
+            ${notes.map(note => `
+              <div class="meeting-card" data-id="${note.id}" data-title="${(note.title || '').toLowerCase()}" data-date="${note.created_at}" 
+                   style="margin-bottom: 16px; border: 1px solid var(--border); border-radius: 12px; overflow: hidden; transition: all 0.2s;">
+                <div class="meeting-header" style="padding: 20px; background: var(--panel-1); cursor: pointer;" onclick="toggleMeetingExpand('${note.id}')">
+                  <div style="display: flex; justify-content: between; align-items: start;">
+                    <div style="flex: 1;">
+                      <h4 style="margin: 0 0 8px 0; font-size: 18px; font-weight: 600; color: var(--primary);">
+                        ${note.title?.includes('Recall') ? '🎙️' : '📝'} ${note.title || 'Untitled Meeting'}
+                      </h4>
+                      <div style="font-size: 14px; color: var(--muted); margin-bottom: 12px;">
+                        📅 ${new Date(note.created_at).toLocaleDateString()} at ${new Date(note.created_at).toLocaleTimeString()} 
+                        • 📊 ${(note.content?.length || 0).toLocaleString()} characters
+                        • ⏱️ ~${Math.ceil((note.content?.length || 0) / 1000)} min read
+                      </div>
+                      <!-- Preview -->
+                      <div class="meeting-preview" style="background: var(--panel-2); padding: 12px; border-radius: 6px; border-left: 3px solid var(--accent);">
+                        ${formatTranscriptContent(note.content, true)}
+                      </div>
+                    </div>
+                    <div style="margin-left: 16px; display: flex; flex-direction: column; gap: 8px;">
+                      <button class="button ghost sm" onclick="event.stopPropagation(); toggleMeetingExpand('${note.id}')" title="Expand">
+                        <i data-lucide="chevron-down" id="chevron-${note.id}"></i>
+                      </button>
+                      <button class="button ghost sm" onclick="event.stopPropagation(); copyMeetingText('${note.id}')" title="Copy">
+                        <i data-lucide="copy"></i>
+                      </button>
+                      <button class="button ghost sm" onclick="event.stopPropagation(); downloadMeeting('${note.id}', '${note.title}')" title="Download">
+                        <i data-lucide="download"></i>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                <div id="meeting-full-${note.id}" class="meeting-full" style="display: none; padding: 24px; background: var(--background); border-top: 1px solid var(--border);">
+                  <div style="max-height: 500px; overflow-y: auto; padding-right: 8px;">
+                    ${formatTranscriptContent(note.content, false)}
+                  </div>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      `;
+      
+      // Add functionality
+      setupMeetingsHubInteractions();
+      
+    } else {
+      hubContent.innerHTML = `
+        <div class="empty-state" style="text-align: center; padding: 60px; color: var(--muted);">
+          <i data-lucide="calendar-x" style="width: 64px; height: 64px; margin-bottom: 24px;"></i>
+          <h3>No meetings found</h3>
+          <p style="margin-top: 8px;">Your meeting transcripts will appear here once imported</p>
+          <div style="margin-top: 24px;">
+            <button class="button" onclick="location.hash = 'space/' + localStorage.getItem('hive_meetings_space_id')">
+              Go to Meetings Space
+            </button>
+          </div>
+        </div>
+      `;
+    }
+    
+    lucide.createIcons();
+  } catch (error) {
+    document.getElementById('meetingsHubContent').innerHTML = `
+      <div class="error" style="color: var(--danger); padding: 24px; text-align: center;">
+        <i data-lucide="alert-circle" style="width: 48px; height: 48px; margin-bottom: 16px;"></i>
+        <h3>Error loading meetings</h3>
+        <p style="margin-top: 8px;">${error.message}</p>
+      </div>
+    `;
+    lucide.createIcons();
+  }
+}
+
+// Old dashboard function - now integrated into hub
 async function renderMeetingsDashboard(root){
   root.innerHTML = `
     <div class="content-head">
@@ -722,11 +873,8 @@ async function renderMeetingsDashboard(root){
                   ${new Date(note.created_at).toLocaleDateString()} • ${Math.round((note.content?.length || 0) / 100)} min read
                 </div>
                 <div class="note-preview" style="display: none; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border);">
-                  <div style="max-height: 200px; overflow-y: auto; font-size: 14px; line-height: 1.4; white-space: pre-wrap;">
-                    ${(() => {
-                      const formatted = formatTranscriptContent(note.content || '');
-                      return formatted.substring(0, 500) + (formatted.length > 500 ? '...' : '');
-                    })()}
+                  <div style="max-height: 200px; overflow-y: auto; font-size: 14px; line-height: 1.4;">
+                    ${formatTranscriptContent(note.content || '', true)}
                   </div>
                 </div>
               </div>
@@ -884,8 +1032,8 @@ async function renderMeetingsSearch(root){
   });
 }
 
-// Helper function to format transcript content
-function formatTranscriptContent(content) {
+// Helper function to format transcript content into rich text
+function formatTranscriptContent(content, isPreview = false) {
   if (!content) return 'No content available';
   
   // Try to parse as JSON (Recall format)
@@ -894,33 +1042,261 @@ function formatTranscriptContent(content) {
     
     // Check if it's a Recall transcript with words/segments
     if (data.words && Array.isArray(data.words)) {
-      // Extract text from words array
-      return data.words.map(word => word.text || word.word || '').join(' ').trim();
+      return formatRecallTranscript(data.words, isPreview);
     }
     
     // Check if it's a transcript with segments/chunks
     if (data.segments && Array.isArray(data.segments)) {
-      return data.segments.map(seg => seg.text || '').join(' ').trim();
+      return data.segments.map(seg => seg.text || '').join('\n\n').trim();
     }
     
     // Check if it's already parsed with a transcript field
     if (data.transcript) {
-      return data.transcript;
+      return formatPlainText(data.transcript, isPreview);
     }
     
     // Check if it has a text field
     if (data.text) {
-      return data.text;
+      return formatPlainText(data.text, isPreview);
     }
     
     // If it's JSON but unrecognized format, return formatted JSON
-    return JSON.stringify(data, null, 2);
+    return `<pre style="font-size: 12px; color: var(--muted);">${JSON.stringify(data, null, 2)}</pre>`;
     
   } catch (e) {
-    // Not JSON, return as-is (might be plain text transcript)
-    return content;
+    // Not JSON, return formatted plain text
+    return formatPlainText(content, isPreview);
   }
 }
+
+// Format Recall transcript with speaker detection and timestamps
+function formatRecallTranscript(words, isPreview = false) {
+  if (!words || !Array.isArray(words)) return 'No transcript available';
+  
+  let currentSpeaker = null;
+  let currentParagraph = [];
+  let paragraphs = [];
+  let lastTimestamp = 0;
+  
+  for (let i = 0; i < words.length; i++) {
+    const word = words[i];
+    const text = word.text || word.word || '';
+    const speaker = word.speaker || word.participant_id || 'Speaker';
+    const timestamp = word.start_timestamp || word.start || 0;
+    
+    // Detect speaker changes or significant time gaps (5+ seconds)
+    const timeDiff = timestamp - lastTimestamp;
+    const speakerChanged = speaker !== currentSpeaker;
+    const significantPause = timeDiff > 5000; // 5 seconds
+    
+    if ((speakerChanged || significantPause) && currentParagraph.length > 0) {
+      // End current paragraph
+      const paragraphText = currentParagraph.join(' ').trim();
+      if (paragraphText) {
+        const timeStr = formatTimestamp(lastTimestamp);
+        paragraphs.push({
+          speaker: currentSpeaker || 'Speaker',
+          text: paragraphText,
+          timestamp: timeStr
+        });
+      }
+      currentParagraph = [];
+    }
+    
+    currentSpeaker = speaker;
+    lastTimestamp = timestamp;
+    
+    if (text.trim()) {
+      currentParagraph.push(text);
+    }
+    
+    // For preview, limit to first few paragraphs
+    if (isPreview && paragraphs.length >= 3) break;
+  }
+  
+  // Add final paragraph
+  if (currentParagraph.length > 0) {
+    const paragraphText = currentParagraph.join(' ').trim();
+    if (paragraphText) {
+      const timeStr = formatTimestamp(lastTimestamp);
+      paragraphs.push({
+        speaker: currentSpeaker || 'Speaker',
+        text: paragraphText,
+        timestamp: timeStr
+      });
+    }
+  }
+  
+  // Format as rich HTML
+  return paragraphs.map(p => `
+    <div class="transcript-paragraph" style="margin-bottom: 16px; padding: 12px; background: var(--panel-2); border-radius: 6px; border-left: 3px solid var(--primary);">
+      <div class="transcript-header" style="display: flex; justify-content: between; align-items: center; margin-bottom: 8px;">
+        <strong style="color: var(--primary);">${p.speaker}</strong>
+        <span style="font-size: 12px; color: var(--muted);">${p.timestamp}</span>
+      </div>
+      <div class="transcript-text" style="line-height: 1.6; white-space: pre-wrap;">${p.text}</div>
+    </div>
+  `).join('');
+}
+
+// Format plain text into readable paragraphs
+function formatPlainText(text, isPreview = false) {
+  if (!text) return 'No content available';
+  
+  // Split into sentences and group into paragraphs
+  const sentences = text.split(/[.!?]+/).filter(s => s.trim().length > 10);
+  const paragraphs = [];
+  
+  // Group sentences into paragraphs of 3-4 sentences each
+  for (let i = 0; i < sentences.length; i += 3) {
+    const paragraphSentences = sentences.slice(i, i + 3);
+    const paragraph = paragraphSentences.join('. ').trim() + '.';
+    paragraphs.push(paragraph);
+    
+    if (isPreview && paragraphs.length >= 2) break;
+  }
+  
+  return paragraphs.map(p => `<p style="margin-bottom: 12px; line-height: 1.6;">${p}</p>`).join('');
+}
+
+// Format timestamp (milliseconds) to readable time
+function formatTimestamp(ms) {
+  if (!ms) return '0:00';
+  const seconds = Math.floor(ms / 1000);
+  const minutes = Math.floor(seconds / 60);
+  const remainingSeconds = seconds % 60;
+  return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+}
+
+// Setup interactions for the Meetings Hub
+function setupMeetingsHubInteractions() {
+  // Search functionality
+  const searchInput = document.getElementById('meetingsSearch');
+  if (searchInput) {
+    searchInput.addEventListener('input', debounce(filterMeetingsHub, 300));
+  }
+  
+  // Filter buttons
+  document.querySelectorAll('.filter-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      filterMeetingsHub();
+    });
+  });
+  
+  // Sort dropdown
+  const sortSelect = document.getElementById('sortMeetings');
+  if (sortSelect) {
+    sortSelect.addEventListener('change', sortMeetingsHub);
+  }
+}
+
+// Filter meetings in the hub
+function filterMeetingsHub() {
+  const searchTerm = document.getElementById('meetingsSearch')?.value.toLowerCase() || '';
+  const activeFilter = document.querySelector('.filter-btn.active')?.getAttribute('data-filter') || 'all';
+  const meetings = document.querySelectorAll('.meeting-card');
+  
+  meetings.forEach(meeting => {
+    const title = meeting.getAttribute('data-title') || '';
+    const date = meeting.getAttribute('data-date') || '';
+    const isRecall = title.includes('recall');
+    const meetingDate = new Date(date);
+    const today = new Date();
+    const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+    
+    let matchesFilter = true;
+    let matchesSearch = true;
+    
+    // Apply filter
+    switch (activeFilter) {
+      case 'recall':
+        matchesFilter = isRecall;
+        break;
+      case 'today':
+        matchesFilter = meetingDate.toDateString() === today.toDateString();
+        break;
+      case 'week':
+        matchesFilter = meetingDate >= weekAgo;
+        break;
+      default:
+        matchesFilter = true;
+    }
+    
+    // Apply search
+    if (searchTerm) {
+      const content = meeting.textContent.toLowerCase();
+      matchesSearch = content.includes(searchTerm);
+    }
+    
+    meeting.style.display = (matchesFilter && matchesSearch) ? 'block' : 'none';
+  });
+}
+
+// Sort meetings in the hub
+function sortMeetingsHub() {
+  const sortBy = document.getElementById('sortMeetings')?.value || 'date-desc';
+  const container = document.getElementById('meetingsList');
+  const meetings = Array.from(container.children);
+  
+  meetings.sort((a, b) => {
+    switch (sortBy) {
+      case 'date-asc':
+        return new Date(a.getAttribute('data-date')) - new Date(b.getAttribute('data-date'));
+      case 'title':
+        return a.getAttribute('data-title').localeCompare(b.getAttribute('data-title'));
+      case 'size':
+        const aSize = parseInt(a.textContent.match(/(\d+) characters/)?.[1] || '0');
+        const bSize = parseInt(b.textContent.match(/(\d+) characters/)?.[1] || '0');
+        return bSize - aSize;
+      default: // date-desc
+        return new Date(b.getAttribute('data-date')) - new Date(a.getAttribute('data-date'));
+    }
+  });
+  
+  meetings.forEach(meeting => container.appendChild(meeting));
+}
+
+// Toggle meeting expansion
+window.toggleMeetingExpand = (noteId) => {
+  const fullContent = document.getElementById(`meeting-full-${noteId}`);
+  const chevron = document.getElementById(`chevron-${noteId}`);
+  
+  if (fullContent && chevron) {
+    const isVisible = fullContent.style.display !== 'none';
+    fullContent.style.display = isVisible ? 'none' : 'block';
+    chevron.setAttribute('data-lucide', isVisible ? 'chevron-down' : 'chevron-up');
+    lucide.createIcons();
+  }
+};
+
+// Copy meeting text
+window.copyMeetingText = async (noteId) => {
+  const fullContent = document.getElementById(`meeting-full-${noteId}`);
+  if (fullContent) {
+    try {
+      await navigator.clipboard.writeText(fullContent.textContent);
+      window.showToast && window.showToast('Meeting transcript copied to clipboard');
+    } catch (e) {
+      window.showToast && window.showToast('Failed to copy transcript');
+    }
+  }
+};
+
+// Download meeting
+window.downloadMeeting = (noteId, title) => {
+  const fullContent = document.getElementById(`meeting-full-${noteId}`);
+  if (fullContent) {
+    const blob = new Blob([fullContent.textContent], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${title || 'meeting'}-transcript.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+};
 
 // Helper functions for meeting views
 window.expandNote = (noteId, element) => {
@@ -1114,16 +1490,8 @@ async function renderRoute(){
     if (sid && chatsId && sid===chatsId){ const { renderChatsSpace } = await import('./ui/chat.js'); await renderChatsSpace(content); }
     else { await renderSpace(content, sid); }
   }
-  else if (hash === 'meetings/dashboard'){
-    await renderMeetingsDashboard(content);
-    await renderSpacesList();
-  }
-  else if (hash === 'meetings/list'){
-    await renderMeetingsList(content);
-    await renderSpacesList();
-  }
-  else if (hash === 'meetings/search'){
-    await renderMeetingsSearch(content);
+  else if (hash === 'meetings/hub'){
+    await renderMeetingsHub(content);
     await renderSpacesList();
   }
   else { 

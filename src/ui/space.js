@@ -316,6 +316,24 @@ export async function renderSpace(root, spaceId){
         // Render markdown nicely (legacy notes) or fall back to HTML when content is rich
         const raw = content?.value || '';
         const htmlFromRich = rich.innerHTML || '';
+        
+        // Format transcripts specially for Recall imports
+        const isTranscript = n.title?.includes('Recall') && raw.includes('"words"');
+        if (isTranscript) {
+          try {
+            const data = JSON.parse(raw);
+            if (data.words && Array.isArray(data.words)) {
+              const formattedText = data.words.map(word => word.text || word.word || '').join(' ').trim();
+              preview.innerHTML = `<div style="background: var(--panel-2); padding: 16px; border-radius: 8px; border-left: 4px solid var(--primary);">
+                <div style="font-weight: 600; color: var(--primary); margin-bottom: 8px;">🎙️ Meeting Transcript</div>
+                <div style="line-height: 1.6; white-space: pre-wrap;">${formattedText.substring(0, 1000)}${formattedText.length > 1000 ? '...' : ''}</div>
+              </div>`;
+              return;
+            }
+          } catch (e) {
+            // Fall through to normal rendering
+          }
+        }
         const looksLikeHtml = /<\s*\w+[^>]*>/i.test(raw) || /<\s*\w+[^>]*>/i.test(htmlFromRich);
         if (looksLikeHtml){
           preview.innerHTML = htmlFromRich || raw;
