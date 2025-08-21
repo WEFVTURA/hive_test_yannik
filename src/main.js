@@ -727,6 +727,9 @@ async function renderMeetingsHub(root){
         Meetings Hub
       </div>
       <button class="button ghost" id="backToLibrary" style="margin-left:12px"><i data-lucide="arrow-left" class="icon"></i> Back to Library</button>
+      <button class="button primary" id="syncRecallBtn" style="margin-left:8px">
+        <i data-lucide="refresh-cw" class="icon"></i> Sync Recall
+      </button>
       <div class="search-bar" style="flex: 1; max-width: 400px; margin-left: 16px;">
         <input type="text" id="meetingsSearch" placeholder="Search meetings..." 
                style="width: 100%; padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px; font-size: 14px;">
@@ -1363,6 +1366,49 @@ function setupMeetingsHubInteractions() {
   });
   // Back to library
   document.getElementById('backToLibrary')?.addEventListener('click', ()=>{ location.hash=''; });
+  
+  // Sync Recall button
+  document.getElementById('syncRecallBtn')?.addEventListener('click', async () => {
+    const btn = document.getElementById('syncRecallBtn');
+    if (!btn) return;
+    
+    // Show loading state
+    const originalContent = btn.innerHTML;
+    btn.innerHTML = '<i data-lucide="loader" class="icon spinning"></i> Syncing...';
+    btn.disabled = true;
+    
+    try {
+      // Call the manual sync endpoint
+      const response = await fetch('/api/recall-sync-manual', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      
+      const result = await response.json();
+      
+      if (result.success) {
+        // Show success message
+        const message = `Sync complete: ${result.summary.imported} new, ${result.summary.skipped} skipped, ${result.summary.failed} failed`;
+        window.showToast && window.showToast(message, 'success');
+        
+        // Log details for debugging
+        console.log('Recall sync result:', result);
+        
+        // Refresh the meetings view to show new transcripts
+        await renderMeetingsHub(document.getElementById('content'));
+      } else {
+        throw new Error(result.error || 'Sync failed');
+      }
+    } catch (error) {
+      console.error('Recall sync error:', error);
+      window.showToast && window.showToast(`Sync failed: ${error.message}`, 'error');
+    } finally {
+      // Restore button state
+      btn.innerHTML = originalContent;
+      btn.disabled = false;
+      lucide.createIcons();
+    }
+  });
 }
 
 // Filter meetings in the hub
