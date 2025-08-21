@@ -158,7 +158,16 @@ export default async function handler(req){
     spaceDebug += importDebug;
   }catch{}
 
-  return jres({ ok:true, space_id: spaceId, checked, imported, debug: spaceDebug }, 200, cors);
+  // Check what notes actually exist in this space
+  let existingNotes = [];
+  try {
+    const notesResp = await fetch(`${SUPABASE_URL}/rest/v1/notes?select=id,title,created_at&space_id=eq.${spaceId}&order=created_at.desc&limit=10`, { 
+      headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` } 
+    });
+    existingNotes = await notesResp.json().catch(() => []);
+  } catch {}
+
+  return jres({ ok:true, space_id: spaceId, checked, imported, debug: spaceDebug, existing_notes: existingNotes }, 200, cors);
 }
 
 
