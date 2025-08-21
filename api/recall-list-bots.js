@@ -58,9 +58,12 @@ export default async function handler(req) {
       result.bots = bots.map(bot => ({
         id: bot.id,
         status: bot.status?.code || bot.status || 'unknown',
+        status_raw: bot.status,  // Show the raw status object
         meeting_url: bot.meeting_url,
         created_at: bot.created_at,
-        transcript_id: bot.transcript_id
+        transcript_id: bot.transcript_id,
+        has_transcript: Boolean(bot.transcript),
+        transcript_ready: bot.transcript_ready
       }));
       
       // Count completed

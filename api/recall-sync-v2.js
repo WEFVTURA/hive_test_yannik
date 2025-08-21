@@ -225,7 +225,7 @@ export default async function handler(req){
           continue;
         }
         
-        // Save to database
+        // Save to database (without metadata field which doesn't exist in the table)
         const saveResponse = await fetch(`${SUPABASE_URL}/rest/v1/notes`, {
           method: 'POST',
           headers: {
@@ -236,13 +236,8 @@ export default async function handler(req){
           body: JSON.stringify({
             space_id: spaceId,
             title: `[Recall] ${title}`,
-            content: text,
-            metadata: {
-              source: 'recall',
-              bot_id: botId,
-              transcript_id: botDetails.transcript_id,
-              synced_at: new Date().toISOString()
-            }
+            content: text
+            // Removed metadata field - table doesn't have this column
           })
         });
         
