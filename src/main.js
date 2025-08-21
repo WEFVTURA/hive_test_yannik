@@ -14,19 +14,28 @@ const prefs = getPrefs();
 // Initialize API keys from environment variables for client-side use
 (function initAPIKeys(){
   try {
-    // Set window variables from Vite environment variables
-    if (import.meta.env.VITE_OPENAI_API_KEY) {
-      window.OPENAI_API_KEY = import.meta.env.VITE_OPENAI_API_KEY;
-    }
-    if (import.meta.env.VITE_MISTRAL_API_KEY) {
-      window.MISTRAL_API_KEY = import.meta.env.VITE_MISTRAL_API_KEY;
-    }
-    if (import.meta.env.VITE_DEEPGRAM_API_KEY) {
-      window.DEEPGRAM_API_KEY = import.meta.env.VITE_DEEPGRAM_API_KEY;
-    }
-    if (import.meta.env.VITE_PERPLEXITY) {
-      window.PERPLEXITY_API_KEY = import.meta.env.VITE_PERPLEXITY;
-    }
+    // In Vercel, env vars are exposed without VITE_ prefix
+    // In local dev with Vite, they need VITE_ prefix
+    // Check both to support all environments
+    
+    // OpenAI
+    window.OPENAI_API_KEY = import.meta.env.VITE_OPENAI_API_KEY || 
+                            import.meta.env.OPENAI_API_KEY || 
+                            import.meta.env.OPEN_AI_API || '';
+    
+    // Mistral
+    window.MISTRAL_API_KEY = import.meta.env.VITE_MISTRAL_API_KEY || 
+                             import.meta.env.MISTRAL_API_KEY || 
+                             import.meta.env.MISTRAL_AI_API || '';
+    
+    // Deepgram
+    window.DEEPGRAM_API_KEY = import.meta.env.VITE_DEEPGRAM_API_KEY || 
+                              import.meta.env.DEEPGRAM_API_KEY || '';
+    
+    // Perplexity
+    window.PERPLEXITY_API_KEY = import.meta.env.VITE_PERPLEXITY || 
+                                import.meta.env.PERPLEXITY || 
+                                import.meta.env.PERPLEXITY_API_KEY || '';
     
     // Debug log (remove in production)
     console.log('API Keys initialized:', {
