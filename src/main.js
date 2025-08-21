@@ -730,29 +730,8 @@ async function renderMeetingsHub(root){
         Meetings Hub
       </div>
       <button class="button ghost" id="backToLibrary" style="margin-left:12px"><i data-lucide="arrow-left" class="icon"></i> Back to Library</button>
-      <button class="button primary" id="syncRecallBtn" style="margin-left:8px">
-        <i data-lucide="refresh-cw" class="icon"></i> Sync Recall
-      </button>
-      <button class="button primary" id="recallBrowserBtn" style="margin-left:8px" title="Browse Recall Transcripts">
-        <i data-lucide="database" class="icon"></i> Browse Recall
-      </button>
-      <button class="button primary" id="transcriptListBtn" style="margin-left:8px" title="Transcript List">
-        <i data-lucide="list" class="icon"></i> Transcript List
-      </button>
-      <button class="button primary" id="botListBtn" style="margin-left:8px" title="Bot List">
-        <i data-lucide="bot" class="icon"></i> Bot List
-      </button>
-      <button class="button" id="directImportBtn" style="margin-left:8px" title="Direct Import">
-        <i data-lucide="file-plus" class="icon"></i> Import
-      </button>
-      <button class="button" id="batchImportBtn" style="margin-left:8px" title="Batch Import">
-        <i data-lucide="folder-plus" class="icon"></i> Batch
-      </button>
-      <button class="button warning" id="testAuthBtn" style="margin-left:8px" title="Test API Auth">
-        🔑 Test Auth
-      </button>
-      <button class="button ghost" id="debugBtn" style="margin-left:8px" title="Debug APIs">
-        🐛 Debug
+      <button class="button" id="directImportBtn" style="margin-left:8px" title="Import Transcript">
+        <i data-lucide="file-plus" class="icon"></i> Import Transcript
       </button>
       <div class="search-bar" style="flex: 1; max-width: 400px; margin-left: 16px;">
         <input type="text" id="meetingsSearch" placeholder="Search meetings..." 
@@ -802,10 +781,6 @@ async function renderMeetingsHub(root){
             <div class="stat-card" style="padding: 16px; border: 1px solid var(--border); border-radius: 8px; text-align: center;">
               <div style="font-size: 28px; font-weight: 700; color: var(--primary);">${notes.length}</div>
               <div style="color: var(--muted); font-size: 14px;">Total Meetings</div>
-            </div>
-            <div class="stat-card" style="padding: 16px; border: 1px solid var(--border); border-radius: 8px; text-align: center;">
-              <div style="font-size: 28px; font-weight: 700; color: var(--accent);">${notes.filter(n => n.title?.includes('Recall')).length}</div>
-              <div style="color: var(--muted); font-size: 14px;">Recall Transcripts</div>
             </div>
             <div class="stat-card" style="padding: 16px; border: 1px solid var(--border); border-radius: 8px; text-align: center;">
               <div style="font-size: 28px; font-weight: 700; color: var(--success);">${notes.filter(n => n.created_at > new Date(Date.now() - 7*24*60*60*1000).toISOString()).length}</div>
@@ -877,7 +852,7 @@ async function renderMeetingsHub(root){
                   <div style="margin-bottom: 16px; padding: 16px; background: var(--panel-1); border-radius: 8px;">
                     <div style="margin-bottom: 12px;">
                       <label style="display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px;">Meeting Title</label>
-                      <input type="text" id="title-${note.id}" value="${cleanMeetingTitle(note.title)}" 
+                      <input type="text" id="title-${note.id}" value="${note.metadata?.edited_title || cleanMeetingTitle(note.title)}" 
                         style="width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 4px; 
                         font-size: 16px; font-weight: 600; background: var(--background); color: var(--text);"
                         onchange="updateMeetingTitle('${note.id}', this.value)">
@@ -888,7 +863,7 @@ async function renderMeetingsHub(root){
                         Participants (click to add)
                       </label>
                       <div id="speakers-${note.id}" style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px;">
-                        <!-- Speaker tags will be added here -->
+                        <!-- Speaker tags will be populated after render -->
                       </div>
                       <button class="button sm ghost" onclick="addSpeakerTag('${note.id}')">
                         <i data-lucide="user-plus"></i> Add Participant
@@ -897,7 +872,7 @@ async function renderMeetingsHub(root){
                   </div>
                   
                   <!-- Formatted Transcript -->
-                  <div style="max-height: 500px; overflow-y: auto; padding-right: 8px;">
+                  <div style="max-height: 650px; overflow-y: auto; padding-right: 8px;">
                     <div id="transcript-content-${note.id}">
                       ${formatEnhancedTranscript(note.content, note.id)}
                     </div>
@@ -1700,8 +1675,58 @@ window.toggleMeetingExpand = (noteId) => {
     fullContent.style.display = isVisible ? 'none' : 'block';
     chevron.setAttribute('data-lucide', isVisible ? 'chevron-down' : 'chevron-up');
     lucide.createIcons();
+    
+    // If expanding, load saved participants
+    if (!isVisible) {
+      loadSavedParticipants(noteId);
+    }
   }
 };
+
+// Load saved participants from metadata
+async function loadSavedParticipants(noteId) {
+  const note = window.notesCache?.find(n => n.id === noteId);
+  if (!note || !note.metadata?.participants) return;
+  
+  const speakersDiv = document.getElementById(`speakers-${noteId}`);
+  if (!speakersDiv || speakersDiv.children.length > 0) return; // Already loaded
+  
+  // Add each saved participant as a tag
+  note.metadata.participants.forEach(participant => {
+    const tagId = `speaker-${noteId}-${Date.now()}-${Math.random()}`;
+    const color = getSpeakerColor(participant.name);
+    
+    const tag = document.createElement('div');
+    tag.id = tagId;
+    tag.style.cssText = `
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 6px 12px; background: ${color}20; border: 1px solid ${color}40;
+      border-radius: 20px; font-size: 13px;
+    `;
+    
+    tag.innerHTML = `
+      <div style="width: 20px; height: 20px; border-radius: 50%; background: ${color}; 
+                  display: flex; align-items: center; justify-content: center; color: white; font-size: 10px;">
+        ${participant.name.charAt(0).toUpperCase()}
+      </div>
+      <div>
+        <div style="font-weight: 500;">${escapeHtml(participant.name)}</div>
+        ${participant.email ? `<div style="font-size: 11px; color: var(--muted);">${escapeHtml(participant.email)}</div>` : ''}
+      </div>
+      <button onclick="removeSpeakerTag('${tagId}')" style="
+        background: none; border: none; color: var(--muted); cursor: pointer;
+        padding: 0; margin-left: 4px; display: flex; align-items: center;
+      ">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="18" y1="6" x2="6" y2="18"></line>
+          <line x1="6" y1="6" x2="18" y2="18"></line>
+        </svg>
+      </button>
+    `;
+    
+    speakersDiv.appendChild(tag);
+  });
+}
 
 // Copy meeting text
 window.copyMeetingText = async (noteId) => {
@@ -2113,11 +2138,28 @@ function escapeHtml(text) {
 // Update meeting title
 window.updateMeetingTitle = async (noteId, newTitle) => {
   try {
-    // Update in database
+    // Get current note to preserve metadata
     const sb = getSupabase();
+    const { data: currentNote, error: fetchError } = await sb
+      .from('notes')
+      .select('metadata')
+      .eq('id', noteId)
+      .single();
+    
+    if (fetchError) throw fetchError;
+    
+    // Preserve existing metadata and update title
+    const metadata = currentNote?.metadata || {};
+    metadata.edited_title = newTitle;
+    metadata.last_edited = new Date().toISOString();
+    
+    // Update in database with new title and metadata
     const { error } = await sb
       .from('notes')
-      .update({ title: `[Recall] ${newTitle}` })
+      .update({ 
+        title: `[Recall] ${newTitle}`,
+        metadata: metadata
+      })
       .eq('id', noteId);
     
     if (error) throw error;
@@ -2126,12 +2168,13 @@ window.updateMeetingTitle = async (noteId, newTitle) => {
     const note = window.notesCache?.find(n => n.id === noteId);
     if (note) {
       note.title = `[Recall] ${newTitle}`;
+      note.metadata = metadata;
     }
     
     // Update in UI
     const headerTitle = document.querySelector(`[data-id="${noteId}"] h4`);
     if (headerTitle) {
-      headerTitle.innerHTML = `${note.title?.includes('Recall') ? '🎙️' : '📝'} ${newTitle}`;
+      headerTitle.innerHTML = `🎙️ ${newTitle}`;
     }
     
     window.showToast && window.showToast('Title updated successfully');
@@ -2218,8 +2261,40 @@ async function saveSpeakersToNote(noteId) {
     }
   });
   
-  // Save to database (would need to add metadata column to notes table)
-  console.log('Speakers for note', noteId, speakers);
+  try {
+    // Get current note metadata
+    const sb = getSupabase();
+    const { data: currentNote, error: fetchError } = await sb
+      .from('notes')
+      .select('metadata')
+      .eq('id', noteId)
+      .single();
+    
+    if (fetchError) throw fetchError;
+    
+    // Update metadata with speakers
+    const metadata = currentNote?.metadata || {};
+    metadata.participants = speakers;
+    metadata.participants_updated = new Date().toISOString();
+    
+    // Save to database
+    const { error } = await sb
+      .from('notes')
+      .update({ metadata })
+      .eq('id', noteId);
+    
+    if (error) throw error;
+    
+    // Update cache
+    const note = window.notesCache?.find(n => n.id === noteId);
+    if (note) {
+      note.metadata = metadata;
+    }
+    
+    console.log('Speakers saved for note', noteId, speakers);
+  } catch(e) {
+    console.error('Failed to save speakers:', e);
+  }
 }
 
 // Format summary content for display
