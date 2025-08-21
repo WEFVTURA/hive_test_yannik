@@ -736,6 +736,9 @@ async function renderMeetingsHub(root){
       <button class="button primary" id="transcriptListBtn" style="margin-left:8px" title="Transcript List">
         <i data-lucide="list" class="icon"></i> Transcript List
       </button>
+      <button class="button primary" id="botListBtn" style="margin-left:8px" title="Bot List">
+        <i data-lucide="bot" class="icon"></i> Bot List
+      </button>
       <button class="button" id="directImportBtn" style="margin-left:8px" title="Direct Import">
         <i data-lucide="file-plus" class="icon"></i> Import
       </button>
@@ -1418,6 +1421,11 @@ function setupMeetingsHubInteractions() {
   // Transcript List button
   document.getElementById('transcriptListBtn')?.addEventListener('click', () => {
     location.hash = 'transcripts';
+  });
+  
+  // Bot List button
+  document.getElementById('botListBtn')?.addEventListener('click', () => {
+    location.hash = 'bots';
   });
   
   // Debug button
@@ -2628,6 +2636,286 @@ ${JSON.stringify(transcript, null, 2)}
   document.body.appendChild(modal);
 };
 
+// Bot List View - Fetch bots and their transcripts
+async function renderBotList(root) {
+  root.innerHTML = `
+    <div class="content-head">
+      <div class="title">
+        <i data-lucide="bot" class="icon"></i>
+        Bot List (with Transcripts)
+      </div>
+      <button class="button ghost" id="backToHub" style="margin-left:12px">
+        <i data-lucide="arrow-left" class="icon"></i> Back to Hub
+      </button>
+      <button class="button primary" id="refreshBotsBtn" style="margin-left:auto">
+        <i data-lucide="refresh-cw" class="icon"></i> Refresh
+      </button>
+    </div>
+    <div class="content-body">
+      <div style="padding: 24px;">
+        <div id="botLoading" style="text-align: center; padding: 48px;">
+          <div class="loading">Fetching bots and transcripts...</div>
+        </div>
+        
+        <div id="botContent" style="display: none;">
+          <div style="margin-bottom: 24px; padding: 16px; background: var(--panel-1); border-radius: 8px;">
+            <h3 style="margin: 0 0 8px 0;">Bot List with Full Details</h3>
+            <p style="margin: 0; color: var(--muted); font-size: 13px;">
+              Fetching each bot individually to get transcript data
+            </p>
+          </div>
+          
+          <div id="botListContainer">
+            <!-- Bots will be loaded here -->
+          </div>
+        </div>
+        
+        <div id="botError" style="display: none; text-align: center; padding: 48px;">
+          <i data-lucide="alert-circle" style="width: 48px; height: 48px; color: var(--danger);"></i>
+          <h3>Failed to load bots</h3>
+          <p id="errorMsg" style="color: var(--muted);"></p>
+        </div>
+      </div>
+    </div>
+  `;
+  
+  lucide.createIcons();
+  
+  // Load bots
+  loadBots();
+  
+  // Event handlers
+  document.getElementById('backToHub')?.addEventListener('click', () => {
+    location.hash = 'meetings/hub';
+  });
+  
+  document.getElementById('refreshBotsBtn')?.addEventListener('click', () => {
+    loadBots();
+  });
+  
+  async function loadBots() {
+    const loadingEl = document.getElementById('botLoading');
+    const contentEl = document.getElementById('botContent');
+    const errorEl = document.getElementById('botError');
+    
+    loadingEl.style.display = 'block';
+    contentEl.style.display = 'none';
+    errorEl.style.display = 'none';
+    
+    try {
+      const response = await fetch('/api/recall-bot-list');
+      const data = await response.json();
+      
+      console.log('Bot List API response:', data);
+      
+      if (!data.success) {
+        throw new Error(data.error || 'Failed to load bots');
+      }
+      
+      const bots = data.bots || [];
+      const container = document.getElementById('botListContainer');
+      
+      if (bots.length === 0) {
+        container.innerHTML = `
+          <div style="text-align: center; padding: 48px; color: var(--muted);">
+            <i data-lucide="bot" style="width: 48px; height: 48px;"></i>
+            <h3>No bots found</h3>
+            <p>Send a Recall bot to a meeting first</p>
+          </div>
+        `;
+      } else {
+        const withTranscripts = bots.filter(b => b.has_transcript).length;
+        
+        container.innerHTML = `
+          <div style="margin-bottom: 16px; padding: 12px; background: var(--info-bg); border-radius: 8px;">
+            📊 Found ${bots.length} bot(s) | ${withTranscripts} with transcripts | ${data.transcripts_found} transcripts total
+          </div>
+          <div style="display: grid; gap: 16px;">
+            ${bots.map((bot, idx) => `
+              <div class="bot-card" style="border: 1px solid var(--border); border-radius: 12px; padding: 16px; background: var(--panel-1);">
+                <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 12px;">
+                  <div>
+                    <h4 style="margin: 0 0 4px 0; color: var(--primary);">
+                      ${bot.meeting_title}
+                    </h4>
+                    <div style="font-size: 12px; color: var(--muted);">
+                      Bot ID: ${bot.id}<br>
+                      Status: <span class="${bot.status === 'done' ? 'success' : 'warning'}">${bot.status}</span><br>
+                      Created: ${new Date(bot.created_at).toLocaleString()}<br>
+                      ${bot.participants ? `Participants: ${bot.participants}<br>` : ''}
+                      ${bot.recording_id ? `Recording ID: ${bot.recording_id}<br>` : ''}
+                      ${bot.transcript_id ? `Transcript ID: ${bot.transcript_id}<br>` : ''}
+                      ${bot.video_url ? '🎥 Has video<br>' : ''}
+                      ${bot.chat_messages > 0 ? `💬 ${bot.chat_messages} chat messages<br>` : ''}
+                    </div>
+                  </div>
+                  <div style="text-align: right;">
+                    <span class="badge ${bot.has_transcript ? 'success' : 'warning'}" 
+                          style="padding: 6px 10px; border-radius: 6px; font-size: 12px;">
+                      ${bot.has_transcript ? '✅ Has Transcript' : '⚠️ No Transcript'}
+                    </span>
+                    ${bot.transcript_structure ? `
+                      <div style="margin-top: 8px; font-size: 11px; color: var(--muted);">
+                        Type: ${bot.transcript_structure.type}<br>
+                        ${bot.transcript_structure.length ? `Length: ${bot.transcript_structure.length}<br>` : ''}
+                        ${bot.transcript_structure.source ? `Source: ${bot.transcript_structure.source}` : ''}
+                      </div>
+                    ` : ''}
+                  </div>
+                </div>
+                
+                ${bot.meeting_url ? `
+                  <div style="font-size: 12px; color: var(--muted); margin-bottom: 12px;">
+                    🔗 ${bot.meeting_url}
+                  </div>
+                ` : ''}
+                
+                ${bot.transcript_preview ? `
+                  <div style="margin-bottom: 12px;">
+                    <div style="font-weight: 600; margin-bottom: 6px; font-size: 13px;">Transcript Preview:</div>
+                    <div style="background: var(--panel-2); padding: 12px; border-radius: 6px; font-size: 12px; line-height: 1.5; max-height: 150px; overflow: auto;">
+                      <pre style="white-space: pre-wrap; margin: 0; font-family: inherit;">
+${bot.transcript_preview}
+                      </pre>
+                    </div>
+                    <div style="font-size: 11px; color: var(--muted); margin-top: 4px;">
+                      📝 ${bot.transcript_length} characters total
+                    </div>
+                  </div>
+                ` : bot.has_transcript ? `
+                  <div style="padding: 12px; background: var(--warning-bg); border-radius: 6px; font-size: 12px;">
+                    ⚠️ Transcript exists but appears empty
+                  </div>
+                ` : `
+                  <div style="padding: 12px; background: var(--panel-2); border-radius: 6px; color: var(--muted); font-size: 12px;">
+                    No transcript available for this bot
+                  </div>
+                `}
+                
+                <div style="display: flex; gap: 8px;">
+                  ${bot.has_transcript && bot.transcript_length > 0 ? `
+                    <button class="button sm primary" onclick="importBotTranscript('${bot.id}', ${idx})">
+                      <i data-lucide="download" class="icon"></i> Import Transcript
+                    </button>
+                    <button class="button sm" onclick="viewBotTranscript(${idx})">
+                      <i data-lucide="eye" class="icon"></i> View Full
+                    </button>
+                  ` : ''}
+                  <button class="button sm ghost" onclick="viewBotDebug(${idx})">
+                    <i data-lucide="code" class="icon"></i> Debug Info
+                  </button>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        `;
+      }
+      
+      loadingEl.style.display = 'none';
+      contentEl.style.display = 'block';
+      lucide.createIcons();
+      
+      // Store for access
+      window.botListData = bots;
+      
+    } catch (error) {
+      loadingEl.style.display = 'none';
+      errorEl.style.display = 'block';
+      document.getElementById('errorMsg').textContent = error.message;
+    }
+  }
+}
+
+// Helper functions for Bot List
+window.importBotTranscript = async (botId, idx) => {
+  const bot = window.botListData?.[idx];
+  if (!bot?.full_transcript) {
+    window.showToast && window.showToast('No transcript content to import');
+    return;
+  }
+  
+  try {
+    const response = await fetch('/api/transcript-import-direct', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title: bot.meeting_title || `Bot ${botId}`,
+        content: bot.full_transcript,
+        source: 'bot-api'
+      })
+    });
+    
+    const result = await response.json();
+    
+    if (result.success) {
+      window.showToast && window.showToast('Transcript imported successfully!');
+      setTimeout(() => {
+        location.hash = 'meetings/hub';
+      }, 1500);
+    } else {
+      window.showToast && window.showToast(`Import failed: ${result.error}`);
+    }
+  } catch (e) {
+    window.showToast && window.showToast(`Error: ${e.message}`);
+  }
+};
+
+window.viewBotTranscript = (idx) => {
+  const bot = window.botListData?.[idx];
+  if (!bot?.full_transcript) return;
+  
+  const modal = document.createElement('div');
+  modal.style.cssText = `
+    position: fixed; inset: 0; background: rgba(0,0,0,0.8); 
+    z-index: 1000; display: flex; align-items: center; justify-content: center;
+  `;
+  
+  modal.innerHTML = `
+    <div style="background: var(--panel); border-radius: 12px; max-width: 90%; max-height: 90%; 
+                overflow: hidden; display: flex; flex-direction: column;">
+      <div style="padding: 16px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between;">
+        <h3 style="margin: 0;">${bot.meeting_title}</h3>
+        <button onclick="this.closest('div[style*=fixed]').remove()" style="background: none; border: none; cursor: pointer; font-size: 24px;">×</button>
+      </div>
+      <div style="padding: 16px; overflow-y: auto; max-height: 70vh;">
+        <pre style="white-space: pre-wrap; font-family: inherit; font-size: 13px; line-height: 1.6;">
+${bot.full_transcript}
+        </pre>
+      </div>
+    </div>
+  `;
+  
+  document.body.appendChild(modal);
+};
+
+window.viewBotDebug = (idx) => {
+  const bot = window.botListData?.[idx];
+  if (!bot) return;
+  
+  const modal = document.createElement('div');
+  modal.style.cssText = `
+    position: fixed; inset: 0; background: rgba(0,0,0,0.8); 
+    z-index: 1000; display: flex; align-items: center; justify-content: center;
+  `;
+  
+  modal.innerHTML = `
+    <div style="background: var(--panel); border-radius: 12px; max-width: 90%; max-height: 90%; 
+                overflow: hidden; display: flex; flex-direction: column;">
+      <div style="padding: 16px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between;">
+        <h3 style="margin: 0;">Debug Info - Bot ${bot.id}</h3>
+        <button onclick="this.closest('div[style*=fixed]').remove()" style="background: none; border: none; cursor: pointer; font-size: 24px;">×</button>
+      </div>
+      <div style="padding: 16px; overflow-y: auto; max-height: 70vh;">
+        <pre style="white-space: pre-wrap; font-family: monospace; font-size: 12px; line-height: 1.4;">
+${JSON.stringify(bot, null, 2)}
+        </pre>
+      </div>
+    </div>
+  `;
+  
+  document.body.appendChild(modal);
+};
+
 window.copyToClipboard = async (noteId) => {
   const content = document.getElementById(`content-${noteId}`);
   if (content) {
@@ -2819,6 +3107,10 @@ async function renderRoute(){
   }
   else if (hash === 'transcripts'){
     await renderTranscriptList(content);
+    await renderSpacesList();
+  }
+  else if (hash === 'bots'){
+    await renderBotList(content);
     await renderSpacesList();
   }
   else { 
