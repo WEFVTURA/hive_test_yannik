@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>API Debug Test</title>
+  <style>
+    body {
+      font-family: monospace;
+      background: #0f1115;
+      color: #e7eaf3;
+      padding: 20px;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    h1 { color: #7a8cff; }
+    .test-section {
+      background: #141821;
+      border: 1px solid #1f2430;
+      border-radius: 8px;
+      padding: 15px;
+      margin: 20px 0;
+    }
+    .test-title {
+      color: #4f6af2;
+      font-size: 18px;
+      margin-bottom: 10px;
+    }
+    button {
+      background: #4f6af2;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 4px;
+      cursor: pointer;
+      margin: 5px;
+    }
+    button:hover { background: #7a8cff; }
+    .result {
+      background: #0d1016;
+      border: 1px solid #1f2430;
+      border-radius: 4px;
+      padding: 10px;
+      margin-top: 10px;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+      font-size: 12px;
+      max-height: 400px;
+      overflow-y: auto;
+    }
+    .success { border-color: #1ec28b; }
+    .error { border-color: #ef5b5b; }
+    .loading { opacity: 0.5; }
+  </style>
+</head>
+<body>
+  <h1>🔍 API Debug Test</h1>
+  
+  <div class="test-section">
+    <div class="test-title">Environment Variables Check</div>
+    <button onclick="testEnv()">Test Environment Variables</button>
+    <div id="env-result" class="result"></div>
+  </div>
+  
+  <div class="test-section">
+    <div class="test-title">Mistral API Test</div>
+    <button onclick="testMistral()">Test Mistral Connection</button>
+    <div id="mistral-result" class="result"></div>
+  </div>
+  
+  <div class="test-section">
+    <div class="test-title">Recall API Test</div>
+    <button onclick="testRecall()">Test Recall Connection</button>
+    <div id="recall-result" class="result"></div>
+  </div>
+  
+  <div class="test-section">
+    <div class="test-title">Recall Sync Test</div>
+    <button onclick="testRecallSync()">Test Recall Sync (Manual)</button>
+    <div id="recall-sync-result" class="result"></div>
+  </div>
+  
+  <div class="test-section">
+    <div class="test-title">Test Summary Generation</div>
+    <button onclick="testSummary()">Test Mistral Summary</button>
+    <div id="summary-result" class="result"></div>
+  </div>
+
+  <script>
+    const baseUrl = window.location.origin;
+    
+    async function testEnv() {
+      const resultEl = document.getElementById('env-result');
+      resultEl.textContent = 'Loading...';
+      resultEl.className = 'result loading';
+      
+      try {
+        const response = await fetch(`${baseUrl}/api/env-test`);
+        const data = await response.json();
+        resultEl.textContent = JSON.stringify(data, null, 2);
+        resultEl.className = response.ok ? 'result success' : 'result error';
+      } catch (e) {
+        resultEl.textContent = `Error: ${e.message}`;
+        resultEl.className = 'result error';
+      }
+    }
+    
+    async function testMistral() {
+      const resultEl = document.getElementById('mistral-result');
+      resultEl.textContent = 'Loading...';
+      resultEl.className = 'result loading';
+      
+      try {
+        const response = await fetch(`${baseUrl}/api/mistral-test-simple`);
+        const data = await response.json();
+        resultEl.textContent = JSON.stringify(data, null, 2);
+        resultEl.className = data.key_found && data.test_result?.ok ? 'result success' : 'result error';
+      } catch (e) {
+        resultEl.textContent = `Error: ${e.message}`;
+        resultEl.className = 'result error';
+      }
+    }
+    
+    async function testRecall() {
+      const resultEl = document.getElementById('recall-result');
+      resultEl.textContent = 'Loading...';
+      resultEl.className = 'result loading';
+      
+      try {
+        const response = await fetch(`${baseUrl}/api/recall-test-simple`);
+        const data = await response.json();
+        resultEl.textContent = JSON.stringify(data, null, 2);
+        const hasSuccessfulAttempt = data.attempts?.some(a => a.ok);
+        resultEl.className = hasSuccessfulAttempt ? 'result success' : 'result error';
+      } catch (e) {
+        resultEl.textContent = `Error: ${e.message}`;
+        resultEl.className = 'result error';
+      }
+    }
+    
+    async function testRecallSync() {
+      const resultEl = document.getElementById('recall-sync-result');
+      resultEl.textContent = 'Loading... (this may take a while)';
+      resultEl.className = 'result loading';
+      
+      try {
+        const response = await fetch(`${baseUrl}/api/recall-sync-manual`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' }
+        });
+        const data = await response.json();
+        resultEl.textContent = JSON.stringify(data, null, 2);
+        resultEl.className = data.success ? 'result success' : 'result error';
+      } catch (e) {
+        resultEl.textContent = `Error: ${e.message}`;
+        resultEl.className = 'result error';
+      }
+    }
+    
+    async function testSummary() {
+      const resultEl = document.getElementById('summary-result');
+      resultEl.textContent = 'Loading...';
+      resultEl.className = 'result loading';
+      
+      try {
+        const response = await fetch(`${baseUrl}/api/summarize-mistral`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            title: 'Test Meeting',
+            content: 'This is a test transcript. We discussed the project timeline and agreed to meet next week. Action items include updating the documentation and preparing the demo.'
+          })
+        });
+        const data = await response.json();
+        resultEl.textContent = JSON.stringify(data, null, 2);
+        resultEl.className = response.ok && data.summary ? 'result success' : 'result error';
+      } catch (e) {
+        resultEl.textContent = `Error: ${e.message}`;
+        resultEl.className = 'result error';
+      }
+    }
+    
+    // Auto-run env test on load
+    window.addEventListener('load', () => {
+      testEnv();
+    });
+  </script>
+</body>
+</html>
