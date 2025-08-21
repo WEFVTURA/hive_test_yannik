@@ -201,7 +201,14 @@ export function renderChat(root){
 
   (async()=>{
     const spaces = await db_listSpaces().catch(()=>[]);
-    for (const sp of spaces){ const opt = document.createElement('option'); opt.value = sp.id; opt.textContent = sp.name; if(prefs.defaultScope===sp.id) opt.selected = true; scopeSel.appendChild(opt); }
+    console.log('Available spaces for search:', spaces.map(s => s.name)); // Debug log
+    for (const sp of spaces){ 
+      const opt = document.createElement('option'); 
+      opt.value = sp.id; 
+      opt.textContent = sp.name; 
+      if(prefs.defaultScope===sp.id) opt.selected = true; 
+      scopeSel.appendChild(opt); 
+    }
   })();
 
   function renderMessages(){
@@ -416,10 +423,15 @@ export function renderChat(root){
     let notes = [];
     if (scopeVal==='ALL'){
       const spaces = await db_listSpaces().catch(()=>[]);
+      console.log(`Building context from ${spaces.length} spaces including:`, spaces.map(s => s.name));
       for (const sp of spaces){
         const { data } = await sb.from('notes').select('id,title,content,updated_at,space_id').eq('space_id', sp.id).order('updated_at', { ascending:false }).limit(100);
+        if (data && data.length > 0) {
+          console.log(`Found ${data.length} notes in space: ${sp.name}`);
+        }
         notes = notes.concat(data||[]);
       }
+      console.log(`Total notes for context: ${notes.length}`);
     } else {
       const { data } = await sb.from('notes').select('id,title,content,updated_at,space_id').eq('space_id', scopeVal).order('updated_at', { ascending:false }).limit(300);
       notes = data||[];
@@ -450,10 +462,20 @@ export function renderChat(root){
     let rows = [];
     if (scopeVal==='ALL'){
       const spaces = await db_listSpaces().catch(()=>[]);
+      console.log(`SQL search across ${spaces.length} spaces:`, spaces.map(s => s.name));
       for (const sp of spaces){
         const { data } = await sb.from('notes').select('id,title,content,space_id,updated_at').eq('space_id', sp.id).order('updated_at', { ascending:false }).limit(200);
+        if (data && data.length > 0) {
+          console.log(`SQL: Found ${data.length} notes in space: ${sp.name}`);
+          // Log sample of meeting transcripts
+          const meetingNotes = data.filter(n => n.title && (n.title.includes('Recall') || n.title.includes('Meeting') || n.title.includes('Call')));
+          if (meetingNotes.length > 0) {
+            console.log(`Found ${meetingNotes.length} meeting-related notes in ${sp.name}`);
+          }
+        }
         rows = rows.concat(data||[]);
       }
+      console.log(`SQL: Total notes for search: ${rows.length}`);
     } else {
       const { data } = await sb.from('notes').select('id,title,content,space_id,updated_at').eq('space_id', scopeVal).order('updated_at', { ascending:false }).limit(500);
       rows = data||[];
