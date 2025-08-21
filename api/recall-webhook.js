@@ -139,30 +139,28 @@ export default async function handler(req){
       const r = await fetch(String(body?.transcript_url || body?.data?.transcript_url));
       text = await r.text();
     } else if (!text && RECALL_KEY && transcriptId){
-          // Try multiple host/path variants and auth header styles
-          // Recall keys are region-scoped: US/EU/JP/Pay-as-you-go
-          const region = (process.env.RECALL_REGION || 'us').trim().toLowerCase();
-          const regionBases = {
-            'us': 'https://us-west-2.recall.ai',
-            'eu': 'https://eu-west-1.recall.ai', 
-            'jp': 'https://ap-northeast-1.recall.ai',
-            'payg': 'https://api.recall.ai'
-          };
-          const base = regionBases[region] || regionBases.us;
-          const urls = [`${base}/v1/transcripts/${transcriptId}`, `${base}/api/v1/transcripts/${transcriptId}`];
-          const headersList = [ { Authorization:`Token ${RECALL_KEY}` }, { 'X-Api-Key': RECALL_KEY } ];
-          for (const u of urls){
-            for (const hdrs of headersList){
-              try{
-                const r = await fetch(u, { headers: hdrs });
-                const j = await r.json().catch(()=>({}));
-                text = j?.text || j?.transcript || '';
-                if (text) break;
-              }catch{}
-            }
+      // Try multiple host/path variants and auth header styles
+      // Recall keys are region-scoped: US/EU/JP/Pay-as-you-go
+      const region = (process.env.RECALL_REGION || 'us').trim().toLowerCase();
+      const regionBases = {
+        'us': 'https://us-west-2.recall.ai',
+        'eu': 'https://eu-west-1.recall.ai', 
+        'jp': 'https://ap-northeast-1.recall.ai',
+        'payg': 'https://api.recall.ai'
+      };
+      const base = regionBases[region] || regionBases.us;
+      const urls = [`${base}/v1/transcripts/${transcriptId}`, `${base}/api/v1/transcripts/${transcriptId}`];
+      const headersList = [ { Authorization:`Token ${RECALL_KEY}` }, { 'X-Api-Key': RECALL_KEY } ];
+      for (const u of urls){
+        for (const hdrs of headersList){
+          try{
+            const r = await fetch(u, { headers: hdrs });
+            const j = await r.json().catch(()=>({}));
+            text = j?.text || j?.transcript || '';
             if (text) break;
-          }
+          }catch{}
         }
+        if (text) break;
       }
     }
   }catch{}
