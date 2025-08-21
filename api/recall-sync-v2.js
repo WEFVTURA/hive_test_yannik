@@ -212,16 +212,18 @@ export default async function handler(req){
           title = title.substring(0, 100) + '...';
         }
         
-        // Check for duplicates
+        // Check for duplicates - look for exact title match
+        const fullTitle = `[Recall] ${title}`;
         const checkDupe = await fetch(
-          `${SUPABASE_URL}/rest/v1/notes?select=id&space_id=eq.${spaceId}&title=ilike.${encodeURIComponent(`[Recall] ${title}`)}`,
+          `${SUPABASE_URL}/rest/v1/notes?select=id,title&space_id=eq.${spaceId}&title=eq.${encodeURIComponent(fullTitle)}`,
           { headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` } }
         );
         const existing = await checkDupe.json().catch(() => []);
         
         if (existing.length > 0) {
           skipped++;
-          processedTitles.push(`[SKIP] ${title}`);
+          processedTitles.push(`[SKIP] ${title} (already exists)`);
+          debugInfo.errors.push(`Skipped duplicate: ${fullTitle}`);
           continue;
         }
         
