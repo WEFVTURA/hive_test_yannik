@@ -16,22 +16,45 @@ export default async function handler(req){
   let rawBody = '';
   try{ rawBody = await req.text(); }catch{}
 
-  // Optional webhook signature verification
+  // Webhook signature verification (Svix format)
+  let signatureValid = false;
   try{
-    const providedSig = req.headers.get('x-recall-signature') || req.headers.get('svix-signature') || '';
+    const providedSig = req.headers.get('svix-signature') || req.headers.get('x-recall-signature') || '';
     const secret = process.env.RECALL_WEBHOOK_SECRET || process.env.WEBHOOK_SECRET || '';
+    
     if (secret && providedSig && rawBody){
-      const enc = new TextEncoder();
-      const key = await crypto.subtle.importKey('raw', enc.encode(secret), { name:'HMAC', hash:'SHA-256' }, false, ['sign']);
-      const sigBuf = await crypto.subtle.sign('HMAC', key, enc.encode(rawBody));
-      const sigHex = Array.from(new Uint8Array(sigBuf)).map(b=>b.toString(16).padStart(2,'0')).join('');
-      // Constant-time compare; if format differs (e.g., Svix), do not block
-      const a = providedSig.trim().toLowerCase();
-      const b = sigHex;
-      const matches = (a.length === b.length) && a.split('').every((c,i)=>c===b[i]);
-      if (!matches){ /* ignore mismatch to avoid false negatives */ }
+      // Handle Svix webhook format
+      if (providedSig.startsWith('v1,')) {
+        const timestamp = req.headers.get('svix-timestamp') || '';
+        const msgId = req.headers.get('svix-id') || '';
+        
+        // Svix format: sign(msg_id.timestamp.body)
+        const signedContent = `${msgId}.${timestamp}.${rawBody}`;
+        const enc = new TextEncoder();
+        
+        // Remove 'whsec_' prefix to get base64 key
+        const actualKey = secret.replace('whsec_', '');
+        const keyBytes = Uint8Array.from(atob(actualKey), c => c.charCodeAt(0));
+        
+        const key = await crypto.subtle.importKey('raw', keyBytes, { name:'HMAC', hash:'SHA-256' }, false, ['sign']);
+        const sigBuf = await crypto.subtle.sign('HMAC', key, enc.encode(signedContent));
+        const computedSig = btoa(String.fromCharCode(...new Uint8Array(sigBuf)));
+        
+        // Extract signatures from header (format: v1,s1=sig1 s2=sig2)
+        const sigs = providedSig.split(' ').filter(p => p.includes('=')).map(p => p.split('=')[1]);
+        signatureValid = sigs.some(s => s === computedSig);
+      } else {
+        // Fallback to simple HMAC
+        const enc = new TextEncoder();
+        const key = await crypto.subtle.importKey('raw', enc.encode(secret), { name:'HMAC', hash:'SHA-256' }, false, ['sign']);
+        const sigBuf = await crypto.subtle.sign('HMAC', key, enc.encode(rawBody));
+        const sigHex = Array.from(new Uint8Array(sigBuf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+        signatureValid = sigHex === providedSig.toLowerCase();
+      }
     }
-  }catch{}
+  }catch(e){
+    console.log('Signature verification error:', e.message);
+  }
 
   let body={};
   try{ body = rawBody ? JSON.parse(rawBody) : {}; }catch{ return json({ error:'bad_json' }, 400, cors); }

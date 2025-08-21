@@ -745,6 +745,9 @@ async function renderMeetingsHub(root){
       <button class="button" id="batchImportBtn" style="margin-left:8px" title="Batch Import">
         <i data-lucide="folder-plus" class="icon"></i> Batch
       </button>
+      <button class="button warning" id="testAuthBtn" style="margin-left:8px" title="Test API Auth">
+        🔑 Test Auth
+      </button>
       <button class="button ghost" id="debugBtn" style="margin-left:8px" title="Debug APIs">
         🐛 Debug
       </button>
@@ -1426,6 +1429,40 @@ function setupMeetingsHubInteractions() {
   // Bot List button
   document.getElementById('botListBtn')?.addEventListener('click', () => {
     location.hash = 'bots';
+  });
+  
+  // Test Auth button
+  document.getElementById('testAuthBtn')?.addEventListener('click', async () => {
+    const btn = document.getElementById('testAuthBtn');
+    if (!btn) return;
+    
+    btn.disabled = true;
+    btn.innerHTML = '⏳ Testing...';
+    
+    try {
+      const resp = await fetch('/api/recall-test-auth');
+      const data = await resp.json();
+      
+      const modal = document.createElement('div');
+      modal.className = 'modal-overlay';
+      modal.innerHTML = `
+        <div class="modal-content" style="max-width: 900px; max-height: 80vh; overflow-y: auto;">
+          <div class="modal-header">
+            <h2>Recall API Authentication Test</h2>
+            <button class="button ghost" onclick="this.closest('.modal-overlay').remove()">✕</button>
+          </div>
+          <div class="modal-body">
+            <pre style="background: var(--bg-secondary); padding: 16px; border-radius: 8px; overflow-x: auto; font-size: 12px; line-height: 1.5;">${JSON.stringify(data, null, 2)}</pre>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(modal);
+    } catch(e) {
+      alert('Test failed: ' + e.message);
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = '🔑 Test Auth';
+    }
   });
   
   // Debug button

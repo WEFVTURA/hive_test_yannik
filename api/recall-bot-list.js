@@ -81,7 +81,7 @@ export default async function handler(req){
     }
     
     // Now fetch details for each bot including transcript
-    for (const bot of allBots.slice(0, 30)) { // Limit to 30 to avoid timeout
+    for (const [idx, bot] of allBots.slice(0, 30).entries()) { // Limit to 30 to avoid timeout
       try {
         // Get full bot details
         const botUrl = `${base}/api/v1/bot/${bot.id}/`;
@@ -99,6 +99,18 @@ export default async function handler(req){
         }
         
         const botData = await botResp.json();
+        
+        // Add raw bot data to debug
+        if (idx === 0) {
+          results.debug.sample_bot_data = {
+            keys: Object.keys(botData),
+            has_transcript: 'transcript' in botData,
+            has_transcript_url: 'transcript_url' in botData,
+            has_recording_id: 'recording_id' in botData,
+            status: botData.status,
+            raw_data: JSON.stringify(botData).substring(0, 1000)
+          };
+        }
         
         // Extract transcript if available
         let transcriptText = '';
