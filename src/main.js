@@ -2107,12 +2107,26 @@ async function renderRecallBrowser(root) {
         listEl.innerHTML = `
           <div style="text-align: center; padding: 48px; color: var(--muted);">
             <i data-lucide="inbox" style="width: 48px; height: 48px;"></i>
-            <h3>No transcripts found</h3>
-            <p>Complete some meetings with Recall bot first</p>
+            <h3>No bots found</h3>
+            <p>Send Recall bot to a meeting first</p>
+            <div style="margin-top: 16px; padding: 12px; background: var(--panel-2); border-radius: 8px; text-align: left; max-width: 400px; margin-left: auto; margin-right: auto;">
+              <strong>Debug Info:</strong><br>
+              Total bots: ${data.total_bots || 0}<br>
+              Region: ${data.debug?.region || 'unknown'}<br>
+              Errors: ${data.debug?.errors?.length || 0}
+            </div>
           </div>
         `;
       } else {
-        listEl.innerHTML = transcripts.map((t, idx) => `
+        // Show total counts at top
+        const withTranscripts = transcripts.filter(t => t.has_transcript).length;
+        const completed = transcripts.filter(t => t.status === 'done').length;
+        
+        listEl.innerHTML = `
+          <div style="margin-bottom: 16px; padding: 12px; background: var(--info-bg); border-radius: 8px; font-size: 13px;">
+            📊 Found ${transcripts.length} bot(s) | ${completed} completed | ${withTranscripts} with transcripts
+          </div>
+        ` + transcripts.map((t, idx) => `
           <div class="transcript-item" data-id="${t.id}" style="border: 1px solid var(--border); border-radius: 12px; padding: 16px; background: var(--panel-1);">
             <div style="display: flex; gap: 16px;">
               <input type="checkbox" class="transcript-checkbox" data-idx="${idx}" style="width: 20px; height: 20px;">
@@ -2125,13 +2139,20 @@ async function renderRecallBrowser(root) {
                     </h4>
                     <div style="font-size: 12px; color: var(--muted);">
                       📅 ${new Date(t.created_at).toLocaleString()} 
-                      ${t.participants > 0 ? `· 👥 ${t.participants} participants` : ''}
+                      ${t.participants > 0 ? `· 👥 ${t.participant_names || t.participants + ' participants'}` : ''}
                       ${t.duration ? `· ${t.duration}` : ''}
                     </div>
                   </div>
-                  <span class="badge ${t.has_transcript ? 'success' : 'warning'}" style="padding: 4px 8px; border-radius: 4px; font-size: 11px;">
-                    ${t.has_transcript ? '✅ Has Transcript' : '⚠️ No Transcript'}
-                  </span>
+                  <div style="display: flex; flex-direction: column; gap: 4px; align-items: flex-end;">
+                    <span class="badge ${t.status === 'done' ? 'success' : t.status === 'fatal' ? 'danger' : 'warning'}" 
+                          style="padding: 4px 8px; border-radius: 4px; font-size: 11px;">
+                      ${t.status_display || t.status}
+                    </span>
+                    ${t.has_transcript ? 
+                      '<span class="badge success" style="padding: 4px 8px; border-radius: 4px; font-size: 11px;">✅ Has Transcript</span>' : 
+                      '<span class="badge muted" style="padding: 4px 8px; border-radius: 4px; font-size: 11px;">📝 No Transcript Yet</span>'
+                    }
+                  </div>
                 </div>
                 
                 ${t.meeting_url ? `

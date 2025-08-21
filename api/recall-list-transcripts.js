@@ -82,14 +82,13 @@ export default async function handler(req){
         const botId = bot.id;
         const status = bot.status?.code || bot.status || '';
         
-        // Only get transcripts for completed bots
-        if (status !== 'done' && status !== 'completed') {
-          continue;
-        }
+        // Include all bots, not just completed ones, so user can see status
+        const isCompleted = status === 'done' || status === 'completed' || status === 'finished' || 
+                          status === 'in_call_ending' || status === 'in_waiting_room';
         
-        // Try to get transcript
-        const transcriptUrl = `${base}/api/v1/bot/${botId}/transcript/`;
-        const tResp = await fetch(transcriptUrl, {
+        // First get full bot details
+        const botDetailUrl = `${base}/api/v1/bot/${botId}/`;
+        const botDetailResp = await fetch(botDetailUrl, {
           headers: {
             'Authorization': `Token ${RECALL_KEY}`,
             'Accept': 'application/json'
@@ -97,39 +96,85 @@ export default async function handler(req){
         });
         
         let transcriptText = '';
-        let transcriptData = null;
+        let botDetail = null;
         
-        if (tResp.ok) {
-          transcriptData = await tResp.json();
+        if (botDetailResp.ok) {
+          botDetail = await botDetailResp.json();
           
-          // Extract text from various possible formats
-          if (typeof transcriptData === 'string') {
-            transcriptText = transcriptData;
-          } else if (transcriptData?.transcript) {
-            transcriptText = transcriptData.transcript;
-          } else if (transcriptData?.text) {
-            transcriptText = transcriptData.text;
-          } else if (Array.isArray(transcriptData)) {
-            // Format speaker segments
-            transcriptText = transcriptData.map(seg => 
-              `${seg.speaker || 'Unknown'}: ${seg.text || seg.words?.map(w => w.text).join(' ') || ''}`
-            ).join('\n');
+          // Check if transcript is directly in bot detail
+          if (botDetail.transcript) {
+            if (typeof botDetail.transcript === 'string') {
+              transcriptText = botDetail.transcript;
+            } else if (Array.isArray(botDetail.transcript)) {
+              // Format speaker segments
+              transcriptText = botDetail.transcript.map(seg => {
+                const speaker = seg.speaker_id === 0 ? 'Bot' : (seg.speaker || `Speaker ${seg.speaker_id || 'Unknown'}`);
+                const words = seg.words ? seg.words.map(w => w.text || w.word || w).join(' ') : (seg.text || '');
+                return `${speaker}: ${words}`;
+              }).join('\n\n');
+            } else if (botDetail.transcript.text) {
+              transcriptText = botDetail.transcript.text;
+            } else if (botDetail.transcript.segments) {
+              transcriptText = botDetail.transcript.segments.map(seg => 
+                `${seg.speaker || 'Unknown'}: ${seg.text || ''}`
+              ).join('\n\n');
+            }
+          }
+        }
+        
+        // If no transcript in bot detail, try the transcript endpoint
+        if (!transcriptText && isCompleted) {
+          const transcriptUrl = `${base}/api/v1/bot/${botId}/transcript/`;
+          const tResp = await fetch(transcriptUrl, {
+            headers: {
+              'Authorization': `Token ${RECALL_KEY}`,
+              'Accept': 'application/json'
+            }
+          });
+          
+          if (tResp.ok) {
+            const transcriptData = await tResp.json();
+            
+            // Extract text from various possible formats
+            if (typeof transcriptData === 'string') {
+              transcriptText = transcriptData;
+            } else if (transcriptData?.transcript) {
+              transcriptText = transcriptData.transcript;
+            } else if (transcriptData?.text) {
+              transcriptText = transcriptData.text;
+            } else if (Array.isArray(transcriptData)) {
+              // Format speaker segments
+              transcriptText = transcriptData.map(seg => 
+                `${seg.speaker || 'Unknown'}: ${seg.text || seg.words?.map(w => w.text).join(' ') || ''}`
+              ).join('\n');
+            }
           }
         }
         
         // Get meeting info
-        const meetingTitle = bot.meeting_metadata?.title || 
+        const meetingTitle = botDetail?.meeting_metadata?.title || 
+                           bot.meeting_metadata?.title ||
                            bot.meeting_url || 
                            `Meeting ${new Date(bot.created_at).toLocaleDateString()}`;
+        
+        // Get participants info
+        const participants = botDetail?.meeting_participants || bot.meeting_participants || [];
+        const participantNames = participants.map(p => p.name || 'Unknown').filter(n => n !== 'Unknown');
         
         transcripts.push({
           id: botId,
           title: meetingTitle,
           status: status,
+          status_display: status === 'done' ? 'Completed' : 
+                         status === 'in_call_ending' ? 'Ending call' :
+                         status === 'in_waiting_room' ? 'In waiting room' :
+                         status === 'joining_call' ? 'Joining' :
+                         status === 'fatal' ? 'Failed' : status,
           created_at: bot.created_at,
-          duration: bot.video_url ? 'Has recording' : 'No recording',
+          duration: botDetail?.video_url || bot.video_url ? 'Has recording' : 'No recording',
           meeting_url: bot.meeting_url || '',
-          participants: bot.meeting_participants?.length || 0,
+          participants: participantNames.length,
+          participant_names: participantNames.join(', '),
           has_transcript: Boolean(transcriptText),
           transcript_length: transcriptText.length,
           transcript_preview: transcriptText.substring(0, 500),
