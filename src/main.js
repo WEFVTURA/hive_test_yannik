@@ -519,6 +519,11 @@ async function renderSpacesList(){
       console.error('Failed to load spaces:', err);
       return [];
     });
+    // If for any reason no spaces are returned, ensure baseline spaces and retry once
+    if (!Array.isArray(spaces) || spaces.length===0){
+      try{ if (typeof ensureBaselineSpaces === 'function') await ensureBaselineSpaces(); }catch{}
+      try{ spaces = await db_listSpaces().catch(()=>[]); }catch{}
+    }
     if (currentQuery) spaces = spaces.filter(s => (s.name||'').toLowerCase().includes(currentQuery));
 
     const list = document.getElementById('spacesList');
@@ -583,7 +588,8 @@ async function renderLibrary(){
     
     const navItems = document.getElementById('navItems');
     if (navItems) {
-      navItems.innerHTML = spaces.slice(0,4).map(s=>`<div class="nav-item" data-id="${s.id}"><div style="display:flex; align-items:center; gap:8px"><svg class="icon"><use href="#book"></use></svg><span>${s.name}</span></div><button class="button ghost sm" data-space-menu="${s.id}" title="Options">⋯</button></div>`).join('');
+      const topSpaces = spaces.slice(0, Math.max(4, spaces.length));
+      navItems.innerHTML = topSpaces.map(s=>`<div class="nav-item" data-id="${s.id}"><div style="display:flex; align-items:center; gap:8px"><svg class="icon"><use href="#book"></use></svg><span>${s.name}</span></div><button class="button ghost sm" data-space-menu="${s.id}" title="Options">⋯</button></div>`).join('');
       navItems.querySelectorAll('[data-id]').forEach(el=>{ el.addEventListener('click', ()=>{ location.hash = 'space/'+el.getAttribute('data-id'); }); });
       // Prevent row navigation when clicking the options button
       navItems.querySelectorAll('[data-space-menu]').forEach(btn=>{
@@ -748,12 +754,11 @@ async function renderMeetingsHub(root){
               </select>
             </div>
           </div>
-          <!-- Transcript View Selector -->
-          <div style="border-top: 1px solid var(--border); padding-top: 12px;">
+          <!-- Transcript View Selector (now single robust view, keep button to refresh) -->
+          <div style="border-top: 1px solid var(--border); padding-top: 12px; display:flex; gap:8px; align-items:center;">
             <span style="font-weight: 600; margin-right: 12px;">Transcript View:</span>
-            <button class="button sm view-btn ${getTranscriptViewMode() === 'view1' ? 'active' : ''}" data-view="view1">🎭 Speaker View</button>
-            <button class="button sm view-btn ${getTranscriptViewMode() === 'view2' ? 'active' : ''}" data-view="view2">📝 Paragraph View</button>
-            <button class="button sm view-btn ${getTranscriptViewMode() === 'view3' ? 'active' : ''}" data-view="view3">📄 Clean Text</button>
+            <span class="muted" style="font-size:12px">Auto (Names from participants)</span>
+            <button class="button sm" id="refreshMeetingsView">Refresh formatting</button>
           </div>
         </div>
 
@@ -1050,40 +1055,17 @@ async function renderMeetingsSearch(root){
   });
 }
 
-// Get current transcript view mode from localStorage
-function getTranscriptViewMode() {
-  return localStorage.getItem('transcript_view_mode') || 'view1';
-}
-
-// Set transcript view mode
-function setTranscriptViewMode(mode) {
-  localStorage.setItem('transcript_view_mode', mode);
-  // Refresh current view
-  if (location.hash === 'meetings/hub') {
-    renderMeetingsHub(document.getElementById('content'));
-  }
-}
-
-// Helper function to format transcript content - 3 different solutions
+// Helper: single, robust transcript formatter with real speaker names
 function formatTranscriptContent(content, isPreview = false) {
-  if (!content) return 'No content available';
-  
-  const viewMode = getTranscriptViewMode();
-  
-  switch (viewMode) {
-    case 'view1': return formatTranscriptView1(content, isPreview);
-    case 'view2': return formatTranscriptView2(content, isPreview);
-    case 'view3': return formatTranscriptView3(content, isPreview);
-    default: return formatTranscriptView1(content, isPreview);
-  }
-}
-
-// VIEW 1: Advanced parsing with speaker detection and timestamps
-function formatTranscriptView1(content, isPreview = false) {
   if (!content) return 'No content available';
   
   try {
     const data = JSON.parse(content);
+    
+    // Case A: top-level array of blocks with participant + words
+    if (Array.isArray(data) && data.length > 0 && data[0] && typeof data[0] === 'object' && 'participant' in data[0] && 'words' in data[0]){
+      return formatRecallTranscriptFromBlocks(data, isPreview);
+    }
     
     // Handle direct array of word objects
     if (Array.isArray(data) && data.length > 0 && data[0].text) {
@@ -1105,67 +1087,6 @@ function formatTranscriptView1(content, isPreview = false) {
     
   } catch (e) {
     return formatPlainTextWithSpeakers(content, isPreview);
-  }
-}
-
-// VIEW 2: Simple text extraction with minimal formatting
-function formatTranscriptView2(content, isPreview = false) {
-  if (!content) return 'No content available';
-  
-  try {
-    const data = JSON.parse(content);
-    const extractedText = extractAllTextFromJSON(data);
-    
-    if (extractedText.length > 10) {
-      // Simple paragraph format
-      const sentences = extractedText.split(/[.!?]+/).filter(s => s.trim().length > 3);
-      let formatted = '';
-      
-      for (let i = 0; i < sentences.length; i += 3) {
-        const paragraph = sentences.slice(i, i + 3).join('. ').trim() + '.';
-        formatted += `<p style="margin-bottom: 12px; line-height: 1.6;">${paragraph}</p>`;
-        if (isPreview && i >= 6) break; // Limit preview to 2 paragraphs
-      }
-      
-      return formatted || extractedText;
-    }
-    
-    return `<div style="background: var(--panel-2); padding: 12px; border-radius: 6px; white-space: pre-wrap;">${JSON.stringify(data, null, 2)}</div>`;
-    
-  } catch (e) {
-    return `<div style="line-height: 1.6;">${content}</div>`;
-  }
-}
-
-// VIEW 3: Raw text extraction with basic cleanup
-function formatTranscriptView3(content, isPreview = false) {
-  if (!content) return 'No content available';
-  
-  try {
-    const data = JSON.parse(content);
-    const extractedText = extractAllTextFromJSON(data);
-    
-    if (extractedText.length > 10) {
-      // Clean up and format as simple text
-      const cleanText = extractedText
-        .replace(/\s+/g, ' ')
-        .replace(/([.!?])\s*([a-zA-Z])/g, '$1 $2')
-        .trim();
-      
-      const displayText = isPreview ? cleanText.substring(0, 500) + '...' : cleanText;
-      
-      return `
-        <div style="background: var(--background); padding: 16px; border-radius: 8px; border: 1px solid var(--border);">
-          <div style="font-size: 14px; line-height: 1.8; white-space: pre-wrap;">${displayText}</div>
-        </div>
-      `;
-    }
-    
-    // Show formatted JSON if no text found
-    return `<pre style="font-size: 11px; color: var(--muted); background: var(--panel-2); padding: 12px; border-radius: 6px; max-height: 200px; overflow-y: auto;">${JSON.stringify(data, null, 2)}</pre>`;
-    
-  } catch (e) {
-    return `<div style="padding: 12px; background: var(--panel-2); border-radius: 6px;">${content}</div>`;
   }
 }
 
@@ -1193,6 +1114,26 @@ function extractAllTextFromJSON(data) {
 }
 
 // Enhanced formatting functions
+function formatRecallTranscriptFromBlocks(blocks, isPreview = false){
+  // blocks: [{ participant: { id, name, ... }, words: [{ text, ... }, ...] }, ...]
+  const paragraphs = [];
+  for (const blk of blocks){
+    const name = (blk?.participant?.name || 'Speaker').toString();
+    const words = Array.isArray(blk?.words) ? blk.words : [];
+    const text = words.map(w => w?.text || w?.word || '').filter(Boolean).join(' ').trim();
+    if (text){
+      paragraphs.push({ speaker: name, text });
+      if (isPreview && paragraphs.length >= 3) break;
+    }
+  }
+  if (!paragraphs.length) return '';
+  return paragraphs.map(p => `
+    <div style="margin-bottom: 16px; padding: 12px; background: var(--panel-2); border-radius: 6px; border-left: 3px solid var(--primary);">
+      <div style="font-weight: 600; color: var(--primary); margin-bottom: 8px;">${p.speaker}</div>
+      <div style="line-height: 1.6; white-space: pre-wrap;">${p.text}</div>
+    </div>
+  `).join('');
+}
 function formatRecallTranscriptAdvanced(words, isPreview = false) {
   if (!words || !Array.isArray(words)) return 'No transcript data available';
   
@@ -1345,14 +1286,9 @@ function setupMeetingsHubInteractions() {
     sortSelect.addEventListener('change', sortMeetingsHub);
   }
   
-  // View selector buttons
-  document.querySelectorAll('.view-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const mode = btn.getAttribute('data-view');
-      setTranscriptViewMode(mode);
-      document.querySelectorAll('.view-btn').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-    });
+  // Refresh button
+  document.getElementById('refreshMeetingsView')?.addEventListener('click', ()=>{
+    renderMeetingsHub(document.getElementById('content'));
   });
 }
 
