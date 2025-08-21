@@ -720,6 +720,9 @@ async function openSpaceOptions(space){
 
 // Comprehensive Meetings Hub (combines dashboard, list, and search)
 async function renderMeetingsHub(root){
+  // Clear notes cache
+  window.notesCache = [];
+  
   root.innerHTML = `
     <div class="content-head">
       <div class="title">
@@ -787,6 +790,9 @@ async function renderMeetingsHub(root){
     
     const hubContent = document.getElementById('meetingsHubContent');
     if (notes && notes.length > 0) {
+      // Store notes in cache for summary generation
+      window.notesCache = notes;
+      
       // Render comprehensive view
       hubContent.innerHTML = `
         <!-- Stats Dashboard -->
@@ -864,17 +870,42 @@ async function renderMeetingsHub(root){
                         <button class="button sm danger" onclick="deleteMeeting('${note.id}')"><i data-lucide="trash-2"></i> Delete</button>
                       </div>
                     </div>
-                    <div>
-                      <div style="font-weight:700; margin-bottom:6px;">🧠 Summary</div>
-                      <div id="summary-${note.id}" style="font-size:14px; line-height:1.5; background: var(--panel-2); padding: 10px; border-radius: 6px; min-height: 80px;">
-                        Generating summary...
-                      </div>
-                    </div>
                   </div>
                 </div>
                 <div id="meeting-full-${note.id}" class="meeting-full" style="display: none; padding: 16px; background: var(--background); border-top: 1px solid var(--border);">
                   <div style="max-height: 420px; overflow-y: auto; padding-right: 8px;">
                     ${formatTranscriptContent(note.content, false)}
+                  </div>
+                  
+                  <!-- Summary section under transcript -->
+                  <div style="margin-top: 16px; border-top: 1px solid var(--border); padding-top: 16px;">
+                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+                      <h4 style="margin: 0; font-size: 16px; font-weight: 600; color: var(--primary);">
+                        <i data-lucide="sparkles" style="width: 16px; height: 16px; display: inline-block; vertical-align: text-bottom;"></i>
+                        AI Summary
+                      </h4>
+                      <div style="display: flex; gap: 8px;">
+                        <button id="generateSummaryBtn-${note.id}" class="button sm primary" onclick="generateSummaryForNote('${note.id}')">
+                          <i data-lucide="wand-2"></i> Generate Summary
+                        </button>
+                        <button id="toggleSummaryBtn-${note.id}" class="button sm ghost" style="display: none;" onclick="toggleSummary('${note.id}')">
+                          <i data-lucide="chevron-down" id="summaryChevron-${note.id}"></i> Hide
+                        </button>
+                      </div>
+                    </div>
+                    <div id="summary-container-${note.id}" style="display: none;">
+                      <div id="summary-${note.id}" style="
+                        background: linear-gradient(135deg, var(--panel-2), var(--panel-1));
+                        padding: 16px;
+                        border-radius: 8px;
+                        border-left: 3px solid var(--accent);
+                        font-size: 14px;
+                        line-height: 1.6;
+                        color: var(--text);
+                      ">
+                        <!-- Summary content will be inserted here -->
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -885,12 +916,6 @@ async function renderMeetingsHub(root){
       
       // Add functionality
       setupMeetingsHubInteractions();
-      // Fetch summaries async
-      (async()=>{
-        for (const n of notes){
-          try{ await fetchAndRenderSummary(n.id, n.title, n.content); }catch{}
-        }
-      })();
       
     } else {
       hubContent.innerHTML = `
@@ -1713,27 +1738,151 @@ function extractSpeakerNames(raw){
   }catch{ return []; }
 }
 
-// Server summary using Mistral via backend proxy (simple fetch to edge if available)
-async function fetchAndRenderSummary(noteId, title, content){
-  const el = document.getElementById(`summary-${noteId}`);
-  if (!el) return;
-  try{
-    const resp = await fetch('/api/summarize-mistral', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ title, content }) });
-    if (!resp.ok) throw new Error('summary_failed');
-    const j = await resp.json();
-    const summary = j.summary || '';
-    el.textContent = summary || 'No summary available';
-    // Persist once server-side for re-use
-    try{ await fetch('/api/save-summary', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ id: noteId, summary }) }); }catch{}
-  }catch{
-    // Client fallback quick heuristic summary
-    try{
-      const txt = typeof content==='string' ? content : JSON.stringify(content);
-      const parsed = formatTranscriptContent(txt, false).replace(/<[^>]+>/g,'');
-      el.textContent = (parsed.split(/\n+/).slice(0,3).join(' ').substring(0,500)) || '—';
-      try{ await fetch('/api/save-summary', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ id: noteId, summary: el.textContent }) }); }catch{}
-    }catch{ el.textContent = '—'; }
+// Generate summary for a specific note
+window.generateSummaryForNote = async (noteId) => {
+  const btn = document.getElementById(`generateSummaryBtn-${noteId}`);
+  const summaryEl = document.getElementById(`summary-${noteId}`);
+  const containerEl = document.getElementById(`summary-container-${noteId}`);
+  const toggleBtn = document.getElementById(`toggleSummaryBtn-${noteId}`);
+  
+  if (!btn || !summaryEl) return;
+  
+  // Get note content
+  const note = window.notesCache?.find(n => n.id === noteId);
+  if (!note) {
+    alert('Note not found');
+    return;
   }
+  
+  // Update button state
+  btn.disabled = true;
+  btn.innerHTML = '<span style="display: inline-flex; align-items: center;"><svg class="icon" style="animation: spin 1s linear infinite; width: 14px; height: 14px; margin-right: 4px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 11-6.219-8.56"/></svg> Generating...</span>';
+  
+  // Add spinning animation if not exists
+  if (!document.getElementById('summarySpinnerStyle')) {
+    const style = document.createElement('style');
+    style.id = 'summarySpinnerStyle';
+    style.textContent = '@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }';
+    document.head.appendChild(style);
+  }
+  
+  try {
+    // Call the API to generate summary
+    const resp = await fetch('/api/summarize-mistral', { 
+      method: 'POST', 
+      headers: {'Content-Type': 'application/json'}, 
+      body: JSON.stringify({ 
+        title: note.title, 
+        content: note.content 
+      }) 
+    });
+    
+    if (!resp.ok) throw new Error('Failed to generate summary');
+    
+    const data = await resp.json();
+    const summary = data.summary || '';
+    
+    if (summary) {
+      // Format and display the summary
+      const formattedSummary = formatSummaryContent(summary);
+      summaryEl.innerHTML = formattedSummary;
+      
+      // Show the summary container
+      containerEl.style.display = 'block';
+      btn.style.display = 'none';
+      toggleBtn.style.display = 'inline-flex';
+      
+      // Save summary to database
+      try {
+        await fetch('/api/save-summary', { 
+          method: 'POST', 
+          headers: {'Content-Type': 'application/json'}, 
+          body: JSON.stringify({ id: noteId, summary }) 
+        });
+      } catch(e) {
+        console.error('Failed to save summary:', e);
+      }
+    } else {
+      summaryEl.innerHTML = '<em style="color: var(--muted);">No summary available</em>';
+      containerEl.style.display = 'block';
+    }
+    
+  } catch(error) {
+    console.error('Summary generation error:', error);
+    summaryEl.innerHTML = `<span style="color: var(--danger);">Failed to generate summary: ${error.message}</span>`;
+    containerEl.style.display = 'block';
+    btn.disabled = false;
+    btn.innerHTML = '<i data-lucide="wand-2"></i> Generate Summary';
+  }
+  
+  // Re-create icons
+  lucide.createIcons();
+};
+
+// Toggle summary visibility
+window.toggleSummary = (noteId) => {
+  const container = document.getElementById(`summary-container-${noteId}`);
+  const chevron = document.getElementById(`summaryChevron-${noteId}`);
+  const toggleBtn = document.getElementById(`toggleSummaryBtn-${noteId}`);
+  
+  if (!container) return;
+  
+  if (container.style.display === 'none') {
+    container.style.display = 'block';
+    toggleBtn.innerHTML = '<i data-lucide="chevron-up" id="summaryChevron-' + noteId + '"></i> Hide';
+  } else {
+    container.style.display = 'none';
+    toggleBtn.innerHTML = '<i data-lucide="chevron-down" id="summaryChevron-' + noteId + '"></i> Show';
+  }
+  
+  lucide.createIcons();
+};
+
+// Format summary content for display
+function formatSummaryContent(summary) {
+  if (!summary) return '';
+  
+  // Remove any JSON or HTML artifacts
+  let formatted = summary;
+  
+  // If it looks like JSON, try to parse it
+  if (summary.startsWith('{') || summary.startsWith('[')) {
+    try {
+      const parsed = JSON.parse(summary);
+      if (typeof parsed === 'string') {
+        formatted = parsed;
+      } else if (parsed.summary) {
+        formatted = parsed.summary;
+      } else if (parsed.text) {
+        formatted = parsed.text;
+      } else {
+        formatted = JSON.stringify(parsed, null, 2);
+      }
+    } catch(e) {
+      // Not JSON, use as-is
+    }
+  }
+  
+  // Convert markdown-style formatting to HTML
+  formatted = formatted
+    .replace(/^## (.+)$/gm, '<h3 style="margin: 16px 0 8px 0; font-size: 15px; font-weight: 600; color: var(--primary);">$1</h3>')
+    .replace(/^### (.+)$/gm, '<h4 style="margin: 12px 0 6px 0; font-size: 14px; font-weight: 600;">$1</h4>')
+    .replace(/^\* (.+)$/gm, '<li>$1</li>')
+    .replace(/^- (.+)$/gm, '<li>$1</li>')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\n\n/g, '</p><p style="margin: 8px 0;">')
+    .replace(/\n/g, '<br>');
+  
+  // Wrap lists
+  formatted = formatted.replace(/(<li>.*<\/li>)(?:\s*<li>)/g, '<ul style="margin: 8px 0; padding-left: 20px;">$1');
+  formatted = formatted.replace(/(<\/li>)(?![\s]*<li>)/g, '$1</ul>');
+  
+  // Wrap in paragraph if not already structured
+  if (!formatted.includes('<p>') && !formatted.includes('<h')) {
+    formatted = `<p style="margin: 8px 0;">${formatted}</p>`;
+  }
+  
+  return formatted;
 }
 
 // Helper functions for meeting views
