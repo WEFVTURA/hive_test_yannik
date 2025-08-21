@@ -164,36 +164,64 @@ export default async function handler(req){
           }
         }
         
-        // If no transcript in main data, try transcript endpoint
+        // If no transcript in main data, try to get transcript via API
         if (!transcriptText) {
           try {
-            const transcriptUrl = `${base}/api/v1/bot/${bot.id}/transcript/`;
-            const tResp = await fetch(transcriptUrl, {
+            // Try the transcript list endpoint for this bot
+            const transcriptListUrl = `${base}/api/v1/transcript/?bot_id=${bot.id}`;
+            const tListResp = await fetch(transcriptListUrl, {
               headers: {
                 'Accept': 'application/json',
                 'Authorization': `Token ${RECALL_KEY}`
               }
             });
             
-            if (tResp.ok) {
-              const tData = await tResp.json();
+            if (tListResp.ok) {
+              const tListData = await tListResp.json();
+              const transcripts = tListData.results || [];
               
-              transcriptStructure = {
-                source: 'transcript_endpoint',
-                type: typeof tData,
-                isArray: Array.isArray(tData)
-              };
-              
-              if (Array.isArray(tData)) {
-                transcriptText = tData.map(seg => {
-                  const speaker = seg.speaker || `Speaker ${seg.speaker_id || 'Unknown'}`;
-                  const text = seg.text || (seg.words ? seg.words.map(w => w.text || w.word || w).join(' ') : '');
-                  return `${speaker}: ${text}`;
-                }).join('\n\n');
-              } else if (typeof tData === 'string') {
-                transcriptText = tData;
-              } else if (tData.text) {
-                transcriptText = tData.text;
+              if (transcripts.length > 0) {
+                const transcript = transcripts[0];
+                
+                // Check if there's a download URL
+                if (transcript.data?.download_url) {
+                  try {
+                    // Fetch the transcript from the download URL
+                    const downloadResp = await fetch(transcript.data.download_url);
+                    if (downloadResp.ok) {
+                      const downloadData = await downloadResp.json();
+                      
+                      transcriptStructure = {
+                        source: 'download_url',
+                        url: transcript.data.download_url.split('?')[0], // Remove query params for display
+                        type: typeof downloadData,
+                        isArray: Array.isArray(downloadData)
+                      };
+                      
+                      // Parse the downloaded transcript data
+                      if (Array.isArray(downloadData)) {
+                        transcriptText = downloadData.map(seg => {
+                          const speaker = seg.speaker || seg.speaker_name || `Speaker ${seg.speaker_id || 'Unknown'}`;
+                          const text = seg.text || (seg.words ? seg.words.map(w => w.text || w.word || w).join(' ') : '');
+                          return text ? `${speaker}: ${text}` : '';
+                        }).filter(line => line).join('\n\n');
+                      } else if (downloadData.segments) {
+                        transcriptText = downloadData.segments.map(seg => {
+                          const speaker = seg.speaker || `Speaker ${seg.speaker_id || 'Unknown'}`;
+                          const text = seg.text || (seg.words ? seg.words.map(w => w.text || w.word || w).join(' ') : '');
+                          return `${speaker}: ${text}`;
+                        }).join('\n\n');
+                      } else if (downloadData.transcript) {
+                        transcriptText = downloadData.transcript;
+                      }
+                    }
+                  } catch(e) {
+                    transcriptStructure = {
+                      source: 'download_url',
+                      error: e.message
+                    };
+                  }
+                }
               }
             }
           } catch(e) {

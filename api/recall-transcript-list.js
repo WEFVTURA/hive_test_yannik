@@ -104,8 +104,39 @@ export default async function handler(req){
           }
         }
         
-        // Get transcript text if URL is provided
-        if (transcript.transcript_url) {
+        // Get transcript text from download URL if provided
+        if (transcript.data?.download_url) {
+          try {
+            // Fetch the transcript from the download URL
+            const downloadResp = await fetch(transcript.data.download_url);
+            if (downloadResp.ok) {
+              const downloadData = await downloadResp.json();
+              
+              // Parse the downloaded transcript data
+              if (Array.isArray(downloadData)) {
+                transcriptText = downloadData.map(seg => {
+                  const speaker = seg.speaker || seg.speaker_name || `Speaker ${seg.speaker_id || 'Unknown'}`;
+                  const text = seg.text || (seg.words ? seg.words.map(w => w.text || w.word || w).join(' ') : '');
+                  return text ? `${speaker}: ${text}` : '';
+                }).filter(line => line).join('\n\n');
+              } else if (downloadData.segments) {
+                transcriptText = downloadData.segments.map(seg => {
+                  const speaker = seg.speaker || `Speaker ${seg.speaker_id || 'Unknown'}`;
+                  const text = seg.text || (seg.words ? seg.words.map(w => w.text || w.word || w).join(' ') : '');
+                  return `${speaker}: ${text}`;
+                }).join('\n\n');
+              } else if (downloadData.transcript) {
+                transcriptText = downloadData.transcript;
+              } else if (typeof downloadData === 'string') {
+                transcriptText = downloadData;
+              }
+            }
+          } catch(e) {
+            results.debug.transcript_fetch_error = `Download failed: ${e.message}`;
+          }
+        }
+        // Fallback to transcript_url if no download_url
+        else if (transcript.transcript_url) {
           try {
             const tResp = await fetch(transcript.transcript_url, {
               headers: {
