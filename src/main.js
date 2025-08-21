@@ -1423,9 +1423,9 @@ function setupMeetingsHubInteractions() {
       alert(`Debug Results (check console for details):
       
 Environment Variables:
-- Mistral: ${results.env?.MISTRAL ? '✅' : '❌'}
-- Recall: ${results.env?.RECALL ? '✅' : '❌'}
-- Deepgram: ${results.env?.DEEPGRAM_API_KEY ? '✅' : '❌'}
+- Mistral: ${results.env?.VITE_MISTRAL ? '✅' : '❌'}
+- Recall: ${results.env?.RECALL_API_KEY ? '✅' : '❌'}
+- Deepgram: ${results.env?.VITE_DEEPGRAM_API_KEY ? '✅' : '❌'}
 
 API Tests:
 - Mistral API: ${results.mistral?.key_found ? '✅' : '❌'} ${results.mistral?.test_result?.ok ? '(working)' : '(not working)'}

@@ -14,6 +14,7 @@ export default async function handler(req) {
   // Check which environment variables are available
   const envVars = {
     // Mistral
+    VITE_MISTRAL: Boolean(process.env.VITE_MISTRAL),
     MISTRAL_API_KEY: Boolean(process.env.MISTRAL_API_KEY),
     MISTRAL: Boolean(process.env.MISTRAL),
     VITE_MISTRAL_API_KEY: Boolean(process.env.VITE_MISTRAL_API_KEY),
@@ -25,10 +26,12 @@ export default async function handler(req) {
     RECALL_REGION: process.env.RECALL_REGION || 'not set',
     
     // Deepgram
+    VITE_DEEPGRAM_API_KEY: Boolean(process.env.VITE_DEEPGRAM_API_KEY),
     DEEPGRAM_API_KEY: Boolean(process.env.DEEPGRAM_API_KEY),
     DEEPGRAM: Boolean(process.env.DEEPGRAM),
     
     // OpenAI
+    VITE_OPEN_AI_API: Boolean(process.env.VITE_OPEN_AI_API),
     OPENAI_API_KEY: Boolean(process.env.OPENAI_API_KEY),
     OPEN_AI_API: Boolean(process.env.OPEN_AI_API),
     

@@ -24,7 +24,7 @@ export default async function handler(req){
     }
     const hdrAuth = req.headers.get('authorization') || '';
     const inlineKey = hdrAuth.toLowerCase().startsWith('bearer ') ? hdrAuth.slice(7).trim() : '';
-    const apiKey = inlineKey || process.env.DEEPGRAM_API_KEY || '';
+    const apiKey = inlineKey || process.env.VITE_DEEPGRAM_API_KEY || process.env.DEEPGRAM_API_KEY || '';
     if (!apiKey) return new Response(JSON.stringify({ error:'DEEPGRAM_API_KEY missing' }), { status:500, headers:{...cors,'Content-Type':'application/json'} });
 
     // Optional callback to save transcript via webhook

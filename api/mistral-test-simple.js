@@ -14,6 +14,7 @@ export default async function handler(req) {
   // Check all possible env var names
   const result = {
     env_vars_checked: {
+      VITE_MISTRAL: Boolean(process.env.VITE_MISTRAL),
       MISTRAL_API_KEY: Boolean(process.env.MISTRAL_API_KEY),
       MISTRAL: Boolean(process.env.MISTRAL),
       VITE_MISTRAL_API_KEY: Boolean(process.env.VITE_MISTRAL_API_KEY),
@@ -24,8 +25,9 @@ export default async function handler(req) {
     test_result: null
   };
   
-  // Get the key
-  const key = process.env.MISTRAL_API_KEY || 
+  // Get the key - VITE_MISTRAL is what's actually in Vercel
+  const key = process.env.VITE_MISTRAL ||
+              process.env.MISTRAL_API_KEY || 
               process.env.MISTRAL || 
               process.env.VITE_MISTRAL_API_KEY || 
               process.env.MISTRAL_AI_API_KEY || '';

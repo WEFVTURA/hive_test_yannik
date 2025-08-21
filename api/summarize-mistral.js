@@ -7,11 +7,12 @@ export default async function handler(req){
   if (req.method !== 'POST') return jres({ error:'method_not_allowed' }, 405);
   try{
     const { title='', content='' } = await req.json();
-    // Check all possible env var names
-    const key = process.env.MISTRAL_API_KEY || process.env.MISTRAL || process.env.VITE_MISTRAL_API_KEY || '';
+    // Check all possible env var names - VITE_MISTRAL is what's in Vercel
+    const key = process.env.VITE_MISTRAL || process.env.MISTRAL_API_KEY || process.env.MISTRAL || process.env.VITE_MISTRAL_API_KEY || '';
     
     // Debug: Check which env vars are actually available
     const envDebug = {
+      has_VITE_MISTRAL: Boolean(process.env.VITE_MISTRAL),
       has_MISTRAL_API_KEY: Boolean(process.env.MISTRAL_API_KEY),
       has_MISTRAL: Boolean(process.env.MISTRAL),
       has_VITE_MISTRAL_API_KEY: Boolean(process.env.VITE_MISTRAL_API_KEY),

@@ -28,7 +28,7 @@ export default async function handler(req){
     if (!file) return new Response(JSON.stringify({ error:'file missing' }), { status:400, headers:{...cors,'Content-Type':'application/json'} });
     const hdrAuth = req.headers.get('authorization') || '';
     const inlineKey = hdrAuth.toLowerCase().startsWith('bearer ') ? hdrAuth.slice(7).trim() : '';
-    const apiKey = inlineKey || process.env.OPENAI_API_KEY || '';
+    const apiKey = inlineKey || process.env.VITE_OPEN_AI_API || process.env.OPENAI_API_KEY || '';
     if (!apiKey) return new Response(JSON.stringify({ error:'OPENAI_API_KEY missing' }), { status:500, headers:{...cors,'Content-Type':'application/json'} });
 
     const body = new FormData();
