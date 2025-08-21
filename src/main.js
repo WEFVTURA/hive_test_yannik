@@ -71,9 +71,9 @@ app.innerHTML = `
       <button class="button" id="simplifiedViewBtn" style="width:100%"><i data-lucide="smartphone" class="icon" aria-hidden="true"></i> Simplified view</button>
       
       <div class="section">Transcripts</div>
-      <button class="button" id="txLiveBtn" style="width:100%"><i data-lucide="radio" class="icon" aria-hidden="true"></i> Transcripts — Live</button>
-      <button class="button" id="txJobsBtn" style="width:100%"><i data-lucide="clock" class="icon" aria-hidden="true"></i> Transcripts — Jobs</button>
-      <button class="button" id="txFilesBtn" style="width:100%"><i data-lucide="hard-drive" class="icon" aria-hidden="true"></i> Transcripts — Files</button>
+      <button class="button" id="meetingsDashBtn" style="width:100%"><i data-lucide="calendar" class="icon" aria-hidden="true"></i> Meetings Dashboard</button>
+      <button class="button" id="meetingsListBtn" style="width:100%"><i data-lucide="list" class="icon" aria-hidden="true"></i> Meeting Notes</button>
+      <button class="button" id="meetingsSearchBtn" style="width:100%"><i data-lucide="search" class="icon" aria-hidden="true"></i> Meeting Search</button>
 
       <div class="section">Giannandrea's Library</div>
       <div class="nav-group" id="spacesList"></div>
@@ -233,13 +233,13 @@ askBtn?.addEventListener('click', ()=>{
   setTimeout(()=>{ try{ document.getElementById('chatInput')?.focus(); }catch{} }, 0);
 });
 
-// Transcripts navigation
-const txLiveBtn = document.getElementById('txLiveBtn');
-const txJobsBtn = document.getElementById('txJobsBtn');
-const txFilesBtn = document.getElementById('txFilesBtn');
-txLiveBtn?.addEventListener('click', ()=>{ location.hash = 'transcripts/live'; });
-txJobsBtn?.addEventListener('click', ()=>{ location.hash = 'transcripts/jobs'; });
-txFilesBtn?.addEventListener('click', ()=>{ location.hash = 'transcripts/files'; });
+// Meetings navigation
+const meetingsDashBtn = document.getElementById('meetingsDashBtn');
+const meetingsListBtn = document.getElementById('meetingsListBtn');
+const meetingsSearchBtn = document.getElementById('meetingsSearchBtn');
+meetingsDashBtn?.addEventListener('click', ()=>{ location.hash = 'meetings/dashboard'; });
+meetingsListBtn?.addEventListener('click', ()=>{ location.hash = 'meetings/list'; });
+meetingsSearchBtn?.addEventListener('click', ()=>{ location.hash = 'meetings/search'; });
 
 // Tour trigger
 document.getElementById('openGuide')?.addEventListener('click', async()=>{
@@ -628,6 +628,412 @@ async function openSpaceOptions(space){
   renderRoute();
 }
 
+// Meeting transcript views
+async function renderMeetingsDashboard(root){
+  root.innerHTML = `
+    <div class="content-head">
+      <div class="title">
+        <i data-lucide="calendar" class="icon"></i>
+        Meetings Dashboard
+      </div>
+    </div>
+    <div class="content-body">
+      <div id="meetingsDashContent">
+        <div class="loading">Loading meetings...</div>
+      </div>
+    </div>
+  `;
+  
+  lucide.createIcons();
+  
+  try {
+    const { getSupabase } = await import('./lib/supabase.js');
+    const sb = getSupabase();
+    
+    // Get meetings space ID
+    const meetingsId = localStorage.getItem('hive_meetings_space_id') || '';
+    
+    // Fetch all notes from meetings space
+    const { data: notes, error } = await sb
+      .from('notes')
+      .select('*')
+      .eq('space_id', meetingsId)
+      .order('created_at', { ascending: false });
+    
+    if (error) throw error;
+    
+    const dashContent = document.getElementById('meetingsDashContent');
+    if (notes && notes.length > 0) {
+      dashContent.innerHTML = `
+        <div class="stats-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 16px; margin-bottom: 24px;">
+          <div class="stat-card" style="padding: 16px; border: 1px solid var(--border); border-radius: 8px;">
+            <div style="font-size: 24px; font-weight: 700; color: var(--primary);">${notes.length}</div>
+            <div style="color: var(--muted);">Total Meetings</div>
+          </div>
+          <div class="stat-card" style="padding: 16px; border: 1px solid var(--border); border-radius: 8px;">
+            <div style="font-size: 24px; font-weight: 700; color: var(--primary);">${notes.filter(n => n.title?.includes('Recall')).length}</div>
+            <div style="color: var(--muted);">Recall Transcripts</div>
+          </div>
+          <div class="stat-card" style="padding: 16px; border: 1px solid var(--border); border-radius: 8px;">
+            <div style="font-size: 24px; font-weight: 700; color: var(--primary);">${notes.filter(n => n.created_at > new Date(Date.now() - 7*24*60*60*1000).toISOString()).length}</div>
+            <div style="color: var(--muted);">This Week</div>
+          </div>
+        </div>
+        <div class="recent-meetings">
+          <h3>Recent Meetings</h3>
+          <div class="notes-list">
+            ${notes.slice(0, 10).map(note => `
+              <div class="note-card" style="padding: 12px; border: 1px solid var(--border); border-radius: 6px; margin-bottom: 8px; cursor: pointer;" onclick="expandNote('${note.id}', this)">
+                <div class="note-title" style="font-weight: 600;">${note.title || 'Untitled'}</div>
+                <div class="note-meta" style="font-size: 12px; color: var(--muted); margin-top: 4px;">
+                  ${new Date(note.created_at).toLocaleDateString()} • ${Math.round((note.content?.length || 0) / 100)} min read
+                </div>
+                <div class="note-preview" style="display: none; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border);">
+                  <div style="max-height: 200px; overflow-y: auto; font-size: 14px; line-height: 1.4;">
+                    ${(note.content || '').substring(0, 500)}${(note.content?.length || 0) > 500 ? '...' : ''}
+                  </div>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      `;
+    } else {
+      dashContent.innerHTML = `
+        <div class="empty-state" style="text-align: center; padding: 40px; color: var(--muted);">
+          <i data-lucide="calendar-x" style="width: 48px; height: 48px; margin-bottom: 16px;"></i>
+          <div>No meetings found</div>
+          <div style="font-size: 14px; margin-top: 8px;">Your meeting transcripts will appear here</div>
+        </div>
+      `;
+      lucide.createIcons();
+    }
+  } catch (error) {
+    document.getElementById('meetingsDashContent').innerHTML = `
+      <div class="error" style="color: var(--danger); padding: 16px;">
+        Error loading meetings: ${error.message}
+      </div>
+    `;
+  }
+}
+
+async function renderMeetingsList(root){
+  root.innerHTML = `
+    <div class="content-head">
+      <div class="title">
+        <i data-lucide="list" class="icon"></i>
+        Meeting Notes
+      </div>
+    </div>
+    <div class="content-body">
+      <div id="meetingsListContent">
+        <div class="loading">Loading meeting notes...</div>
+      </div>
+    </div>
+  `;
+  
+  lucide.createIcons();
+  
+  try {
+    const { getSupabase } = await import('./lib/supabase.js');
+    const sb = getSupabase();
+    
+    const meetingsId = localStorage.getItem('hive_meetings_space_id') || '';
+    
+    const { data: notes, error } = await sb
+      .from('notes')
+      .select('*')
+      .eq('space_id', meetingsId)
+      .order('created_at', { ascending: false });
+    
+    if (error) throw error;
+    
+    const listContent = document.getElementById('meetingsListContent');
+    if (notes && notes.length > 0) {
+      listContent.innerHTML = `
+        <div class="filter-bar" style="margin-bottom: 16px; display: flex; gap: 8px; align-items: center;">
+          <input type="text" id="meetingFilter" placeholder="Filter meetings..." style="flex: 1; padding: 8px; border: 1px solid var(--border); border-radius: 4px;">
+          <select id="sortBy" style="padding: 8px; border: 1px solid var(--border); border-radius: 4px;">
+            <option value="date-desc">Newest First</option>
+            <option value="date-asc">Oldest First</option>
+            <option value="title">Title A-Z</option>
+            <option value="size">By Size</option>
+          </select>
+        </div>
+        <div id="filteredNotes">
+          ${notes.map(note => `
+            <div class="meeting-item" data-title="${(note.title || '').toLowerCase()}" style="padding: 16px; border: 1px solid var(--border); border-radius: 8px; margin-bottom: 12px;">
+              <div class="meeting-header" style="display: flex; justify-content: between; align-items: start; margin-bottom: 8px;">
+                <div>
+                  <h4 style="margin: 0; font-weight: 600;">${note.title || 'Untitled Meeting'}</h4>
+                  <div style="font-size: 12px; color: var(--muted); margin-top: 4px;">
+                    ${new Date(note.created_at).toLocaleString()} • ${(note.content?.length || 0).toLocaleString()} characters
+                  </div>
+                </div>
+                <button class="button ghost sm" onclick="toggleMeetingContent('${note.id}')">
+                  <i data-lucide="chevron-down"></i>
+                </button>
+              </div>
+              <div id="content-${note.id}" class="meeting-content" style="display: none; padding-top: 12px; border-top: 1px solid var(--border);">
+                <div style="max-height: 300px; overflow-y: auto; font-size: 14px; line-height: 1.5; white-space: pre-wrap;">
+                  ${note.content || 'No content available'}
+                </div>
+                <div style="margin-top: 12px; display: flex; gap: 8px;">
+                  <button class="button sm" onclick="copyToClipboard('${note.id}')">Copy</button>
+                  <button class="button sm ghost" onclick="downloadNote('${note.id}', '${note.title}')">Download</button>
+                </div>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      `;
+      
+      // Add filter functionality
+      document.getElementById('meetingFilter').addEventListener('input', filterMeetings);
+      document.getElementById('sortBy').addEventListener('change', sortMeetings);
+      
+    } else {
+      listContent.innerHTML = `
+        <div class="empty-state" style="text-align: center; padding: 40px; color: var(--muted);">
+          <i data-lucide="file-text" style="width: 48px; height: 48px; margin-bottom: 16px;"></i>
+          <div>No meeting notes found</div>
+        </div>
+      `;
+    }
+    
+    lucide.createIcons();
+  } catch (error) {
+    document.getElementById('meetingsListContent').innerHTML = `
+      <div class="error" style="color: var(--danger); padding: 16px;">
+        Error loading meetings: ${error.message}
+      </div>
+    `;
+  }
+}
+
+async function renderMeetingsSearch(root){
+  root.innerHTML = `
+    <div class="content-head">
+      <div class="title">
+        <i data-lucide="search" class="icon"></i>
+        Meeting Search
+      </div>
+    </div>
+    <div class="content-body">
+      <div class="search-interface">
+        <div style="margin-bottom: 24px;">
+          <input type="text" id="meetingSearchInput" placeholder="Search through all your meeting transcripts..." 
+                 style="width: 100%; padding: 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 16px;">
+          <div style="margin-top: 8px; display: flex; gap: 8px; flex-wrap: wrap;">
+            <button class="button sm" onclick="searchMeetings('Recall')">Recall Transcripts</button>
+            <button class="button sm" onclick="searchMeetings('today')">Today</button>
+            <button class="button sm" onclick="searchMeetings('this week')">This Week</button>
+            <button class="button sm" onclick="searchMeetings('')">All</button>
+          </div>
+        </div>
+        <div id="searchResults">
+          <div style="text-align: center; color: var(--muted); padding: 40px;">
+            <i data-lucide="search" style="width: 48px; height: 48px; margin-bottom: 16px;"></i>
+            <div>Enter a search term to find specific meetings</div>
+            <div style="font-size: 14px; margin-top: 8px;">Search through titles, content, and dates</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+  
+  lucide.createIcons();
+  
+  // Add search functionality
+  document.getElementById('meetingSearchInput').addEventListener('input', debounce(performMeetingSearch, 300));
+  document.getElementById('meetingSearchInput').addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') performMeetingSearch();
+  });
+}
+
+// Helper functions for meeting views
+window.expandNote = (noteId, element) => {
+  const preview = element.querySelector('.note-preview');
+  if (preview) {
+    preview.style.display = preview.style.display === 'none' ? 'block' : 'none';
+  }
+};
+
+window.toggleMeetingContent = (noteId) => {
+  const content = document.getElementById(`content-${noteId}`);
+  const icon = event.target.closest('button').querySelector('i');
+  if (content) {
+    const isVisible = content.style.display !== 'none';
+    content.style.display = isVisible ? 'none' : 'block';
+    icon.setAttribute('data-lucide', isVisible ? 'chevron-down' : 'chevron-up');
+    lucide.createIcons();
+  }
+};
+
+window.copyToClipboard = async (noteId) => {
+  const content = document.getElementById(`content-${noteId}`);
+  if (content) {
+    try {
+      await navigator.clipboard.writeText(content.textContent);
+      window.showToast && window.showToast('Copied to clipboard');
+    } catch (e) {
+      window.showToast && window.showToast('Failed to copy');
+    }
+  }
+};
+
+window.downloadNote = (noteId, title) => {
+  const content = document.getElementById(`content-${noteId}`);
+  if (content) {
+    const blob = new Blob([content.textContent], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${title || 'meeting'}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+};
+
+window.filterMeetings = () => {
+  const filter = document.getElementById('meetingFilter').value.toLowerCase();
+  const items = document.querySelectorAll('.meeting-item');
+  items.forEach(item => {
+    const title = item.getAttribute('data-title') || '';
+    item.style.display = title.includes(filter) ? 'block' : 'none';
+  });
+};
+
+window.sortMeetings = () => {
+  const sortBy = document.getElementById('sortBy').value;
+  const container = document.getElementById('filteredNotes');
+  const items = Array.from(container.children);
+  
+  items.sort((a, b) => {
+    switch(sortBy) {
+      case 'date-asc': return new Date(a.querySelector('.meeting-header div div').textContent.split(' •')[0]) - new Date(b.querySelector('.meeting-header div div').textContent.split(' •')[0]);
+      case 'title': return a.getAttribute('data-title').localeCompare(b.getAttribute('data-title'));
+      case 'size': return parseInt(b.querySelector('.meeting-header div div').textContent.split(' • ')[1]) - parseInt(a.querySelector('.meeting-header div div').textContent.split(' • ')[1]);
+      default: return new Date(b.querySelector('.meeting-header div div').textContent.split(' •')[0]) - new Date(a.querySelector('.meeting-header div div').textContent.split(' •')[0]);
+    }
+  });
+  
+  items.forEach(item => container.appendChild(item));
+};
+
+window.searchMeetings = (query) => {
+  document.getElementById('meetingSearchInput').value = query;
+  performMeetingSearch();
+};
+
+async function performMeetingSearch() {
+  const query = document.getElementById('meetingSearchInput').value.toLowerCase().trim();
+  const results = document.getElementById('searchResults');
+  
+  if (!query) {
+    results.innerHTML = `
+      <div style="text-align: center; color: var(--muted); padding: 40px;">
+        <i data-lucide="search" style="width: 48px; height: 48px; margin-bottom: 16px;"></i>
+        <div>Enter a search term to find specific meetings</div>
+      </div>
+    `;
+    lucide.createIcons();
+    return;
+  }
+  
+  results.innerHTML = '<div class="loading">Searching...</div>';
+  
+  try {
+    const { getSupabase } = await import('./lib/supabase.js');
+    const sb = getSupabase();
+    
+    const meetingsId = localStorage.getItem('hive_meetings_space_id') || '';
+    
+    const { data: notes, error } = await sb
+      .from('notes')
+      .select('*')
+      .eq('space_id', meetingsId)
+      .order('created_at', { ascending: false });
+    
+    if (error) throw error;
+    
+    const filtered = notes.filter(note => 
+      (note.title || '').toLowerCase().includes(query) ||
+      (note.content || '').toLowerCase().includes(query) ||
+      new Date(note.created_at).toLocaleDateString().includes(query)
+    );
+    
+    if (filtered.length > 0) {
+      results.innerHTML = `
+        <div style="margin-bottom: 16px; color: var(--muted);">
+          Found ${filtered.length} result${filtered.length === 1 ? '' : 's'} for "${query}"
+        </div>
+        ${filtered.map(note => {
+          const titleMatch = (note.title || '').toLowerCase().includes(query);
+          const contentMatch = (note.content || '').toLowerCase().includes(query);
+          let snippet = '';
+          
+          if (contentMatch) {
+            const index = (note.content || '').toLowerCase().indexOf(query);
+            const start = Math.max(0, index - 100);
+            const end = Math.min((note.content || '').length, index + 200);
+            snippet = (note.content || '').substring(start, end);
+            snippet = snippet.replace(new RegExp(`(${query})`, 'gi'), '<mark>$1</mark>');
+          }
+          
+          return `
+            <div class="search-result" style="padding: 16px; border: 1px solid var(--border); border-radius: 8px; margin-bottom: 12px;">
+              <h4 style="margin: 0 0 8px 0;">
+                ${titleMatch ? (note.title || '').replace(new RegExp(`(${query})`, 'gi'), '<mark>$1</mark>') : (note.title || 'Untitled')}
+              </h4>
+              <div style="font-size: 12px; color: var(--muted); margin-bottom: 8px;">
+                ${new Date(note.created_at).toLocaleString()}
+              </div>
+              ${snippet ? `<div style="font-size: 14px; line-height: 1.4;">...${snippet}...</div>` : ''}
+              <button class="button sm" style="margin-top: 8px;" onclick="viewFullNote('${note.id}')">View Full Note</button>
+            </div>
+          `;
+        }).join('')}
+      `;
+    } else {
+      results.innerHTML = `
+        <div style="text-align: center; color: var(--muted); padding: 40px;">
+          <i data-lucide="search-x" style="width: 48px; height: 48px; margin-bottom: 16px;"></i>
+          <div>No results found for "${query}"</div>
+          <div style="font-size: 14px; margin-top: 8px;">Try a different search term</div>
+        </div>
+      `;
+    }
+    
+    lucide.createIcons();
+  } catch (error) {
+    results.innerHTML = `
+      <div class="error" style="color: var(--danger); padding: 16px;">
+        Search error: ${error.message}
+      </div>
+    `;
+  }
+}
+
+window.viewFullNote = (noteId) => {
+  // Navigate to the meetings space and highlight the specific note
+  const meetingsId = localStorage.getItem('hive_meetings_space_id') || '';
+  window.hiveFocusNoteId = noteId;
+  location.hash = `space/${meetingsId}`;
+};
+
+function debounce(func, wait) {
+  let timeout;
+  return function executedFunction(...args) {
+    const later = () => {
+      clearTimeout(timeout);
+      func(...args);
+    };
+    clearTimeout(timeout);
+    timeout = setTimeout(later, wait);
+  };
+}
+
 async function renderRoute(){
   // Do not fetch data until authenticated to avoid 401s
   const me = await auth_getUser().catch(()=>null);
@@ -640,17 +1046,14 @@ async function renderRoute(){
     if (sid && chatsId && sid===chatsId){ const { renderChatsSpace } = await import('./ui/chat.js'); await renderChatsSpace(content); }
     else { await renderSpace(content, sid); }
   }
-  else if (hash === 'transcripts/live'){
-    const { renderTxLive } = await import('./ui/transcripts.js');
-    await renderTxLive(content);
+  else if (hash === 'meetings/dashboard'){
+    await renderMeetingsDashboard(content);
   }
-  else if (hash === 'transcripts/jobs'){
-    const { renderTxJobs } = await import('./ui/transcripts.js');
-    await renderTxJobs(content);
+  else if (hash === 'meetings/list'){
+    await renderMeetingsList(content);
   }
-  else if (hash === 'transcripts/files'){
-    const { renderTxFiles } = await import('./ui/transcripts.js');
-    await renderTxFiles(content);
+  else if (hash === 'meetings/search'){
+    await renderMeetingsSearch(content);
   }
   else { await renderLibrary(); }
 }
