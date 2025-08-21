@@ -1870,8 +1870,10 @@ function formatEnhancedTranscript(content, noteId) {
   
   const contentStr = typeof content === 'string' ? content : JSON.stringify(content);
   
-  // Check if it's already formatted with speaker labels
-  if (contentStr.includes('Speaker:') || contentStr.includes('Speaker 1:') || contentStr.includes('Speaker 2:')) {
+  // Check if it's already formatted with speaker labels (look for more patterns)
+  if (contentStr.includes('Speaker:') || contentStr.includes('Speaker 1:') || 
+      contentStr.includes('Speaker 2:') || contentStr.includes('Speaker Unknown:') ||
+      contentStr.includes('Unknown:')) {
     return formatSpeakerBasedTranscript(contentStr);
   }
   
@@ -1897,8 +1899,8 @@ function formatEnhancedTranscript(content, noteId) {
     // Not JSON, treat as plain text
   }
   
-  // Default to plain text formatting
-  return formatPlainTranscript(contentStr);
+  // For plain text, try to detect speaker patterns or format nicely
+  return formatIntelligentTranscript(contentStr);
 }
 
 // Format speaker-based transcript
@@ -1909,7 +1911,8 @@ function formatSpeakerBasedTranscript(text) {
   let currentContent = [];
   
   for (const line of lines) {
-    const speakerMatch = line.match(/^(Speaker\s*\d*|[A-Za-z\s]+):\s*(.+)/);
+    // More flexible speaker matching pattern
+    const speakerMatch = line.match(/^((?:Speaker\s*(?:\d+|Unknown)|Unknown|\w+(?:\s+\w+)?)):\s*(.+)/i);
     
     if (speakerMatch) {
       // Save previous speaker's content
@@ -1931,12 +1934,53 @@ function formatSpeakerBasedTranscript(text) {
     html += renderSpeakerBlock(currentSpeaker, currentContent.join(' '));
   }
   
-  return html || formatPlainTranscript(text);
+  return html || formatIntelligentTranscript(text);
+}
+
+// Format intelligent transcript - detect patterns and format accordingly
+function formatIntelligentTranscript(text) {
+  // Clean and normalize the text
+  const cleaned = text.replace(/\s+/g, ' ').trim();
+  
+  // Try to detect speaker patterns
+  const speakerPatterns = [
+    /Speaker\s*(?:\d+|Unknown):/gi,
+    /\b(?:Unknown|Speaker):/gi,
+    /^([A-Z][a-z]+ [A-Z][a-z]+):/gm
+  ];
+  
+  for (const pattern of speakerPatterns) {
+    if (pattern.test(cleaned)) {
+      return formatSpeakerBasedTranscript(text);
+    }
+  }
+  
+  // If no speakers detected, create conversational blocks
+  const sentences = cleaned.split(/(?<=[.!?])\s+/);
+  let html = '';
+  let currentBlock = [];
+  let speakerNum = 1;
+  
+  for (let i = 0; i < sentences.length; i++) {
+    currentBlock.push(sentences[i]);
+    
+    // Create a block every 2-3 sentences or on natural breaks
+    if (currentBlock.length >= 2 || i === sentences.length - 1) {
+      const blockText = currentBlock.join(' ').trim();
+      if (blockText) {
+        html += renderSpeakerBlock(`Speaker ${speakerNum}`, blockText);
+        speakerNum = speakerNum === 1 ? 2 : 1; // Alternate between speakers
+      }
+      currentBlock = [];
+    }
+  }
+  
+  return html || '<p style="color: var(--muted);">No transcript content available</p>';
 }
 
 // Format structured transcript from JSON
 function formatStructuredTranscript(data) {
-  if (!Array.isArray(data)) return formatPlainTranscript(JSON.stringify(data));
+  if (!Array.isArray(data)) return formatIntelligentTranscript(JSON.stringify(data));
   
   let html = '';
   
@@ -1962,26 +2006,9 @@ function formatStructuredTranscript(data) {
 // Format words-based transcript
 function formatWordsTranscript(words) {
   const text = words.map(w => w.text || w.word || '').join(' ');
-  return formatPlainTranscript(text);
+  return formatIntelligentTranscript(text);
 }
 
-// Format plain text transcript
-function formatPlainTranscript(text) {
-  // Remove excessive whitespace and format paragraphs
-  const cleaned = text
-    .replace(/\s+/g, ' ')
-    .replace(/([.!?])\s+/g, '$1\n\n')
-    .trim();
-  
-  const paragraphs = cleaned.split(/\n\n+/).filter(p => p.trim());
-  
-  return paragraphs.map((p, i) => `
-    <div style="margin-bottom: 16px; padding: 12px; background: var(--panel-2); border-radius: 8px;">
-      <div style="font-size: 12px; color: var(--muted); margin-bottom: 6px;">Segment ${i + 1}</div>
-      <div style="line-height: 1.7; color: var(--text);">${escapeHtml(p)}</div>
-    </div>
-  `).join('');
-}
 
 // Render a speaker block with nice formatting
 function renderSpeakerBlock(speaker, text) {
