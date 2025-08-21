@@ -730,6 +730,9 @@ async function renderMeetingsHub(root){
       <button class="button primary" id="syncRecallBtn" style="margin-left:8px">
         <i data-lucide="refresh-cw" class="icon"></i> Sync Recall
       </button>
+      <button class="button ghost" id="debugBtn" style="margin-left:8px" title="Debug APIs">
+        🐛 Debug
+      </button>
       <div class="search-bar" style="flex: 1; max-width: 400px; margin-left: 16px;">
         <input type="text" id="meetingsSearch" placeholder="Search meetings..." 
                style="width: 100%; padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px; font-size: 14px;">
@@ -1375,6 +1378,70 @@ function setupMeetingsHubInteractions() {
   });
   // Back to library
   document.getElementById('backToLibrary')?.addEventListener('click', ()=>{ location.hash=''; });
+  
+  // Debug button
+  document.getElementById('debugBtn')?.addEventListener('click', async () => {
+    const btn = document.getElementById('debugBtn');
+    if (!btn) return;
+    
+    btn.textContent = '🔄 Running tests...';
+    btn.disabled = true;
+    
+    const results = {
+      env: null,
+      mistral: null,
+      recall: null,
+      summary: null
+    };
+    
+    try {
+      // Test environment variables
+      const envResp = await fetch('/api/env-test');
+      results.env = await envResp.json();
+      
+      // Test Mistral
+      const mistralResp = await fetch('/api/mistral-test-simple');
+      results.mistral = await mistralResp.json();
+      
+      // Test Recall
+      const recallResp = await fetch('/api/recall-test-simple');
+      results.recall = await recallResp.json();
+      
+      // Test summary
+      const summaryResp = await fetch('/api/summarize-mistral', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: 'Test',
+          content: 'Test content for summary'
+        })
+      });
+      results.summary = await summaryResp.json();
+      
+      // Show results
+      console.log('🐛 DEBUG RESULTS:', results);
+      alert(`Debug Results (check console for details):
+      
+Environment Variables:
+- Mistral: ${results.env?.MISTRAL ? '✅' : '❌'}
+- Recall: ${results.env?.RECALL ? '✅' : '❌'}
+- Deepgram: ${results.env?.DEEPGRAM_API_KEY ? '✅' : '❌'}
+
+API Tests:
+- Mistral API: ${results.mistral?.key_found ? '✅' : '❌'} ${results.mistral?.test_result?.ok ? '(working)' : '(not working)'}
+- Recall API: ${results.recall?.has_key ? '✅' : '❌'} ${results.recall?.attempts?.some(a => a.ok) ? '(working)' : '(not working)'}
+- Summary Generation: ${results.summary?.summary ? '✅' : '❌'}
+
+Check browser console for full details.`);
+      
+    } catch (error) {
+      console.error('Debug error:', error);
+      alert('Debug failed - check console');
+    } finally {
+      btn.textContent = '🐛 Debug';
+      btn.disabled = false;
+    }
+  });
   
   // Sync Recall button
   document.getElementById('syncRecallBtn')?.addEventListener('click', async () => {
