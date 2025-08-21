@@ -1,24 +1,29 @@
 # Vercel Environment Variables
 
-Add these environment variables in your Vercel project settings:
+These are the environment variables used in your Vercel deployment:
 
-## Required for Core Functionality
-
-```
-SUPABASE_URL=https://lmrnnfjuytygomdfujhs.supabase.co
-SUPABASE_ANON_KEY=[your-anon-key]
-SUPABASE_SERVICE_ROLE_KEY=[your-service-key]
-```
-
-## API Keys (without VITE_ prefix)
+## Currently Set in Your Vercel
 
 ```
-OPENAI_API_KEY=[your-openai-key]
-MISTRAL_API_KEY=[your-mistral-key]
+SUPABASE_URL=[set]
+SUPABASE_ANON_KEY=[set]
+SUPABASE_SERVICE_ROLE_KEY=[set]
+SERVICE_KEY=[set]
+OPEN_AI_API=[set] ← OpenAI API key
+MISTRAL=[set] ← Mistral API key  
+PERPLEXITY=[set] ← Perplexity API key
+RECALL_API_KEY=[set]
+RECALL_WEBHOOK_SECRET=[set]
+RECALL_REGION=[set]
+```
+
+## Missing - Need to Add
+
+```
 DEEPGRAM_API_KEY=[your-deepgram-key]
-PERPLEXITY_API_KEY=[your-perplexity-key]
-RECALL_KEY=[your-recall-key]
 ```
+
+Add this in your Vercel dashboard for Deepgram transcription to work.
 
 ## Notes
 

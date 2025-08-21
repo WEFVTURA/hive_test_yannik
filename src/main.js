@@ -18,21 +18,24 @@ const prefs = getPrefs();
     // In local dev with Vite, they need VITE_ prefix
     // Check both to support all environments
     
-    // OpenAI
+    // OpenAI - Your Vercel uses OPEN_AI_API
     window.OPENAI_API_KEY = import.meta.env.VITE_OPENAI_API_KEY || 
-                            import.meta.env.OPENAI_API_KEY || 
-                            import.meta.env.OPEN_AI_API || '';
+                            import.meta.env.OPEN_AI_API || 
+                            import.meta.env.OPENAI_API_KEY || '';
     
-    // Mistral
+    // Mistral - Your Vercel uses MISTRAL
     window.MISTRAL_API_KEY = import.meta.env.VITE_MISTRAL_API_KEY || 
-                             import.meta.env.MISTRAL_API_KEY || 
-                             import.meta.env.MISTRAL_AI_API || '';
+                             import.meta.env.MISTRAL || 
+                             import.meta.env.MISTRAL_AI_API || 
+                             import.meta.env.MISTRAL_API_KEY || '';
     
-    // Deepgram
+    // Deepgram - Not in your Vercel list! Need to add it
     window.DEEPGRAM_API_KEY = import.meta.env.VITE_DEEPGRAM_API_KEY || 
-                              import.meta.env.DEEPGRAM_API_KEY || '';
+                              import.meta.env.DEEPGRAM_API_KEY || 
+                              import.meta.env.DEEPGRAM || 
+                              'd07d3f107acd0c8e6b9faf97ed1ff8295b900119'; // Fallback to default
     
-    // Perplexity
+    // Perplexity - Your Vercel uses PERPLEXITY
     window.PERPLEXITY_API_KEY = import.meta.env.VITE_PERPLEXITY || 
                                 import.meta.env.PERPLEXITY || 
                                 import.meta.env.PERPLEXITY_API_KEY || '';
