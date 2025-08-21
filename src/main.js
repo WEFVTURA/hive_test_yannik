@@ -2145,11 +2145,12 @@ window.updateMeetingTitle = async (noteId, newTitle) => {
     const sb = getSupabase();
     const { data: currentNote, error: fetchError } = await sb
       .from('notes')
-      .select('metadata')
+      .select('*')
       .eq('id', noteId)
       .single();
     
-    if (fetchError) throw fetchError;
+    // Handle missing note or metadata gracefully
+    if (fetchError && fetchError.code !== 'PGRST116') throw fetchError;
     
     // Preserve existing metadata and update title
     const metadata = currentNote?.metadata || {};
@@ -2269,11 +2270,12 @@ async function saveSpeakersToNote(noteId) {
     const sb = getSupabase();
     const { data: currentNote, error: fetchError } = await sb
       .from('notes')
-      .select('metadata')
+      .select('*')
       .eq('id', noteId)
       .single();
     
-    if (fetchError) throw fetchError;
+    // Handle missing note or metadata gracefully
+    if (fetchError && fetchError.code !== 'PGRST116') throw fetchError;
     
     // Update metadata with speakers
     const metadata = currentNote?.metadata || {};
