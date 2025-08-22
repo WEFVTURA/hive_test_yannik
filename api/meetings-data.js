@@ -56,18 +56,49 @@ export default async function handler(req){
       timestamp: new Date().toISOString()
     };
 
-    // Strong isolation: fetch notes by owner_id; fallback to space scoping only if needed
+    // Strong isolation: fetch notes by owner_id AND bot mappings
     let notes = [];
     let fetchStatus = 200;
     let fetchOk = true;
     
+    // First, get all bot IDs mapped to this user
+    let userBotIds = [];
+    try {
+      const botMappingsResp = await fetch(`${SUPABASE_URL}/rest/v1/recall_bots?select=bot_id&user_id=eq.${userId}`, {
+        headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` }
+      });
+      if (botMappingsResp.ok) {
+        const mappings = await botMappingsResp.json();
+        userBotIds = mappings.map(m => m.bot_id);
+        debugInfo.mapped_bots = userBotIds.length;
+      }
+    } catch(e) {
+      debugInfo.bot_mapping_error = e.message;
+    }
+    
     try{
-      const byOwner = await fetch(`${SUPABASE_URL}/rest/v1/notes?select=*&owner_id=eq.${userId}&order=created_at.desc`, { headers:{ apikey:SERVICE_KEY, Authorization:`Bearer ${SERVICE_KEY}` } });
+      // Build query to get notes by owner_id OR by bot_id in metadata
+      let query = `${SUPABASE_URL}/rest/v1/notes?select=*&order=created_at.desc`;
+      
+      if (userBotIds.length > 0) {
+        // Include notes owned by user OR linked to user's bots
+        const botConditions = userBotIds.map(id => 
+          `metadata->>bot_id.eq.${id},metadata->>recording_id.eq.${id}`
+        ).join(',');
+        query += `&or=(owner_id.eq.${userId},${botConditions})`;
+      } else {
+        // Just get notes owned by user
+        query += `&owner_id=eq.${userId}`;
+      }
+      
+      const byOwner = await fetch(query, { 
+        headers:{ apikey:SERVICE_KEY, Authorization:`Bearer ${SERVICE_KEY}` } 
+      });
       fetchStatus = byOwner.status;
       fetchOk = byOwner.ok;
       if (byOwner.ok){ 
         notes = await byOwner.json().catch(()=>[]); 
-        debugInfo.mode='owner_only'; 
+        debugInfo.mode='owner_and_bots'; 
       }
     }catch(e){
       debugInfo.fetch_error = e.message;
