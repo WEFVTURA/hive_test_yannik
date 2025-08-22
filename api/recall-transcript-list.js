@@ -42,6 +42,8 @@ export default async function handler(req){
   
   const RECALL_KEY = process.env.RECALL_API_KEY || process.env.RECALL_KEY || process.env.RECALL || '';
   const region = (process.env.RECALL_REGION || 'us').trim().toLowerCase();
+  const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || process.env.REACT_APP_SUPABASE_URL || '';
+  const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY || process.env.SERVICE_KEY || '';
   
   if (!RECALL_KEY) {
     return jres({ error: 'No Recall API key configured' }, 500, cors);
@@ -66,6 +68,18 @@ export default async function handler(req){
   };
   
   try {
+    // Authenticate
+    const authz = req.headers.get('authorization') || req.headers.get('Authorization') || '';
+    const token = authz.startsWith('Bearer ')? authz.slice(7).trim() : '';
+    if (!token) return jres({ error:'Forbidden' }, 401, cors);
+    let user=null; try{ const r=await fetch(`${SUPABASE_URL}/auth/v1/user`, { headers:{ apikey: SERVICE_KEY, Authorization:`Bearer ${token}` } }); user = await r.json(); }catch{}
+    const userId = user?.id || '';
+    if (!userId) return jres({ error:'Forbidden' }, 401, cors);
+
+    // Only allow transcripts for mapped bots of this user
+    const mapResp = await fetch(`${SUPABASE_URL}/rest/v1/recall_bots?select=bot_id&user_id=eq.${userId}`, { headers:{ apikey: SERVICE_KEY, Authorization:`Bearer ${SERVICE_KEY}` } });
+    const mapped = await mapResp.json().catch(()=>[]);
+    const allowedIds = new Set((mapped||[]).map((r)=>r.bot_id));
     // Use the exact endpoint from Recall documentation
     let url = `${base}/api/v1/transcript/?status_code=done&limit=100`;
     let pageCount = 0;
@@ -99,6 +113,9 @@ export default async function handler(req){
       const items = data.results || data.data || (Array.isArray(data) ? data : []);
       
       for (const transcript of items) {
+        // Skip transcripts not belonging to this user (no bot_id or not mapped)
+        const tBotId = transcript.bot_id || transcript.recording_id || null;
+        if (tBotId && allowedIds.size && !allowedIds.has(tBotId)) continue;
         // Fetch the actual transcript content
         let transcriptText = '';
         let botInfo = {};

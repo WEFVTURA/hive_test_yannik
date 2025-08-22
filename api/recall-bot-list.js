@@ -18,7 +18,6 @@ export default async function handler(req){
   
   const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || process.env.REACT_APP_SUPABASE_URL || '';
   const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY || process.env.SERVICE_KEY || '';
-  const ALLOWED_EMAILS = ['ggg@fvtura.com'];
   async function getToken(){
     const authz = req.headers.get('authorization') || req.headers.get('Authorization') || '';
     if (authz.startsWith('Bearer ')) return authz.slice(7).trim();
@@ -34,10 +33,8 @@ export default async function handler(req){
     }catch{ return null; }
   }
   const user = await getUser();
-  const email = (user?.email||'').toLowerCase();
-  if (!email || !ALLOWED_EMAILS.includes(email)){
-    return jres({ error:'Forbidden', message:'Access denied' }, 403, cors);
-  }
+  const userId = user?.id || '';
+  if (!userId){ return jres({ error:'Forbidden', message:'Not authenticated' }, 401, cors); }
   
   const RECALL_KEY = process.env.RECALL_API_KEY || process.env.RECALL_KEY || process.env.RECALL || '';
   const region = (process.env.RECALL_REGION || 'us').trim().toLowerCase();
@@ -65,7 +62,11 @@ export default async function handler(req){
   };
   
   try {
-    // First, list all bots
+    // Limit to this user's mapped bot IDs
+    const mapResp = await fetch(`${SUPABASE_URL}/rest/v1/recall_bots?select=bot_id&user_id=eq.${userId}`, { headers:{ apikey: SERVICE_KEY, Authorization:`Bearer ${SERVICE_KEY}` } });
+    const mapped = await mapResp.json().catch(()=>[]);
+    const allowedIds = new Set((mapped||[]).map((r)=>r.bot_id));
+    // First, list all bots and filter by allowed IDs
     let url = `${base}/api/v1/bot/?limit=50`;
     let pageCount = 0;
     const allBots = [];
@@ -94,7 +95,8 @@ export default async function handler(req){
       
       const data = await response.json();
       const bots = data.results || data.data || (Array.isArray(data) ? data : []);
-      allBots.push(...bots);
+      const filtered = Array.isArray(bots) ? bots.filter(b=> allowedIds.has(b?.id)) : [];
+      allBots.push(...filtered);
       
       // Check for next page
       url = data.next || null;
