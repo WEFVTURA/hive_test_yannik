@@ -2120,7 +2120,7 @@ function formatStructuredTranscript(data) {
   
   // Flush any remaining text
   flushSpeaker();
-  }
+  
   
   // If no content was generated, show debug info
   if (!html && data.length > 0) {
