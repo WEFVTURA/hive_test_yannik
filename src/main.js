@@ -4110,9 +4110,9 @@ async function renderRoute(){
     else { await renderSpace(content, sid); }
   }
   else if (hash === 'meetings/hub'){
-    // Use new V2 implementation
-    const { renderMeetingsHubV2 } = await import('./meetings-hub-v2.js');
-    await renderMeetingsHubV2(content);
+    // Use PROPER implementation
+    const { initMeetingsHub } = await import('./meetings-hub-proper.js');
+    await initMeetingsHub();
     await renderSpacesList();
   }
   else if (hash === 'meetings/import'){
