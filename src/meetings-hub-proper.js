@@ -187,20 +187,44 @@ function getTranscriptPreview(content) {
   if (!content) return 'No transcript available';
   
   try {
-    const data = JSON.parse(content);
+    // Handle double-encoded JSON
+    let data = content;
+    if (typeof data === 'string') {
+      try {
+        data = JSON.parse(data);
+        if (typeof data === 'string') {
+          data = JSON.parse(data);
+        }
+      } catch(e) {
+        // Try to extract JSON from text
+        const jsonMatch = data.match(/\[[\s\S]*\]/);
+        if (jsonMatch) {
+          data = JSON.parse(jsonMatch[0]);
+        }
+      }
+    }
+    
     if (Array.isArray(data) && data.length > 0) {
       // Get first few utterances
       const preview = data.slice(0, 2).map(segment => {
-        const speaker = segment.speaker || segment.speaker_name || 'Speaker';
+        const speaker = segment.speaker || segment.speaker_name || segment.participant?.name || 'Speaker';
         const text = segment.text || (segment.words ? segment.words.map(w => w.text || w.word || w).join(' ') : '');
         return text ? `${speaker}: ${text}` : '';
       }).filter(Boolean).join(' • ');
       
       return preview.substring(0, 200) + (preview.length > 200 ? '...' : '');
     }
-  } catch(e) {}
+  } catch(e) {
+    // If we can't parse, don't show raw JSON
+    if (content.startsWith('[') || content.startsWith('{')) {
+      return 'Transcript available - click View to see';
+    }
+  }
   
-  // Fallback to plain text preview
+  // Fallback to plain text preview but not JSON
+  if (content.startsWith('[') || content.startsWith('{')) {
+    return 'Transcript available - click View to see';
+  }
   return content.substring(0, 200) + (content.length > 200 ? '...' : '');
 }
 
@@ -239,7 +263,24 @@ window.viewTranscript = async function(noteId) {
   let speakers = new Map();
   
   try {
-    const data = JSON.parse(note.content);
+    // Handle double-encoded JSON (stringified twice)
+    let data = note.content;
+    if (typeof data === 'string') {
+      try {
+        data = JSON.parse(data);
+        // If it's still a string after first parse, parse again
+        if (typeof data === 'string') {
+          data = JSON.parse(data);
+        }
+      } catch(e) {
+        // Try to extract JSON from text
+        const jsonMatch = data.match(/\[[\s\S]*\]/);
+        if (jsonMatch) {
+          data = JSON.parse(jsonMatch[0]);
+        }
+      }
+    }
+    
     if (Array.isArray(data)) {
       // Build speaker map
       let colorIndex = 0;
