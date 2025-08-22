@@ -42,8 +42,6 @@ export default async function handler(req){
   
   const RECALL_KEY = process.env.RECALL_API_KEY || process.env.RECALL_KEY || process.env.RECALL || '';
   const region = (process.env.RECALL_REGION || 'us').trim().toLowerCase();
-  const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || process.env.REACT_APP_SUPABASE_URL || '';
-  const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY || process.env.SERVICE_KEY || '';
   
   if (!RECALL_KEY) {
     return jres({ error: 'No Recall API key configured' }, 500, cors);
