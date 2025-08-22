@@ -143,8 +143,9 @@ export async function db_listSpaces(){
   // Enforce per-user isolation: only return spaces the user owns or that are shared with their email
   let meEmail=''; let meId='';
   try{ const me = (await sb.auth.getUser()).data?.user; meEmail = me?.email||''; meId = me?.id||''; }catch{}
-  return rows.filter(s => !('deleted_at' in s) || s.deleted_at === null || s.deleted_at === '' || !s.deleted_at)
-             .filter(s => !s.owner_id || !meId ? true : s.owner_id === meId);
+  return rows
+    .filter(s => !('deleted_at' in s) || s.deleted_at === null || s.deleted_at === '' || !s.deleted_at)
+    .filter(s => meId ? s.owner_id === meId : false);
 }
 export async function db_getSpace(id){
   const sb = getSupabase();

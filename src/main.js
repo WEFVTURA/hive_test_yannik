@@ -3989,11 +3989,8 @@ async function hydrateProfileUI(){
 async function ensureBaselineSpaces(){
   try{
     const spaces = await db_listSpaces().catch(()=>[]);
-    const hasMeetings = spaces.find(s=> (s.name||'').toLowerCase()==='meetings');
     const hasChats = spaces.find(s=> (s.name||'').toLowerCase()==='chats');
     const hasResearch = spaces.find(s=> /deep research/i.test(s.name||''));
-    if (!hasMeetings){ const s = await db_createSpace('Meetings'); localStorage.setItem('hive_meetings_space_id', s.id); }
-    else { localStorage.setItem('hive_meetings_space_id', hasMeetings.id); }
     if (!hasChats){ const s2 = await db_createSpace('Chats'); localStorage.setItem('hive_chats_space_id', s2.id); }
     else { localStorage.setItem('hive_chats_space_id', hasChats.id); }
     if (!hasResearch){ const s3 = await db_createSpace('Deep Researches'); localStorage.setItem('hive_research_space_id', s3.id); }

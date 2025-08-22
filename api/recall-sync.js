@@ -49,7 +49,7 @@ export default async function handler(req){
     return jres({ error:'Forbidden', message:'Access denied' }, 403, cors);
   }
 
-  // Ensure Meetings space
+  // Ensure Meetings space (deprecated for isolation): do not create global Meetings; assign to owner-owned spaces only in webhook
   let spaceId = '';
   let spaceDebug = '';
   try{
