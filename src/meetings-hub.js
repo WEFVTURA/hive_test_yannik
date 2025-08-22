@@ -9,17 +9,24 @@ export async function renderMeetingsHub() {
   
   // MEETINGS HUB IS COMPLETELY SEPARATE FROM SPACES
   content.innerHTML = `
-    <div style="padding: 24px; max-width: 1400px; margin: 0 auto;">
-      <h1 style="margin-bottom: 32px; font-size: 32px;">Meetings Hub</h1>
-      <p style="color: var(--muted); margin-bottom: 24px;">Your meeting transcripts with speaker diarization</p>
-      
-      <div style="display: flex; gap: 12px; margin-bottom: 32px;">
-        <button class="button primary" onclick="window.showTranscriptImport()">
-          <i data-lucide="upload"></i> Import Transcripts
-        </button>
-        <button class="button" onclick="window.refreshMeetingsHub()">
-          <i data-lucide="refresh-cw"></i> Refresh
-        </button>
+    <div class="meetings-hub">
+      <div class="hub-header">
+        <div>
+          <h1>Meetings Hub</h1>
+          <p class="muted">Your meeting transcripts with speaker diarization</p>
+        </div>
+        <div class="hub-actions">
+          <button class="button primary" onclick="window.showTranscriptImport()">
+            <i data-lucide="upload"></i> Import Transcripts
+          </button>
+          <button class="button" onclick="window.refreshMeetingsHub()">
+            <i data-lucide="refresh-cw"></i> Refresh
+          </button>
+        </div>
+      </div>
+
+      <div id="hub-insights" class="insights-grid">
+        <!-- Insights will be loaded here -->
       </div>
       
       <div id="meetingsList">
@@ -47,11 +54,14 @@ async function loadMeetings() {
     const notes = data.notes || [];
     
     if (notes.length === 0) {
-      listEl.innerHTML = '<div style="padding: 48px; text-align: center; color: var(--muted);">No meetings found</div>';
+      listEl.innerHTML = '<div class="empty-state">No meetings found</div>';
       return;
     }
+
+    // Render insights
+    renderInsights(notes);
     
-    let html = '<div style="display: grid; gap: 16px;">';
+    let html = '<div class="meetings-grid">';
     
     notes.forEach(note => {
       const date = new Date(note.created_at);
@@ -94,42 +104,40 @@ async function loadMeetings() {
       }
       
       html += `
-        <div style="background: var(--panel); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; transition: all 0.2s; cursor: pointer;"
-             onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 4px 12px rgba(0,0,0,0.3)'"
-             onmouseout="this.style.transform=''; this.style.boxShadow=''"
-             onclick="window.openTranscript('${note.id}')">
-          
-          <div style="padding: 20px;">
-            <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 12px;">
-              <h3 style="margin: 0; font-size: 18px; color: var(--text);">
-                ${escapeHtml(note.title || 'Meeting Transcript')}
-              </h3>
-              ${speakerCount > 0 ? `
-                <span style="background: var(--accent); color: white; padding: 4px 8px; border-radius: 12px; font-size: 12px;">
-                  ${speakerCount} speakers
-                </span>
-              ` : ''}
-            </div>
-            
-            <div style="display: flex; gap: 16px; margin-bottom: 12px;">
-              <span style="color: var(--muted); font-size: 13px;">
-                <i data-lucide="calendar" style="width: 14px; height: 14px; display: inline-block; vertical-align: -2px;"></i>
-                ${dateStr}
-              </span>
-              <span style="color: var(--muted); font-size: 13px;">
-                <i data-lucide="clock" style="width: 14px; height: 14px; display: inline-block; vertical-align: -2px;"></i>
-                ${timeStr}
-              </span>
-            </div>
-            
-            <div style="color: var(--text-secondary); font-size: 14px; line-height: 1.5;">
-              ${escapeHtml(preview)}
-            </div>
+        <div class="meeting-card" data-note-id="${note.id}">
+          <div class="card-header">
+            <h3 class="card-title">${escapeHtml(note.title || 'Meeting Transcript')}</h3>
+            ${speakerCount > 0 ? `
+              <span class="badge">${speakerCount} speakers</span>
+            ` : ''}
           </div>
           
-          <div style="background: var(--panel-2); padding: 12px 20px; border-top: 1px solid var(--border);">
-            <button class="button sm primary" style="width: 100%;">
-              View Transcript with Diarization
+          <div class="card-meta">
+            <span>
+              <i data-lucide="calendar" class="icon-sm"></i>
+              ${dateStr}
+            </span>
+            <span>
+              <i data-lucide="clock" class="icon-sm"></i>
+              ${timeStr}
+            </span>
+          </div>
+          
+          <p class="card-preview">${escapeHtml(preview)}</p>
+
+          <div class="card-actions">
+            <button class="button sm" onclick="window.openTranscript('${note.id}')">
+              <i data-lucide="eye"></i> View
+            </button>
+            <button class="button sm" onclick="window.editTranscript('${note.id}')">
+              <i data-lucide="pencil"></i> Edit
+            </button>
+            <button class="button sm" onclick="window.renameSpeakers('${note.id}')">
+              <i data-lucide="users"></i> Speakers
+            </button>
+            <div class="spacer"></div>
+            <button class="button sm red" onclick="window.deleteTranscript('${note.id}')">
+              <i data-lucide="trash-2"></i>
             </button>
           </div>
         </div>
@@ -144,8 +152,58 @@ async function loadMeetings() {
     if (window.lucide) lucide.createIcons();
     
   } catch(error) {
-    listEl.innerHTML = `<div style="color: var(--danger);">Error: ${error.message}</div>`;
+    listEl.innerHTML = `<div class="error-state">Error: ${error.message}</div>`;
   }
+}
+
+function renderInsights(notes) {
+  const insightsEl = document.getElementById('hub-insights');
+  if (!insightsEl) return;
+
+  const totalMeetings = notes.length;
+  const meetingsLast7Days = notes.filter(n => {
+    const noteDate = new Date(n.created_at);
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    return noteDate > sevenDaysAgo;
+  }).length;
+
+  let totalSpeakers = 0;
+  const speakerSet = new Set();
+  notes.forEach(note => {
+    try {
+      let content = note.content;
+      if (typeof content === 'string' && (content.startsWith('[') || content.startsWith('{'))) {
+        const data = JSON.parse(content);
+        if (Array.isArray(data)) {
+          data.forEach(seg => {
+            const speaker = seg.speaker || seg.speaker_name || seg.participant?.name;
+            if (speaker) speakerSet.add(speaker);
+          });
+        }
+      }
+    } catch(e) {}
+  });
+  totalSpeakers = speakerSet.size;
+
+  insightsEl.innerHTML = `
+    <div class="insight-card">
+      <h4>Total Meetings</h4>
+      <p>${totalMeetings}</p>
+    </div>
+    <div class="insight-card">
+      <h4>Meetings (Last 7 Days)</h4>
+      <p>${meetingsLast7Days}</p>
+    </div>
+    <div class="insight-card">
+      <h4>Unique Speakers</h4>
+      <p>${totalSpeakers}</p>
+    </div>
+     <div class="insight-card">
+      <h4>Coming soon</h4>
+      <p>🚀</p>
+    </div>
+  `;
 }
 
 // Open transcript with proper diarization
@@ -194,26 +252,25 @@ window.openTranscript = async function(noteId) {
   
   // Create modal
   const modal = document.createElement('div');
-  modal.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:#1a1a1a;z-index:9999;overflow-y:auto;';
+  modal.classList.add('transcript-modal');
   
   let transcriptHtml = '';
   
   if (segments.length > 0) {
     // Show speaker legend
-    transcriptHtml += '<div style="padding:20px;background:#2a2a2a;margin-bottom:20px;">';
-    transcriptHtml += '<div style="display:flex;gap:20px;flex-wrap:wrap;">';
+    transcriptHtml += '<div class="speaker-legend">';
     speakers.forEach((color, name) => {
       transcriptHtml += `
-        <div style="display:flex;align-items:center;gap:8px;">
-          <div style="width:12px;height:12px;background:${color};border-radius:50%;"></div>
+        <div class="speaker-item">
+          <div class="speaker-color" style="background:${color};"></div>
           <span>${escapeHtml(name)}</span>
         </div>
       `;
     });
-    transcriptHtml += '</div></div>';
+    transcriptHtml += '</div>';
     
     // Show transcript with diarization
-    transcriptHtml += '<div style="padding:20px;">';
+    transcriptHtml += '<div class="transcript-content">';
     segments.forEach(seg => {
       const name = seg.speaker || seg.speaker_name || seg.participant?.name || 'Speaker';
       const color = speakers.get(name);
@@ -221,11 +278,11 @@ window.openTranscript = async function(noteId) {
       
       if (text) {
         transcriptHtml += `
-          <div style="display:flex;margin-bottom:20px;">
-            <div style="width:4px;background:${color};margin-right:16px;"></div>
-            <div>
-              <div style="color:${color};font-weight:600;margin-bottom:4px;">${escapeHtml(name)}</div>
-              <div style="color:#e0e0e0;line-height:1.6;">${escapeHtml(text)}</div>
+          <div class="transcript-segment">
+            <div class="segment-color-bar" style="background:${color};"></div>
+            <div class="segment-text">
+              <div class="segment-speaker" style="color:${color};">${escapeHtml(name)}</div>
+              <div class="segment-message">${escapeHtml(text)}</div>
             </div>
           </div>
         `;
@@ -234,19 +291,204 @@ window.openTranscript = async function(noteId) {
     transcriptHtml += '</div>';
   } else {
     // Fallback for non-JSON content
-    transcriptHtml = `<div style="padding:20px;"><pre style="white-space:pre-wrap;">${escapeHtml(note.content)}</pre></div>`;
+    transcriptHtml = `<div class="transcript-fallback"><pre>${escapeHtml(note.content)}</pre></div>`;
   }
   
   modal.innerHTML = `
-    <div style="padding:20px;background:#2a2a2a;border-bottom:1px solid #444;display:flex;justify-content:space-between;align-items:center;">
-      <h2 style="margin:0;">${escapeHtml(note.title || 'Transcript')}</h2>
-      <button class="button" onclick="this.closest('div[style*=fixed]').remove()">Close</button>
+    <div class="modal-content-wrapper">
+      <div class="transcript-header">
+        <h2>${escapeHtml(note.title || 'Transcript')}</h2>
+        <button class="button" onclick="this.closest('.transcript-modal').remove()">
+          <i data-lucide="x"></i> Close
+        </button>
+      </div>
+      <div class="transcript-body">
+        ${transcriptHtml}
+      </div>
     </div>
-    ${transcriptHtml}
   `;
   
   document.body.appendChild(modal);
+  if (window.lucide) lucide.createIcons();
 };
+
+window.editTranscript = async function(noteId) {
+  const sb = getSupabase();
+  const { data: note } = await sb.from('notes').select('*').eq('id', noteId).single();
+  if (!note) return alert('Transcript not found');
+
+  const modal = document.createElement('div');
+  modal.classList.add('modal-scrim', 'modal-show');
+  modal.innerHTML = `
+    <div class="modal" style="max-width: 800px;">
+      <div class="modal-head">
+        <h3>Edit Transcript Content</h3>
+        <button class="button sm ghost" onclick="this.closest('.modal-scrim').remove()"><i data-lucide="x"></i></button>
+      </div>
+      <div class="modal-body">
+        <textarea id="editJsonContent" style="width: 100%; height: 50vh; font-family: monospace;"></textarea>
+      </div>
+      <div class="modal-actions">
+        <button class="button" onclick="this.closest('.modal-scrim').remove()">Cancel</button>
+        <button class="button primary" id="saveTranscriptChanges">Save Changes</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+  if (window.lucide) lucide.createIcons();
+
+  const textarea = modal.querySelector('#editJsonContent');
+  try {
+    const content = JSON.parse(note.content);
+    textarea.value = JSON.stringify(content, null, 2);
+  } catch(e) {
+    textarea.value = note.content;
+  }
+
+  modal.querySelector('#saveTranscriptChanges').onclick = async () => {
+    const updatedContent = textarea.value;
+    try {
+      // Validate JSON if possible
+      JSON.parse(updatedContent);
+    } catch(e) {
+      if (!confirm("The content is not valid JSON. Save anyway as plain text?")) {
+        return;
+      }
+    }
+
+    const token = localStorage.getItem('sb_access_token');
+    const response = await fetch('/api/update-note', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      body: JSON.stringify({ note_id: noteId, content: updatedContent })
+    });
+
+    const result = await response.json();
+    if (result.success) {
+      modal.remove();
+      // Potentially refresh just this card's data, for now a full refresh is simplest
+      window.refreshMeetingsHub(); 
+    } else {
+      alert('Error updating transcript: ' + result.error);
+    }
+  };
+}
+
+window.renameSpeakers = async function(noteId) {
+  const sb = getSupabase();
+  const { data: note } = await sb.from('notes').select('*').eq('id', noteId).single();
+  if (!note) return alert('Transcript not found');
+
+  let segments = [];
+  try {
+    segments = JSON.parse(note.content);
+    if (!Array.isArray(segments)) throw new Error('Not an array');
+  } catch(e) {
+    return alert('Cannot rename speakers: transcript content is not a valid JSON array of segments.');
+  }
+
+  const speakers = [...new Set(segments.map(s => s.speaker || s.speaker_name || s.participant?.name).filter(Boolean))];
+  
+  const modal = document.createElement('div');
+  modal.classList.add('modal-scrim', 'modal-show');
+  modal.innerHTML = `
+    <div class="modal">
+      <div class="modal-head">
+        <h3>Rename Speakers</h3>
+        <button class="button sm ghost" onclick="this.closest('.modal-scrim').remove()"><i data-lucide="x"></i></button>
+      </div>
+      <div class="modal-body" id="speakerRenameFields">
+        ${speakers.map(s => `
+          <div class="field speaker-rename-field">
+            <label>${escapeHtml(s)}</label>
+            <input type="text" data-original-name="${escapeHtml(s)}" value="${escapeHtml(s)}">
+          </div>
+        `).join('')}
+      </div>
+      <div class="modal-actions">
+        <button class="button" onclick="this.closest('.modal-scrim').remove()">Cancel</button>
+        <button class="button primary" id="saveSpeakerNames">Save Names</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+  if (window.lucide) lucide.createIcons();
+
+  modal.querySelector('#saveSpeakerNames').onclick = async () => {
+    const nameMap = new Map();
+    modal.querySelectorAll('.speaker-rename-field input').forEach(input => {
+      nameMap.set(input.dataset.originalName, input.value);
+    });
+
+    const updatedSegments = segments.map(seg => {
+      const originalSpeaker = seg.speaker || seg.speaker_name || seg.participant?.name;
+      if (originalSpeaker && nameMap.has(originalSpeaker)) {
+        const newSpeaker = nameMap.get(originalSpeaker);
+        // This is a bit simplistic, assumes 'speaker' is the primary key.
+        // A more robust solution would check all possible speaker name fields.
+        if(seg.speaker) seg.speaker = newSpeaker;
+        if(seg.speaker_name) seg.speaker_name = newSpeaker;
+        if(seg.participant?.name) seg.participant.name = newSpeaker;
+      }
+      return seg;
+    });
+
+    const updatedContent = JSON.stringify(updatedSegments, null, 2);
+    
+    const token = localStorage.getItem('sb_access_token');
+    const response = await fetch('/api/update-note', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      body: JSON.stringify({ note_id: noteId, content: updatedContent })
+    });
+    
+    const result = await response.json();
+    if (result.success) {
+      modal.remove();
+      window.refreshMeetingsHub();
+    } else {
+      alert('Error updating speaker names: ' + result.error);
+    }
+  };
+}
+
+window.deleteTranscript = async function(noteId) {
+  const noteCard = document.querySelector(`.meeting-card[data-note-id="${noteId}"]`);
+  const title = noteCard ? noteCard.querySelector('.card-title').textContent : 'this transcript';
+
+  // Simple confirmation for now
+  if (!confirm(`Are you sure you want to delete "${title}"? This cannot be undone.`)) {
+    return;
+  }
+
+  try {
+    const token = localStorage.getItem('sb_access_token');
+    const response = await fetch('/api/delete-note', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': token ? `Bearer ${token}` : ''
+      },
+      body: JSON.stringify({ note_id: noteId })
+    });
+
+    const result = await response.json();
+
+    if (result.success) {
+      if (noteCard) {
+        noteCard.remove();
+      }
+      // Consider refreshing insights or the whole list
+      // For now, just removing the card is fine.
+      // A toast notification would be a good addition here.
+    } else {
+      throw new Error(result.error || 'Failed to delete transcript');
+    }
+  } catch (error) {
+    console.error('Error deleting transcript:', error);
+    alert(`Could not delete transcript: ${error.message}`);
+  }
+}
 
 window.refreshMeetingsHub = loadMeetings;
 
