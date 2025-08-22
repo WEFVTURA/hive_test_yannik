@@ -3935,6 +3935,11 @@ async function renderRoute(){
     if (sid && chatsId && sid===chatsId){ const { renderChatsSpace } = await import('./ui/chat.js'); await renderChatsSpace(content); }
     else { await renderSpace(content, sid); }
   }
+  else if (hash.startsWith('space-settings/')){
+    const sid = hash.split('/')[1];
+    const { renderSpaceSettings } = await import('./ui/space-settings.js');
+    await renderSpaceSettings(content, sid);
+  }
   else if (hash === 'meetings/hub'){
     // Use single implementation
     const { renderMeetingsHub } = await import('./meetings-hub.js');

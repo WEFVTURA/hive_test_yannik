@@ -113,50 +113,7 @@ export async function renderSpace(root, spaceId){
   }
 
   // Space settings modal (rename/visibility/delete + share)
-  root.querySelector('#spaceSettingsBtn').addEventListener('click', async ()=>{
-    const space = await db_getSpace(spaceId).catch(()=>({ id: spaceId, name:'Space', visibility:'private' }));
-    const { openModalWithExtractor } = await import('./modals.js');
-    const shares = await (await import('../lib/supabase.js')).db_listShares(spaceId).catch(()=>[]);
-    const storedColor = (typeof localStorage!=='undefined') ? (localStorage.getItem('space_color_'+spaceId)||'') : '';
-    const palette = ['#7c3aed','#2563eb','#059669','#f59e0b','#e11d48','#06b6d4','#a855f7'];
-    const body = `
-      <div class='field'><label>Name</label><input id='spName' value='${space.name||''}' /></div>
-      <div class='field'><label>Visibility</label>
-        <select id='spVis'>
-          <option value='private' ${space.visibility==='private'?'selected':''}>Private</option>
-          <option value='team' ${space.visibility==='team'?'selected':''}>Team</option>
-          <option value='public' ${space.visibility==='public'?'selected':''}>Public</option>
-        </select>
-      </div>
-      <div class='field'><label>Color</label>
-        <div id='spColors' style='display:flex; gap:8px'>
-          ${palette.map(c=>`<button class='button' data-color='${c}' title='${c}' style='width:26px; height:26px; padding:0; border-radius:999px; background:${c}; border:2px solid ${storedColor===c?'#fff':'var(--border)'}'></button>`).join('')}
-          <button class='button' data-color='' title='None' style='width:26px; height:26px; padding:0; border-radius:999px; background:transparent'>✕</button>
-        </div>
-      </div>
-      <div class='field'><label>Invite by email</label><input id='inviteEmail' placeholder='name@company.com' /></div>
-      <div class='muted' style='font-size:12px'>Existing shares</div>
-      <div style='display:grid; gap:6px'>${shares.map(s=>`<div style='border:1px solid var(--border); padding:6px; border-radius:8px'>${s.email}</div>`).join('')||'<div class=muted>None</div>'}</div>`;
-    const modalPromise = openModalWithExtractor('Space options', body, (root)=>({ name: root.querySelector('#spName')?.value||'', vis: root.querySelector('#spVis')?.value||space.visibility||'private', email: root.querySelector('#inviteEmail')?.value?.trim()||'', color: root.querySelector('#spColors [data-selected="1"]')?.getAttribute('data-color')||'' }));
-    const scrim = document.getElementById('modalScrim');
-    // Color selection events
-    try{ scrim.querySelectorAll('#spColors [data-color]').forEach(btn=>{
-      btn.addEventListener('click', ()=>{
-        scrim.querySelectorAll('#spColors [data-color]').forEach(b=>{ b.removeAttribute('data-selected'); b.style.borderColor='var(--border)'; });
-        btn.setAttribute('data-selected','1'); btn.style.borderColor='#fff';
-      });
-      if (storedColor && btn.getAttribute('data-color')===storedColor){ btn.setAttribute('data-selected','1'); btn.style.borderColor='#fff'; }
-    }); }catch{}
-    const res = await modalPromise;
-    if (!res.ok) return;
-    const { name, vis, email, color } = res.values || {};
-    // Persist color locally for library card styling
-    try{ if (typeof localStorage!=='undefined'){ if (color){ localStorage.setItem('space_color_'+spaceId, color); } else { localStorage.removeItem('space_color_'+spaceId); } } }catch{}
-    if (name && name!==space.name){ try{ await db_updateSpace(spaceId, { name }); console.info('Space name updated'); }catch(e){ console.error('Update name failed', e); } }
-    if (vis && vis!==space.visibility){ try{ await db_updateSpace(spaceId, { visibility: vis }); console.info('Visibility updated', vis); }catch(e){ console.error('Update visibility failed', e); } }
-    if (email){ await (await import('../lib/supabase.js')).db_shareSpace(spaceId, email).catch(()=>alert('Share failed')); window.showToast && window.showToast('Invite sent to '+email); }
-    renderSpace(root, spaceId);
-  });
+  root.querySelector('#spaceSettingsBtn').addEventListener('click', ()=>{ try{ location.hash = 'space-settings/'+spaceId; }catch{} });
 
   // Files list (only present when not in Deep Research view)
   const filesList = root.querySelector('#filesList');
