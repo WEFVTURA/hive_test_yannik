@@ -130,7 +130,8 @@ export async function renderSpaceSettings(root, spaceId){
       settings.public_permissions = pubPerm||'view';
       try{
         let token=''; try{ const sb = getSupabase(); const ss = await sb.auth.getSession(); token = ss?.data?.session?.access_token || ''; }catch{}
-        await fetch('/api/space-update', { method:'POST', headers:{ 'Content-Type':'application/json', ...(token? { Authorization:`Bearer ${token}` }: {}) }, body: JSON.stringify({ id: spaceId, fields: { settings } }) });
+        const r2 = await fetch('/api/space-update', { method:'POST', headers:{ 'Content-Type':'application/json', ...(token? { Authorization:`Bearer ${token}` }: {}) }, body: JSON.stringify({ id: spaceId, fields: { settings } }) });
+        if (!r2.ok){ const t2 = await r2.text(); window.showToast && window.showToast('Failed to save public permissions: '+t2); }
       }catch{}
     }
     window.showToast && window.showToast('Saved');
