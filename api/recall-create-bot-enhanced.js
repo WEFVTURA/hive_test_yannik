@@ -21,6 +21,15 @@ export default async function handler(req){
   const SUPABASE_URL = process.env.SUPABASE_URL || '';
   const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SERVICE_KEY || '';
   const RECALL_API_KEY = process.env.RECALL_API_KEY || '';
+  const RECALL_REGION = (process.env.RECALL_REGION || 'us').toLowerCase();
+  const RECALL_BASE_URL = (process.env.RECALL_BASE_URL || '').trim();
+  const regionBases = {
+    us: 'https://us-west-2.recall.ai',
+    eu: 'https://eu-west-1.recall.ai',
+    jp: 'https://ap-northeast-1.recall.ai',
+    payg: 'https://api.recall.ai'
+  };
+  const RECALL_BASE = (RECALL_BASE_URL || regionBases[RECALL_REGION] || regionBases.us).replace(/\/$/, '');
   
   // Quick env validation with actionable messages
   if (!SUPABASE_URL || !SERVICE_KEY) {
@@ -97,8 +106,8 @@ export default async function handler(req){
       })
     });
     
-    // STEP 2: Create the bot via Recall API
-    const botResp = await fetch('https://api.recall.ai/api/v1/bot/', {
+    // STEP 2: Create the bot via Recall API (direct join)
+    const botResp = await fetch(`${RECALL_BASE}/api/v1/bot/`, {
       method: 'POST',
       headers: {
         'Authorization': `Token ${RECALL_API_KEY}`,
@@ -107,7 +116,8 @@ export default async function handler(req){
       body: JSON.stringify({
         meeting_url: urlStr,
         bot_name: 'HIVE Assistant',
-        transcription_options: { provider: 'default' }
+        // Use modern recording configuration to enable transcripts
+        recording_config: { transcript: {} }
       })
     });
     

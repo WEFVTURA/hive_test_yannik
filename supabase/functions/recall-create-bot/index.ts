@@ -52,13 +52,27 @@ Deno.serve(async (req: Request) => {
   const userId = user?.id || '';
   if (!userId) return new Response(JSON.stringify({ error:'user_not_found' }), { status:401, headers:{...corsHeaders,'Content-Type':'application/json'} });
 
+  // Persist meeting URL mapping immediately
+  try{
+    await fetchJson(`${SUPABASE_URL}/rest/v1/meeting_urls`, {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json', apikey: SERVICE_KEY, Authorization:`Bearer ${SERVICE_KEY}`, 'Prefer': 'resolution=merge-duplicates' },
+      body: JSON.stringify({
+        user_id: userId,
+        url: meetingUrl,
+        created_at: new Date().toISOString(),
+        metadata: { source: 'meeting_intelligence', status: 'requested' }
+      })
+    });
+  }catch(e){ /* non-fatal */ }
+
   // Create bot at Recall
   let bot: any = {};
   try{
     bot = await fetchJson(`${BASE}/api/v1/bot/`, {
       method:'POST',
       headers:{ 'Authorization': `Token ${RECALL_KEY}`, 'Content-Type':'application/json' },
-      body: JSON.stringify({ meeting_url: meetingUrl })
+      body: JSON.stringify({ meeting_url: meetingUrl, recording_config: { transcript: {} } })
     });
   }catch(e){
     return new Response(JSON.stringify({ error:'recall_create_failed', detail: String(e) }), { status:502, headers:{...corsHeaders,'Content-Type':'application/json'} });

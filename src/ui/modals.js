@@ -16,7 +16,7 @@ export function initModals(){
   document.body.insertAdjacentHTML('beforeend', html);
 }
 
-export function openModalWithExtractor(title, bodyHtml, extractor){
+export function openModalWithExtractor(title, bodyHtml, extractor, onReady){
   const scrim = document.getElementById('modalScrim');
   const body = document.getElementById('modalBody');
   const titleEl = document.getElementById('modalTitle');
@@ -28,6 +28,7 @@ export function openModalWithExtractor(title, bodyHtml, extractor){
   scrim.classList.add('modal-show');
   scrim.style.display = 'flex';
   scrim.setAttribute('aria-hidden','false');
+  try { if (typeof onReady === 'function') onReady(body); } catch {}
   return new Promise((resolve)=>{
     function cleanup(res){
       // Move focus away before hiding (prevents aria-hidden warning)

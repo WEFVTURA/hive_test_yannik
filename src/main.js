@@ -288,7 +288,34 @@ meetingBtn?.addEventListener('click', async ()=>{
   const res = await openModalWithExtractor('Send HIVE bot', `
     <div class="field"><label>Meeting URL</label><input id="mUrl" placeholder="Paste Zoom/Meet/Teams URL"></div>
     <div class="muted" style="font-size:12px">HIVE bot will join and record. Transcripts are available in the <strong>Meetings</strong> space in your dashboard. <em>(It can take a few minutes for transcripts to appear there after the call.)</em></div>
-  `, (root)=>({ url: root.querySelector('#mUrl')?.value?.trim()||'' }));
+    <div style="display:flex; gap:8px; align-items:center; margin-top:8px">
+      <button id="debugRecall" class="button ghost" type="button">Debug Recall</button>
+      <span id="debugStatus" class="muted" style="font-size:12px"></span>
+    </div>
+    <pre id="debugOut" style="display:none; margin-top:8px; padding:8px; background:#0d1016; border:1px solid #1f2430; border-radius:8px; max-height:220px; overflow:auto"></pre>
+  `, (root)=>({ url: root.querySelector('#mUrl')?.value?.trim()||'' }), (root)=>{
+    const btn = root.querySelector('#debugRecall');
+    const out = root.querySelector('#debugOut');
+    const status = root.querySelector('#debugStatus');
+    if (btn){
+      btn.addEventListener('click', async ()=>{
+        status.textContent = 'Running diagnostics…';
+        out.style.display = 'none';
+        out.textContent = '';
+        try{
+          const resp = await fetch('/api/recall-debug', { method:'GET' });
+          const text = await resp.text();
+          out.textContent = text;
+          out.style.display = 'block';
+          status.textContent = resp.ok ? 'Diagnostics OK' : `Diagnostics failed (${resp.status})`;
+        }catch(e){
+          out.textContent = String(e?.message||e);
+          out.style.display = 'block';
+          status.textContent = 'Diagnostics error';
+        }
+      });
+    }
+  });
   if (!res.ok) return; const url = res.values?.url; if(!url){ window.showToast && window.showToast('Add a meeting URL'); return; }
   try{
     // Obtain Supabase access token reliably
@@ -309,8 +336,14 @@ meetingBtn?.addEventListener('click', async ()=>{
     });
     if (!resp.ok) {
       let details = '';
-      try { details = await resp.text(); } catch {}
-      throw new Error(details || 'Failed to create bot');
+      let json = null;
+      try { details = await resp.text(); json = JSON.parse(details); } catch {}
+      const msg = json?.error || json?.details || details || 'Failed to create bot';
+      // Surface actionable details
+      window.showToast && window.showToast(`Bot error: ${msg}`);
+      // Optionally keep last debug for quick copy
+      try{ window.hiveLastRecallError = json || details; }catch{}
+      throw new Error(msg);
     }
     const data = await resp.json();
     window.showToast && window.showToast('HIVE bot joining meeting - transcript will be automatically linked to your account');
