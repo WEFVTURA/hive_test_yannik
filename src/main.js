@@ -736,6 +736,9 @@ async function renderMeetingsHub(root){
       <button class="button" id="directImportBtn" style="margin-left:8px" title="Manual Import">
         <i data-lucide="file-plus" class="icon"></i> Import Transcript
       </button>
+      <button class="button" id="debugTranscriptsBtn" style="margin-left:8px; background: var(--warning); color: var(--panel);" title="Debug Transcripts">
+        <i data-lucide="bug" class="icon"></i> Debug
+      </button>
       <div class="search-bar" style="flex: 1; max-width: 400px; margin-left: 16px;">
         <input type="text" id="meetingsSearch" placeholder="Search meetings..." 
                style="width: 100%; padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px; font-size: 14px;">
@@ -1438,47 +1441,195 @@ function setupMeetingsHubInteractions() {
   document.getElementById('refreshMeetingsView')?.addEventListener('click', ()=>{
     renderMeetingsHub(document.getElementById('content'));
   });
-  // Back to library
-  const backBtn = document.getElementById('backToLibrary');
-  if (backBtn) {
-    backBtn.addEventListener('click', () => { 
-      location.hash = ''; 
-    });
-  }
-  
-  // Direct Import button
-  const importBtn = document.getElementById('directImportBtn');
-  if (importBtn) {
-    importBtn.addEventListener('click', () => {
-      location.hash = 'meetings/import';
-    });
-  }
-  
-  // Transcript List button
-  const transcriptBtn = document.getElementById('transcriptListBtn');
-  if (transcriptBtn) {
-    transcriptBtn.addEventListener('click', () => {
-      location.hash = 'transcripts';
-    });
-  }
-  
-  // Also add inline onclick handlers as backup
+  // Navigation buttons - use direct onclick for reliability
   setTimeout(() => {
-    const backBtn2 = document.getElementById('backToLibrary');
-    if (backBtn2 && !backBtn2.onclick) {
-      backBtn2.onclick = () => { location.hash = ''; };
+    const backBtn = document.getElementById('backToLibrary');
+    if (backBtn) {
+      backBtn.onclick = (e) => { 
+        e.preventDefault();
+        console.log('Navigating to library');
+        location.hash = ''; 
+      };
     }
     
-    const importBtn2 = document.getElementById('directImportBtn');
-    if (importBtn2 && !importBtn2.onclick) {
-      importBtn2.onclick = () => { location.hash = 'meetings/import'; };
+    const importBtn = document.getElementById('directImportBtn');
+    if (importBtn) {
+      importBtn.onclick = (e) => {
+        e.preventDefault();
+        console.log('Navigating to import');
+        location.hash = 'meetings/import';
+      };
     }
     
-    const transcriptBtn2 = document.getElementById('transcriptListBtn');
-    if (transcriptBtn2 && !transcriptBtn2.onclick) {
-      transcriptBtn2.onclick = () => { location.hash = 'transcripts'; };
+    const transcriptBtn = document.getElementById('transcriptListBtn');
+    if (transcriptBtn) {
+      transcriptBtn.onclick = (e) => {
+        e.preventDefault();
+        console.log('Navigating to transcript list');
+        location.hash = 'transcripts';
+      };
     }
-  }, 100);
+  }, 50);
+  
+  // Debug Transcripts button
+  const debugBtn = document.getElementById('debugTranscriptsBtn');
+  if (debugBtn) {
+    debugBtn.addEventListener('click', async () => {
+      const sb = getSupabase();
+      const user = await sb.auth.getUser();
+      const session = await sb.auth.getSession();
+      const token = session?.data?.session?.access_token || '';
+      
+      console.log('Debug: Current user:', user?.data?.user?.email, user?.data?.user?.id);
+      
+      // Create debug modal
+      const modal = document.createElement('div');
+      modal.className = 'modal-overlay';
+      modal.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:9999';
+      modal.innerHTML = `
+        <div class="modal-content" style="background:var(--panel);border-radius:12px;padding:24px;max-width:900px;max-height:80vh;overflow-y:auto;width:90%">
+          <h2 style="margin-bottom:16px">🔍 Transcript Debug Information</h2>
+          <div id="debugContent">
+            <div class="loading">Gathering debug data...</div>
+          </div>
+          <button class="button" onclick="this.closest('.modal-overlay').remove()" style="margin-top:16px">Close</button>
+        </div>
+      `;
+      document.body.appendChild(modal);
+      
+      const debugContent = modal.querySelector('#debugContent');
+      let debugHtml = '';
+      
+      // 1. Check current user
+      debugHtml += `<h3>1. Current User</h3>`;
+      debugHtml += `<pre style="background:var(--panel-2);padding:12px;border-radius:6px;overflow-x:auto">`;
+      debugHtml += `Email: ${user?.data?.user?.email || 'Not logged in'}\n`;
+      debugHtml += `User ID: ${user?.data?.user?.id || 'N/A'}\n`;
+      debugHtml += `Has Token: ${token ? 'Yes' : 'No'}`;
+      debugHtml += `</pre>`;
+      
+      // 2. Check Meetings space
+      debugHtml += `<h3>2. User's Meetings Space</h3>`;
+      try {
+        const { data: spaces, error: spaceError } = await sb
+          .from('spaces')
+          .select('*')
+          .eq('name', 'Meetings')
+          .eq('owner_id', user?.data?.user?.id);
+        
+        if (spaceError) {
+          debugHtml += `<pre style="background:var(--danger-bg);padding:12px;border-radius:6px">Error: ${spaceError.message}</pre>`;
+        } else {
+          debugHtml += `<pre style="background:var(--panel-2);padding:12px;border-radius:6px;overflow-x:auto">`;
+          debugHtml += `Found ${spaces?.length || 0} Meetings space(s)\n`;
+          if (spaces?.length > 0) {
+            debugHtml += `Space ID: ${spaces[0].id}\n`;
+            debugHtml += `Owner ID: ${spaces[0].owner_id}\n`;
+            debugHtml += `Created: ${spaces[0].created_at}`;
+          }
+          debugHtml += `</pre>`;
+        }
+      } catch(e) {
+        debugHtml += `<pre style="background:var(--danger-bg);padding:12px;border-radius:6px">Error: ${e.message}</pre>`;
+      }
+      
+      // 3. Check notes owned by user
+      debugHtml += `<h3>3. Notes/Transcripts in Database</h3>`;
+      try {
+        const { data: notes, error: notesError } = await sb
+          .from('notes')
+          .select('id, title, owner_id, space_id, created_at')
+          .eq('owner_id', user?.data?.user?.id)
+          .order('created_at', { ascending: false })
+          .limit(10);
+        
+        if (notesError) {
+          debugHtml += `<pre style="background:var(--danger-bg);padding:12px;border-radius:6px">Error: ${notesError.message}</pre>`;
+        } else {
+          debugHtml += `<pre style="background:var(--panel-2);padding:12px;border-radius:6px;overflow-x:auto">`;
+          debugHtml += `Found ${notes?.length || 0} note(s) owned by you\n\n`;
+          if (notes && notes.length > 0) {
+            notes.forEach((note, i) => {
+              debugHtml += `${i+1}. ${note.title}\n`;
+              debugHtml += `   ID: ${note.id}\n`;
+              debugHtml += `   Space: ${note.space_id}\n`;
+              debugHtml += `   Created: ${note.created_at}\n\n`;
+            });
+          }
+          debugHtml += `</pre>`;
+        }
+      } catch(e) {
+        debugHtml += `<pre style="background:var(--danger-bg);padding:12px;border-radius:6px">Error: ${e.message}</pre>`;
+      }
+      
+      // 4. Check recall_bots mappings
+      debugHtml += `<h3>4. Bot Mappings</h3>`;
+      try {
+        const { data: bots, error: botsError } = await sb
+          .from('recall_bots')
+          .select('*')
+          .eq('user_id', user?.data?.user?.id);
+        
+        if (botsError) {
+          debugHtml += `<pre style="background:var(--danger-bg);padding:12px;border-radius:6px">Error: ${botsError.message}</pre>`;
+        } else {
+          debugHtml += `<pre style="background:var(--panel-2);padding:12px;border-radius:6px;overflow-x:auto">`;
+          debugHtml += `Found ${bots?.length || 0} bot mapping(s)\n`;
+          if (bots && bots.length > 0) {
+            bots.forEach(bot => {
+              debugHtml += `\nBot ID: ${bot.bot_id}\n`;
+              debugHtml += `Status: ${bot.status || 'N/A'}\n`;
+              debugHtml += `Meeting URL: ${bot.meeting_url || 'N/A'}`;
+            });
+          }
+          debugHtml += `</pre>`;
+        }
+      } catch(e) {
+        debugHtml += `<pre style="background:var(--danger-bg);padding:12px;border-radius:6px">Error: ${e.message}</pre>`;
+      }
+      
+      // 5. Test API endpoints
+      debugHtml += `<h3>5. API Endpoint Tests</h3>`;
+      
+      // Test meetings-data
+      try {
+        const resp = await fetch('/api/meetings-data', {
+          headers: token ? { Authorization: `Bearer ${token}` } : {}
+        });
+        const data = await resp.json();
+        debugHtml += `<pre style="background:var(--panel-2);padding:12px;border-radius:6px;overflow-x:auto">`;
+        debugHtml += `/api/meetings-data: ${resp.status} ${resp.ok ? '✅' : '❌'}\n`;
+        debugHtml += `Notes returned: ${data.notes?.length || 0}\n`;
+        debugHtml += `Success: ${data.success}\n`;
+        if (data.debug) {
+          debugHtml += `Mode: ${data.debug.mode || 'unknown'}`;
+        }
+        debugHtml += `</pre>`;
+      } catch(e) {
+        debugHtml += `<pre style="background:var(--danger-bg);padding:12px;border-radius:6px">/api/meetings-data: Error - ${e.message}</pre>`;
+      }
+      
+      // Test transcript-list
+      try {
+        const resp = await fetch('/api/recall-transcript-list', {
+          headers: token ? { Authorization: `Bearer ${token}` } : {}
+        });
+        const data = await resp.json();
+        debugHtml += `<pre style="background:var(--panel-2);padding:12px;border-radius:6px;overflow-x:auto">`;
+        debugHtml += `/api/recall-transcript-list: ${resp.status} ${resp.ok ? '✅' : '❌'}\n`;
+        debugHtml += `Transcripts returned: ${data.transcripts?.length || 0}\n`;
+        if (data.error) {
+          debugHtml += `Error: ${data.error}`;
+        }
+        debugHtml += `</pre>`;
+      } catch(e) {
+        debugHtml += `<pre style="background:var(--danger-bg);padding:12px;border-radius:6px">/api/recall-transcript-list: Error - ${e.message}</pre>`;
+      }
+      
+      debugContent.innerHTML = debugHtml;
+      lucide.createIcons();
+    });
+  }
   
   // Test Auth button
   document.getElementById('testAuthBtn')?.addEventListener('click', async () => {
