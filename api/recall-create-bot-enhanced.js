@@ -16,7 +16,7 @@ export default async function handler(req){
   };
   
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
-  if (req.method !== 'POST') return jres({ error:'Method not allowed' }, 405, cors);
+  if (req.method !== 'POST' && req.method !== 'GET') return jres({ error:'Method not allowed' }, 405, cors);
   
   const SUPABASE_URL = process.env.SUPABASE_URL || '';
   const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SERVICE_KEY || '';
@@ -121,9 +121,17 @@ export default async function handler(req){
   }
   
   try {
-    const bodyIn = await req.json();
-    const meeting_url = bodyIn?.meeting_url;
-    const strategy = String(bodyIn?.strategy||'').trim();
+    let meeting_url = '';
+    let strategy = '';
+    if (req.method === 'POST'){
+      const bodyIn = await req.json().catch(()=>({}));
+      meeting_url = bodyIn?.meeting_url;
+      strategy = String(bodyIn?.strategy||'').trim();
+    } else {
+      const urlObj = new URL(req.url);
+      meeting_url = urlObj.searchParams.get('meeting_url') || '';
+      strategy = String(urlObj.searchParams.get('strategy')||'').trim();
+    }
     
     if (!meeting_url) {
       return jres({ error: 'Meeting URL required' }, 400, cors);
