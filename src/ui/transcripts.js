@@ -6,7 +6,7 @@ export async function renderTxLive(root){
     <div class="content-head"><div class="title"><h2>Transcripts — Live</h2></div></div>
     <div class="panel" id="txLiveFeed" style="padding:12px; max-height:60vh; overflow:auto"></div>`;
   const feed = document.getElementById('txLiveFeed');
-  feed.innerHTML = `<div class='muted'>Transcripts from Deepgram/Recall will appear here in real-time when webhooks hit.</div>`;
+  feed.innerHTML = `<div class='muted'>Transcripts from connected services will appear here in real-time when webhooks hit.</div>`;
 }
 
 export async function renderTxJobs(root){

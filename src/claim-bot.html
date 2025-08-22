@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Claim Your Recall Bot</title>
+  <title>Claim Your Meeting Bot</title>
   <style>
     body {
       font-family: system-ui, -apple-system, sans-serif;
@@ -57,17 +57,17 @@
   </style>
 </head>
 <body>
-  <h1>Claim Your Recall Bot</h1>
+  <h1>Claim Your Meeting Bot</h1>
   
   <div class="info">
     <strong>Why do this?</strong><br>
-    If you created Recall bots before the security update, they need to be linked to your account to see their transcripts.
+    If you created bots before the security update, they need to be linked to your account to see their transcripts.
   </div>
   
   <div>
     <label>Enter Your Bot ID:</label>
-    <input type="text" id="botId" placeholder="e.g., 089c5b47-bc78-4aa5-9c9c-de8245c408fe">
-    <div class="example">Find this in your Recall.ai dashboard or webhook data</div>
+    <input type="text" id="botId" placeholder="e.g., a1b2c3d4-e5f6-...">
+    <div class="example">Find this in your provider's dashboard or webhook data</div>
   </div>
   
   <button onclick="claimBot()">Claim This Bot</button>

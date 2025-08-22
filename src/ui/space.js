@@ -314,32 +314,29 @@ export async function renderSpace(root, spaceId){
       rich.style.display = isEdit ? '' : 'none';
       if (!isEdit){
         // Render markdown nicely (legacy notes) or fall back to HTML when content is rich
-        const raw = content?.value || '';
-        const htmlFromRich = rich.innerHTML || '';
+        const raw = String(n.content || '');
+        const isJson = raw.trim().startsWith('{') || raw.trim().startsWith('[');
         
-        // Format transcripts specially for Recall imports
-        const isTranscript = n.title?.includes('Recall') && raw.includes('"words"');
-        if (isTranscript) {
+        let preview = '';
+        let isMeeting = false;
+
+        if (isJson) {
           try {
-            const data = JSON.parse(raw);
-            if (data.words && Array.isArray(data.words)) {
-              const formattedText = data.words.map(word => word.text || word.word || '').join(' ').trim();
-              preview.innerHTML = `<div style="background: var(--panel-2); padding: 16px; border-radius: 8px; border-left: 4px solid var(--primary);">
-                <div style="font-weight: 600; color: var(--primary); margin-bottom: 8px;">🎙️ Meeting Transcript</div>
-                <div style="line-height: 1.6; white-space: pre-wrap;">${formattedText.substring(0, 1000)}${formattedText.length > 1000 ? '...' : ''}</div>
-              </div>`;
-              return;
+            const parsed = JSON.parse(raw);
+            // Format transcripts specially for meeting imports
+            isMeeting = (n.title?.toLowerCase().includes('meeting') || n.title?.toLowerCase().includes('call')) && (raw.includes('"words"') || raw.includes('"speaker"'));
+            
+            if (isMeeting) {
+              preview = formatSimpleTranscript(parsed.words || parsed, true);
+            } else {
+              preview = marked.parse(raw);
             }
           } catch (e) {
             // Fall through to normal rendering
           }
-        }
-        const looksLikeHtml = /<\s*\w+[^>]*>/i.test(raw) || /<\s*\w+[^>]*>/i.test(htmlFromRich);
-        if (looksLikeHtml){
-          preview.innerHTML = htmlFromRich || raw;
         } else {
-          try{ preview.innerHTML = marked.parse(htmlFromRich || raw); }
-          catch{ preview.textContent = htmlFromRich || raw; }
+          try{ preview.innerHTML = marked.parse(raw); }
+          catch{ preview.textContent = raw; }
         }
         preview.style.display='block';
         preview.setAttribute('contenteditable','true');

@@ -1435,8 +1435,7 @@ function formatPlainTextWithSpeakers(text, isPreview = false) {
 
 // Format Recall transcript with speaker detection and timestamps
 function formatRecallTranscript(words, isPreview = false) {
-  if (!words || !Array.isArray(words)) return 'No transcript available';
-  
+  let html = '';
   let currentSpeaker = null;
   let currentParagraph = [];
   let paragraphs = [];
@@ -1850,43 +1849,27 @@ Check browser console for full details.`);
   // Sync Recall button
   document.getElementById('syncRecallBtn')?.addEventListener('click', async () => {
     const btn = document.getElementById('syncRecallBtn');
-    if (!btn) return;
-    
-    // Show loading state
-    const originalContent = btn.innerHTML;
+    const origText = btn.innerHTML;
     btn.innerHTML = '<i data-lucide="loader" class="icon spinning"></i> Syncing...';
     btn.disabled = true;
     
     try {
-      // Call the new v2 sync endpoint that properly lists bots first
-      const sb = (await import('./lib/supabase.js')).getSupabase();
-      let token=''; try{ token = (await sb.auth.getSession()).data.session?.access_token || ''; }catch{}
-      const response = await fetch('/api/recall-sync-v2', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) }
+      const token = localStorage.getItem('sb_access_token');
+      const response = await fetch('/api/recall-sync', {
+        headers: { 'Authorization': `Bearer ${token}` }
       });
-      
       const result = await response.json();
-      
       if (result.success) {
-        // Show success message
-        const message = `Sync complete: ${result.summary.imported} new, ${result.summary.skipped} skipped, ${result.summary.failed} failed`;
-        window.showToast && window.showToast(message, 'success');
-        
-        // Log details for debugging
+        showToast('Sync completed!', 'success');
         console.log('Recall sync result:', result);
-        
-        // Refresh the meetings view to show new transcripts
-        await renderMeetingsHub(document.getElementById('content'));
       } else {
-        throw new Error(result.error || 'Sync failed');
+        throw new Error(result.error || 'Unknown error');
       }
     } catch (error) {
+      showToast(`Sync failed: ${error.message}`, 'error');
       console.error('Recall sync error:', error);
-      window.showToast && window.showToast(`Sync failed: ${error.message}`, 'error');
     } finally {
-      // Restore button state
-      btn.innerHTML = originalContent;
+      btn.innerHTML = origText;
       btn.disabled = false;
       lucide.createIcons();
     }
@@ -3023,73 +3006,35 @@ async function renderBatchImport(root) {
 // Recall Browser - Direct connection to Recall API
 async function renderRecallBrowser(root) {
   root.innerHTML = `
-    <div class="content-head">
-      <div class="title">
-        <i data-lucide="database" class="icon"></i>
-        Recall Transcript Browser
+    <div class="panel" style="height: 100%; display: flex; flex-direction: column;">
+      <div class="content-head" style="padding: 12px; border-bottom: 1px solid var(--border); background: var(--panel-2);">
+        <div class="title">
+          <h2>Recall Transcript Browser</h2>
+        </div>
+        <div style="display: flex; align-items: center;">
+          <button class="button primary" id="refreshRecallBtn" style="margin-left:auto">
+            <i data-lucide="refresh-cw"></i> Refresh
+          </button>
+          <button class="button ghost" id="testRecallBtn" style="margin-left:8px">
+            Test Connection
+          </button>
+        </div>
       </div>
-      <button class="button ghost" id="backToHub" style="margin-left:12px">
-        <i data-lucide="arrow-left" class="icon"></i> Back to Hub
-      </button>
-      <button class="button primary" id="refreshRecallBtn" style="margin-left:auto">
-        <i data-lucide="refresh-cw" class="icon"></i> Refresh
-      </button>
-      <button class="button ghost" id="testRecallBtn" style="margin-left:8px">
-        🔍 Test API
-      </button>
-    </div>
-    <div class="content-body">
-      <div style="padding: 24px;">
-        <!-- Loading state -->
-        <div id="recallLoading" style="text-align: center; padding: 48px;">
+      <div id="recallContent" style="flex: 1; overflow-y: auto; padding: 12px;">
           <div class="loading">Connecting to Recall API...</div>
-        </div>
-        
-        <!-- Transcript list -->
-        <div id="recallContent" style="display: none;">
-          <div style="margin-bottom: 24px; padding: 16px; background: var(--panel-1); border-radius: 8px;">
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-              <h3 style="margin: 0;">Available Transcripts</h3>
-              <div style="display: flex; gap: 12px;">
-                <button class="button sm" id="selectAllBtn">Select All</button>
-                <button class="button sm" id="deselectAllBtn">Deselect All</button>
-                <button class="button primary" id="importSelectedBtn">
-                  <i data-lucide="download" class="icon"></i> Import Selected
-                </button>
-              </div>
-            </div>
-          </div>
-          
-          <div id="transcriptList" style="display: grid; gap: 16px;">
-            <!-- Transcripts will be loaded here -->
-          </div>
-        </div>
-        
-        <!-- Error state -->
-        <div id="recallError" style="display: none; text-align: center; padding: 48px;">
-          <i data-lucide="alert-circle" style="width: 48px; height: 48px; color: var(--danger);"></i>
-          <h3>Failed to load transcripts</h3>
-          <p id="errorMessage" style="color: var(--muted);"></p>
-          <button class="button" onclick="location.reload()">Retry</button>
-        </div>
       </div>
     </div>
   `;
-  
-  lucide.createIcons();
-  
+
+  if (window.lucide) lucide.createIcons();
+
   // Load transcripts from Recall
   loadRecallTranscripts();
-  
-  // Event handlers
-  document.getElementById('backToHub')?.addEventListener('click', () => {
-    location.hash = 'meetings/hub';
-  });
-  
+
+  // Attach event listeners
   document.getElementById('refreshRecallBtn')?.addEventListener('click', () => {
     loadRecallTranscripts();
   });
-  
   document.getElementById('testRecallBtn')?.addEventListener('click', async () => {
     const btn = document.getElementById('testRecallBtn');
     btn.textContent = '⏳ Testing...';
@@ -3140,483 +3085,194 @@ async function renderRecallBrowser(root) {
       btn.textContent = '🔍 Test API';
     }
   });
-  
+
   async function loadRecallTranscripts() {
-    const loadingEl = document.getElementById('recallLoading');
     const contentEl = document.getElementById('recallContent');
-    const errorEl = document.getElementById('recallError');
-    
-    loadingEl.style.display = 'block';
-    contentEl.style.display = 'none';
-    errorEl.style.display = 'none';
-    
+    contentEl.innerHTML = '<div class="loading">Loading...</div>';
+
     try {
-      // First try the new recordings endpoint
-      const sb = (await import('./lib/supabase.js')).getSupabase();
-      let token=''; try{ token = (await sb.auth.getSession()).data.session?.access_token || ''; }catch{}
-      let response = await fetch('/api/recall-fetch-recordings', { headers: token ? { Authorization: `Bearer ${token}` } : {} });
-      let data = await response.json();
-      
-      // If that fails or returns no transcripts, fall back to the original endpoint
-      if (!data.success || !data.transcripts || data.transcripts.length === 0) {
-        response = await fetch('/api/recall-list-transcripts', { headers: token ? { Authorization: `Bearer ${token}` } : {} });
-        data = await response.json();
-      }
-      
+      const response = await fetch('/api/recall-list-transcripts');
+      const data = await response.json();
+
       if (!data.success) {
-        throw new Error(data.error || 'Failed to load transcripts');
+        contentEl.innerHTML = `<div class="error-state" style="padding: 24px;">Error: ${data.error}</div>`;
+        return;
       }
-      
-      const transcripts = data.transcripts || [];
-      const listEl = document.getElementById('transcriptList');
-      
-      if (transcripts.length === 0) {
-        listEl.innerHTML = `
-          <div style="text-align: center; padding: 48px; color: var(--muted);">
-            <i data-lucide="inbox" style="width: 48px; height: 48px;"></i>
-            <h3>No bots found</h3>
+
+      if (data.transcripts.length === 0) {
+        contentEl.innerHTML = `
+          <div class="empty-state" style="padding: 24px;">
+            <h3>No Transcripts Found</h3>
             <p>Send Recall bot to a meeting first</p>
-            <div style="margin-top: 16px; padding: 12px; background: var(--panel-2); border-radius: 8px; text-align: left; max-width: 400px; margin-left: auto; margin-right: auto;">
-              <strong>Debug Info:</strong><br>
-              Total bots: ${data.total_bots || 0}<br>
-              Region: ${data.debug?.region || 'unknown'}<br>
-              Errors: ${data.debug?.errors?.length || 0}
-            </div>
           </div>
         `;
-      } else {
-        // Show total counts at top
-        const withTranscripts = transcripts.filter(t => t.has_transcript).length;
-        const completed = transcripts.filter(t => t.status === 'done').length;
-        
-        listEl.innerHTML = `
-          <div style="margin-bottom: 16px; padding: 12px; background: var(--info-bg); border-radius: 8px; font-size: 13px;">
-            📊 Found ${transcripts.length} bot(s) | ${completed} completed | ${withTranscripts} with transcripts
-          </div>
-        ` + transcripts.map((t, idx) => `
-          <div class="transcript-item" data-id="${t.id}" style="border: 1px solid var(--border); border-radius: 12px; padding: 16px; background: var(--panel-1);">
-            <div style="display: flex; gap: 16px;">
-              <input type="checkbox" class="transcript-checkbox" data-idx="${idx}" style="width: 20px; height: 20px;">
+        return;
+      }
+
+      contentEl.innerHTML = `
+        <div class="transcript-list">
+          ${data.transcripts.map((t, i) => `
+            <div class="transcript-item" data-id="${t.id}">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                <div>
+                  <h4 style="margin: 0 0 4px 0; color: var(--primary);">
+                    ${t.title || 'Untitled Transcript'}
+                  </h4>
+                  <div style="font-size: 12px; color: var(--muted);">
+                    ID: ${t.id}<br>
+                    Recording ID: ${t.recording_id || 'N/A'}<br>
+                    Created: ${new Date(t.created_at).toLocaleString()}<br>
+                    Status: ${t.status}
+                  </div>
+                </div>
+                <span class="badge ${t.has_transcript ? 'success' : 'warning'}" 
+                      style="padding: 6px 10px; border-radius: 6px; font-size: 12px;">
+                  ${t.has_transcript ? '✅ Has Content' : '⚠️ No Content'}
+                </span>
+              </div>
               
-              <div style="flex: 1;">
-                <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 12px;">
-                  <div>
-                    <h4 style="margin: 0 0 4px 0; color: var(--primary);">
-                      ${t.title}
-                    </h4>
-                    <div style="font-size: 12px; color: var(--muted);">
-                      📅 ${new Date(t.created_at).toLocaleString()} 
-                      ${t.participants > 0 ? `· 👥 ${t.participant_names || t.participants + ' participants'}` : ''}
-                      ${t.duration ? `· ${t.duration}` : ''}
-                    </div>
+              ${t.meeting_url ? `
+                <div style="font-size: 12px; color: var(--muted); margin-bottom: 12px;">
+                  🔗 ${t.meeting_url}
+                </div>
+              ` : ''}
+              
+              ${t.transcript_preview ? `
+                <div style="margin-bottom: 12px;">
+                  <div style="font-weight: 600; margin-bottom: 6px; font-size: 13px;">Preview:</div>
+                  <div style="background: var(--panel-2); padding: 12px; border-radius: 6px; font-size: 12px; line-height: 1.5; max-height: 150px; overflow: auto;">
+                    <pre style="white-space: pre-wrap; margin: 0; font-family: inherit;">
+${t.transcript_preview}
+                    </pre>
                   </div>
-                  <div style="display: flex; flex-direction: column; gap: 4px; align-items: flex-end;">
-                    <span class="badge ${t.status === 'done' ? 'success' : t.status === 'fatal' ? 'danger' : 'warning'}" 
-                          style="padding: 4px 8px; border-radius: 4px; font-size: 11px;">
-                      ${t.status_display || t.status}
-                    </span>
-                    ${t.has_transcript ? 
-                      '<span class="badge success" style="padding: 4px 8px; border-radius: 4px; font-size: 11px;">✅ Has Transcript</span>' : 
-                      '<span class="badge muted" style="padding: 4px 8px; border-radius: 4px; font-size: 11px;">📝 No Transcript Yet</span>'
-                    }
+                  <div style="font-size: 11px; color: var(--muted); margin-top: 4px;">
+                    📝 ${t.transcript_length} characters total
                   </div>
                 </div>
-                
-                ${t.meeting_url ? `
-                  <div style="font-size: 12px; color: var(--muted); margin-bottom: 8px;">
-                    🔗 ${t.meeting_url.substring(0, 50)}...
-                  </div>
+              ` : `
+                <div style="padding: 12px; background: var(--panel-2); border-radius: 6px; color: var(--muted); font-size: 12px;">
+                  No transcript content available
+                </div>
+              `}
+              
+              <div style="display: flex; gap: 8px;">
+                ${t.has_transcript ? `
+                  <button class="button sm primary" onclick="importTranscriptDirect('${t.id}', ${i})">
+                    <i data-lucide="download" class="icon"></i> Import to Meetings
+                  </button>
                 ` : ''}
-                
-                ${t.transcript_preview ? `
-                  <div style="margin-bottom: 12px;">
-                    <div style="font-weight: 600; margin-bottom: 6px; font-size: 13px;">Preview:</div>
-                    <div class="transcript-preview" style="background: var(--panel-2); padding: 12px; border-radius: 6px; font-size: 12px; line-height: 1.5; max-height: 100px; overflow: hidden; position: relative;">
-                      ${t.transcript_preview}
-                      ${t.transcript_length > 500 ? '<div style="position: absolute; bottom: 0; left: 0; right: 0; height: 30px; background: linear-gradient(transparent, var(--panel-2));"></div>' : ''}
-                    </div>
-                    <div style="font-size: 11px; color: var(--muted); margin-top: 4px;">
-                      📝 ${t.transcript_length} characters
-                    </div>
-                  </div>
-                ` : `
-                  <div style="padding: 12px; background: var(--panel-2); border-radius: 6px; color: var(--muted); font-size: 12px;">
-                    No transcript preview available
-                  </div>
-                `}
-                
-                <div style="display: flex; gap: 8px;">
-                  <button class="button sm" onclick="viewFullTranscript(${idx})">
-                    <i data-lucide="eye" class="icon"></i> View Full
-                  </button>
-                  <button class="button sm ghost" onclick="copyTranscript(${idx})">
-                    <i data-lucide="copy" class="icon"></i> Copy
-                  </button>
-                </div>
+                <button class="button sm ghost" onclick="viewTranscriptDebug(${i})">
+                  <i data-lucide="code" class="icon"></i> View Debug
+                </button>
               </div>
             </div>
-            
-            <!-- Hidden full transcript data -->
-            <div id="transcript-full-${idx}" style="display: none;">
-              ${t.full_transcript || 'No transcript available'}
-            </div>
-          </div>
-        `).join('');
-      }
-      
-      loadingEl.style.display = 'none';
-      contentEl.style.display = 'block';
-      lucide.createIcons();
-      
-      // Store transcripts for later use
-      window.recallTranscripts = transcripts;
-      
+          `).join('')}
+        </div>
+      `;
     } catch (error) {
-      loadingEl.style.display = 'none';
-      errorEl.style.display = 'block';
-      document.getElementById('errorMessage').textContent = error.message;
+      contentEl.innerHTML = `<div class="error-state" style="padding: 24px;">Error: ${error.message}</div>`;
     }
   }
-  
-  // Select/Deselect all
-  document.getElementById('selectAllBtn')?.addEventListener('click', () => {
-    document.querySelectorAll('.transcript-checkbox').forEach(cb => cb.checked = true);
-  });
-  
-  document.getElementById('deselectAllBtn')?.addEventListener('click', () => {
-    document.querySelectorAll('.transcript-checkbox').forEach(cb => cb.checked = false);
-  });
-  
-  // Import selected transcripts
-  document.getElementById('importSelectedBtn')?.addEventListener('click', async () => {
-    const selected = [];
-    document.querySelectorAll('.transcript-checkbox:checked').forEach(cb => {
-      const idx = parseInt(cb.getAttribute('data-idx'));
-      if (window.recallTranscripts && window.recallTranscripts[idx]) {
-        const t = window.recallTranscripts[idx];
-        if (t.full_transcript) {
-          selected.push({
-            title: t.title,
-            content: t.full_transcript,
-            source: 'recall'
-          });
-        }
-      }
-    });
-    
-    if (selected.length === 0) {
-      window.showToast && window.showToast('No transcripts selected');
-      return;
-    }
-    
-    const btn = document.getElementById('importSelectedBtn');
-    const originalText = btn.innerHTML;
-    btn.innerHTML = '<i data-lucide="loader" class="icon spinning"></i> Importing...';
-    btn.disabled = true;
-    
-    try {
-      const sb = (await import('./lib/supabase.js')).getSupabase();
-      let token=''; try{ token = (await sb.auth.getSession()).data.session?.access_token || ''; }catch{}
-      const response = await fetch('/api/transcript-import-batch', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-        body: JSON.stringify({ transcripts: selected })
-      });
-      
-      const result = await response.json();
-      
-      if (result.success) {
-        window.showToast && window.showToast(`Imported ${result.imported} transcript(s)`);
-        setTimeout(() => {
-          location.hash = 'meetings/hub';
-        }, 1500);
-      } else {
-        window.showToast && window.showToast(`Import failed: ${result.error}`);
-      }
-    } catch (e) {
-      window.showToast && window.showToast(`Error: ${e.message}`);
-    } finally {
-      btn.innerHTML = originalText;
-      btn.disabled = false;
-      lucide.createIcons();
-    }
-  });
 }
 
 // Helper functions for Recall browser
-window.viewFullTranscript = (idx) => {
-  const transcript = window.recallTranscripts?.[idx];
-  if (!transcript) return;
-  
-  const modal = document.createElement('div');
-  modal.style.cssText = `
-    position: fixed; inset: 0; background: rgba(0,0,0,0.8); 
-    z-index: 1000; display: flex; align-items: center; justify-content: center;
-  `;
-  
-  modal.innerHTML = `
-    <div style="background: var(--panel); border-radius: 12px; max-width: 90%; max-height: 90%; 
-                overflow: hidden; display: flex; flex-direction: column;">
-      <div style="padding: 16px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between;">
-        <h3 style="margin: 0;">${transcript.title}</h3>
-        <button onclick="this.closest('div[style*=fixed]').remove()" style="background: none; border: none; cursor: pointer; font-size: 24px;">×</button>
-      </div>
-      <div style="padding: 16px; overflow-y: auto; max-height: 70vh;">
-        <pre style="white-space: pre-wrap; font-family: monospace; font-size: 13px; line-height: 1.6;">
-${transcript.full_transcript || 'No transcript available'}
-        </pre>
-      </div>
-    </div>
-  `;
-  
-  document.body.appendChild(modal);
-};
+window.viewBotTranscript = async function(transcriptId) {
+  alert('Viewing transcript: ' + transcriptId);
+  // Implementation would be similar to the existing openTranscript logic
+}
 
-window.copyTranscript = async (idx) => {
-  const transcript = window.recallTranscripts?.[idx];
-  if (!transcript?.full_transcript) return;
-  
-  try {
-    await navigator.clipboard.writeText(transcript.full_transcript);
-    window.showToast && window.showToast('Transcript copied to clipboard');
-  } catch (e) {
-    window.showToast && window.showToast('Failed to copy transcript');
-  }
-};
+window.importBotTranscript = async function(transcriptId) {
+  alert('Importing transcript: ' + transcriptId);
+  // Implementation would be similar to the existing importRecallTranscript logic
+}
+
 
 // Transcript List View - Direct from Recall API
-async function renderTranscriptList(root) {
+async function renderBotTranscriptList(root) {
+  root.setAttribute('data-view', 'bot-transcripts');
   root.innerHTML = `
     <div class="content-head">
       <div class="title">
-        <i data-lucide="list" class="icon"></i>
-        Transcript List (Direct API)
+        <h2>Transcripts from Meeting Bot</h2>
       </div>
-      <button class="button ghost" id="backToHub" style="margin-left:12px">
-        <i data-lucide="arrow-left" class="icon"></i> Back to Hub
-      </button>
-      <button class="button primary" id="refreshTranscriptsBtn" style="margin-left:auto">
-        <i data-lucide="refresh-cw" class="icon"></i> Refresh
-      </button>
     </div>
-    <div class="content-body">
-      <div style="padding: 24px;">
-        <div id="transcriptLoading" style="text-align: center; padding: 48px;">
-          <div class="loading">Fetching transcripts from Recall API...</div>
-        </div>
-        
-        <div id="transcriptContent" style="display: none;">
-          <div style="margin-bottom: 24px; padding: 16px; background: var(--panel-1); border-radius: 8px;">
-            <h3 style="margin: 0 0 8px 0;">Available Transcripts</h3>
-            <p style="margin: 0; color: var(--muted); font-size: 13px;">
-              Using /api/v1/transcript/ endpoint directly
-            </p>
-          </div>
-          
-          <div id="transcriptListContainer">
-            <!-- Transcripts will be loaded here -->
-          </div>
-        </div>
-        
-        <div id="transcriptError" style="display: none; text-align: center; padding: 48px;">
-          <i data-lucide="alert-circle" style="width: 48px; height: 48px; color: var(--danger);"></i>
-          <h3>Failed to load transcripts</h3>
-          <p id="errorMsg" style="color: var(--muted);"></p>
-          <div id="debugInfo" style="margin-top: 16px; padding: 16px; background: var(--panel-2); border-radius: 8px; text-align: left; font-family: monospace; font-size: 12px; max-width: 600px; margin-left: auto; margin-right: auto;">
-          </div>
-        </div>
-      </div>
+    <div class="panel" style="padding: 12px;" id="botTranscriptContainer">
+      <div class="loading">Fetching transcripts from Recall API...</div>
     </div>
   `;
-  
-  lucide.createIcons();
-  
-  // Load transcripts
-  loadTranscripts();
-  
-  // Event handlers
-  document.getElementById('backToHub')?.addEventListener('click', () => {
-    location.hash = 'meetings/hub';
-  });
-  
-  document.getElementById('refreshTranscriptsBtn')?.addEventListener('click', () => {
-    loadTranscripts();
-  });
-  
-  async function loadTranscripts() {
-    const loadingEl = document.getElementById('transcriptLoading');
-    const contentEl = document.getElementById('transcriptContent');
-    const errorEl = document.getElementById('transcriptError');
-    
-    loadingEl.style.display = 'block';
-    contentEl.style.display = 'none';
-    errorEl.style.display = 'none';
-    
-    try {
-      const sb = (await import('./lib/supabase.js')).getSupabase();
-      let token=''; try{ token = (await sb.auth.getSession()).data.session?.access_token || ''; }catch{}
-      // Use the secure endpoint that only shows user's mapped transcripts
-      const response = await fetch('/api/recall-transcript-list', { headers: token ? { Authorization: `Bearer ${token}` } : {} });
-      const data = await response.json();
-      
-      console.log('Transcript List API response:', data);
-      
-      if (!data.success) {
-        throw new Error(data.error || 'Failed to load transcripts');
-      }
-      
-      const transcripts = data.transcripts || [];
-      const container = document.getElementById('transcriptListContainer');
-      
-      if (transcripts.length === 0) {
-        container.innerHTML = `
-          <div style="text-align: center; padding: 48px; color: var(--muted);">
-            <i data-lucide="file-x" style="width: 48px; height: 48px;"></i>
-            <h3>No transcripts found</h3>
-            <p>The /api/v1/transcript/ endpoint returned no results</p>
-            <div style="margin-top: 16px; padding: 12px; background: var(--panel-2); border-radius: 8px;">
-              <strong>Debug Info:</strong><br>
-              Base URL: ${data.debug?.base || 'unknown'}<br>
-              Endpoint: ${data.debug?.endpoint || 'unknown'}<br>
-              Attempts: ${data.debug?.attempts?.length || 0}
+
+  try {
+    const response = await fetch('/api/recall-transcript-list');
+    const data = await response.json();
+    const container = document.getElementById('botTranscriptContainer');
+
+    if (!data.success) {
+      throw new Error(data.error);
+    }
+
+    if (!data.transcripts || data.transcripts.length === 0) {
+      container.innerHTML = '<div class="muted">No transcripts available. Send a Recall bot to a meeting first.</div>';
+      return;
+    }
+
+    container.innerHTML = `
+      <p>✅ Found ${data.transcripts.length} transcript(s) from Recall API:</p>
+      <div style="max-height: 400px; overflow-y: auto; border: 1px solid var(--border); border-radius: 8px; padding: 8px;">
+        ${data.transcripts.map((t, i) => `
+          <div style="padding: 8px; border-bottom: 1px solid var(--border);">
+            <h4 style="margin: 0 0 4px 0; color: var(--primary);">
+              ${t.title || 'Untitled Transcript'}
+            </h4>
+            <div style="font-size: 12px; color: var(--muted);">
+              ID: ${t.id}<br>
+              Recording ID: ${t.recording_id || 'N/A'}<br>
+              Created: ${new Date(t.created_at).toLocaleString()}<br>
+              Status: ${t.status}
             </div>
-          </div>
-        `;
-      } else {
-        container.innerHTML = `
-          <div style="margin-bottom: 16px; padding: 12px; background: var(--success-bg); border-radius: 8px;">
-            ✅ Found ${transcripts.length} transcript(s) from Recall API
-          </div>
-          <div style="display: grid; gap: 16px;">
-            ${transcripts.map((t, idx) => `
-              <div class="transcript-card" style="border: 1px solid var(--border); border-radius: 12px; padding: 16px; background: var(--panel-1);">
-                <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 12px;">
-                  <div>
-                    <h4 style="margin: 0 0 4px 0; color: var(--primary);">
-                      ${t.title || 'Untitled Transcript'}
-                    </h4>
-                    <div style="font-size: 12px; color: var(--muted);">
-                      ID: ${t.id}<br>
-                      Recording ID: ${t.recording_id || 'N/A'}<br>
-                      Created: ${new Date(t.created_at).toLocaleString()}<br>
-                      Status: ${t.status}
-                    </div>
-                  </div>
-                  <span class="badge ${t.has_transcript ? 'success' : 'warning'}" 
-                        style="padding: 6px 10px; border-radius: 6px; font-size: 12px;">
-                    ${t.has_transcript ? '✅ Has Content' : '⚠️ No Content'}
-                  </span>
-                </div>
-                
-                ${t.meeting_url ? `
-                  <div style="font-size: 12px; color: var(--muted); margin-bottom: 12px;">
-                    🔗 ${t.meeting_url}
-                  </div>
-                ` : ''}
-                
-                ${t.transcript_preview ? `
-                  <div style="margin-bottom: 12px;">
-                    <div style="font-weight: 600; margin-bottom: 6px; font-size: 13px;">Preview:</div>
-                    <div style="background: var(--panel-2); padding: 12px; border-radius: 6px; font-size: 12px; line-height: 1.5; max-height: 150px; overflow: auto;">
-                      <pre style="white-space: pre-wrap; margin: 0; font-family: inherit;">
+            
+            ${t.meeting_url ? `
+              <div style="font-size: 12px; color: var(--muted); margin-bottom: 12px;">
+                🔗 ${t.meeting_url}
+              </div>
+            ` : ''}
+            
+            ${t.transcript_preview ? `
+              <div style="margin-bottom: 12px;">
+                <div style="font-weight: 600; margin-bottom: 6px; font-size: 13px;">Preview:</div>
+                <div style="background: var(--panel-2); padding: 12px; border-radius: 6px; font-size: 12px; line-height: 1.5; max-height: 150px; overflow: auto;">
+                  <pre style="white-space: pre-wrap; margin: 0; font-family: inherit;">
 ${t.transcript_preview}
-                      </pre>
-                    </div>
-                    <div style="font-size: 11px; color: var(--muted); margin-top: 4px;">
-                      📝 ${t.transcript_length} characters total
-                    </div>
-                  </div>
-                ` : `
-                  <div style="padding: 12px; background: var(--panel-2); border-radius: 6px; color: var(--muted); font-size: 12px;">
-                    No transcript content available
-                  </div>
-                `}
-                
-                <div style="display: flex; gap: 8px;">
-                  ${t.has_transcript ? `
-                    <button class="button sm primary" onclick="importTranscriptDirect('${t.id}', ${idx})">
-                      <i data-lucide="download" class="icon"></i> Import to Meetings
-                    </button>
-                  ` : ''}
-                  <button class="button sm ghost" onclick="viewTranscriptDebug(${idx})">
-                    <i data-lucide="code" class="icon"></i> View Debug
-                  </button>
+                  </pre>
+                </div>
+                <div style="font-size: 11px; color: var(--muted); margin-top: 4px;">
+                  📝 ${t.transcript_length} characters total
                 </div>
               </div>
-            `).join('')}
+            ` : `
+              <div style="padding: 12px; background: var(--panel-2); border-radius: 6px; color: var(--muted); font-size: 12px;">
+                No transcript content available
+              </div>
+            `}
+            
+            <div style="display: flex; gap: 8px;">
+              ${t.has_transcript ? `
+                <button class="button sm primary" onclick="importTranscriptDirect('${t.id}', ${i})">
+                  <i data-lucide="download" class="icon"></i> Import to Meetings
+                </button>
+              ` : ''}
+              <button class="button sm ghost" onclick="viewTranscriptDebug(${i})">
+                <i data-lucide="code" class="icon"></i> View Debug
+              </button>
+            </div>
           </div>
-        `;
-      }
-      
-      loadingEl.style.display = 'none';
-      contentEl.style.display = 'block';
-      lucide.createIcons();
-      
-      // Store for access
-      window.transcriptListData = transcripts;
-      
-    } catch (error) {
-      loadingEl.style.display = 'none';
-      errorEl.style.display = 'block';
-      document.getElementById('errorMsg').textContent = error.message;
-      document.getElementById('debugInfo').innerHTML = `
-        <strong>Error Details:</strong><br>
-        ${error.message}<br><br>
-        <strong>Stack:</strong><br>
-        ${error.stack || 'No stack trace'}
-      `;
-    }
+        `).join('')}
+      </div>
+    `;
+  } catch (error) {
+    console.error('Error loading transcripts:', error);
+    container.innerHTML = `<div class="error-state" style="padding: 24px;">Error: ${error.message}</div>`;
   }
 }
-
-// Helper functions for Transcript List
-window.importTranscriptDirect = async (transcriptId, idx) => {
-  const transcript = window.transcriptListData?.[idx];
-  if (!transcript?.full_transcript) {
-    alert('No transcript content to import');
-    return;
-  }
-  
-  const btn = event.target.closest('button');
-  if (btn) {
-    btn.disabled = true;
-    btn.innerHTML = '<i data-lucide="loader" class="icon spinning"></i> Importing...';
-  }
-  
-  try {
-    const sb = getSupabase();
-    let token=''; try{ token = (await sb.auth.getSession()).data.session?.access_token || ''; }catch{}
-    const response = await fetch('/api/transcript-import-direct', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-      body: JSON.stringify({
-        title: transcript.title || `Transcript ${transcriptId}`,
-        content: transcript.full_transcript,
-        source: 'recall-api'
-      })
-    });
-    
-    const result = await response.json();
-    
-    if (result.success) {
-      alert('Transcript imported successfully!');
-      setTimeout(() => {
-        location.hash = 'meetings/hub';
-      }, 1500);
-    } else {
-      alert(`Import failed: ${result.error || 'Unknown error'}`);
-      console.error('Import error:', result);
-    }
-  } catch (e) {
-    alert(`Error: ${e.message}`);
-    console.error('Import exception:', e);
-  } finally {
-    if (btn) {
-      btn.disabled = false;
-      btn.innerHTML = '<i data-lucide="download" class="icon"></i> Import to Meetings';
-    }
-  }
-};
 
 window.viewTranscriptDebug = (idx) => {
   const transcript = window.transcriptListData?.[idx];
@@ -4313,4 +3969,17 @@ async function maybeRunOnboardingTour(){
     setTimeout(()=>{ startDefaultTour(); }, 300);
     localStorage.setItem(key, String(count+1));
   }catch{}
+}
+
+// Clean up note titles
+window.cleanNoteTitle = function(title, content) {
+  if (!title) {
+    if (content && content.toLowerCase().includes('speaker')) return 'Meeting Transcript';
+    return 'Untitled Note';
+  }
+  const isMeeting = title.includes('Meeting') || title.includes('Call') || title.includes('recall') || (content && content.toLowerCase().includes('speaker'));
+  if (isMeeting) {
+     return String(title).replace(/^\[Meeting\]\s*/i,'').replace(/^\[Recall\]\s*/i,'').replace(/^Recall\s+[0-9a-f\-]+\s*/i,'').replace(/^\[Call\]\s*/i,'').replace(/^[0-9a-f\-]+\s*/i,'').trim() || 'Meeting';
+  }
+  return title;
 }

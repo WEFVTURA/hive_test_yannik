@@ -502,9 +502,9 @@ window.showTranscriptImport = async function() {
       <h2 style="margin:0 0 24px 0;">Import Transcripts</h2>
       
       <div style="margin-bottom:24px;">
-        <h3 style="margin-bottom:12px;">From Recall.ai</h3>
+        <h3 style="margin-bottom:12px;">From Connected Account</h3>
         <button class="button primary" onclick="window.fetchRecallTranscripts()" style="width:100%;">
-          Fetch Available Transcripts from Recall
+          Fetch Available Transcripts
         </button>
       </div>
       
@@ -528,7 +528,7 @@ window.showTranscriptImport = async function() {
   document.body.appendChild(modal);
 };
 
-// Fetch transcripts from Recall
+// Fetch transcripts from connected account
 window.fetchRecallTranscripts = async function() {
   const statusEl = document.getElementById('importStatus');
   statusEl.innerHTML = '<div class="loading">Fetching transcripts...</div>';
@@ -564,7 +564,7 @@ window.fetchRecallTranscripts = async function() {
   }
 };
 
-// Import specific Recall transcript
+// Import specific transcript from connected account
 window.importRecallTranscript = async function(transcriptId) {
   const statusEl = document.getElementById('importStatus');
   statusEl.innerHTML = '<div class="loading">Importing...</div>';
