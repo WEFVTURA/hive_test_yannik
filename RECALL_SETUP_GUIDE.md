@@ -209,3 +209,44 @@ Your Recall API key needs access to:
 ## Contact
 For Recall.ai specific issues, contact their support with your account email (villagai@fvtura.com).
 For integration issues, check the browser console and Vercel logs for detailed error messages.
+
+---
+
+## Addendum: Working Configuration and Pitfalls (Current)
+
+### Create Bot – Required Settings
+- Auth header: use Authorization, not X-Api-Key
+  - Authorization: `Token <RECALL_API_KEY>`
+  - X-Api-Key: not accepted in our tenant for create-bot (401)
+- Base URL: region-specific host from `RECALL_REGION`
+  - US: `https://us-west-2.recall.ai`
+- API path: `/api/v1/bot/` (not `/v1/bot/`)
+- Body (recommended):
+```json
+{
+  "meeting_url": "https://...",
+  "bot_name": "HIVE Assistant",
+  "recording_config": { "transcript": {} }
+}
+```
+
+### Central Brain Endpoint
+- `POST /api/recall-create-bot-enhanced` with `{ "meeting_url": "..." }`
+- Behavior:
+  1) Stores meeting URL in Supabase `meeting_urls` with the authenticated `user_id`
+  2) Calls Recall directly using Authorization: Token on the region base
+  3) On success, saves `recall_bots { bot_id, user_id, meeting_url }`
+  4) On failure, writes diagnostic `attempts` into `meeting_urls.metadata`
+
+### Transcript Association
+- Webhook (`/api/recall-webhook`) resolves `user_id` from `recall_bots` first, then `meeting_urls` if necessary
+- Saves transcript note with `owner_id = user_id` into the user's `Meetings` space
+
+### Troubleshooting Bot Join
+- If creation fails, inspect the response body from `/api/recall-create-bot-enhanced` – it includes an `attempts` array (URL, header style, status, body snippet)
+- Use `/api/recall-debug` to verify base/auth across permutations
+
+### Checklist Updates
+- Verify `RECALL_API_KEY`, `RECALL_REGION`, `RECALL_WEBHOOK_SECRET`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`
+- Ensure Authorization header style is used (Token <KEY>)
+- Use `/api/v1/bot/` on the region base host
