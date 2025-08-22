@@ -39,6 +39,32 @@ export default async function handler(req){
     return jres({ error: 'Bot provider not configured', details: 'Missing RECALL_API_KEY on server' }, 500, cors);
   }
   
+  async function tryCreateRecallBot(meetingUrl){
+    const bases = [RECALL_BASE];
+    if (!RECALL_BASE_URL) bases.push('https://api.recall.ai'); // fallback to PAYG host
+    const headerVariants = [
+      { Authorization: `Token ${RECALL_API_KEY}`, 'Content-Type': 'application/json' },
+      { 'X-Api-Key': RECALL_API_KEY, 'Content-Type': 'application/json' }
+    ];
+    const attempts = [];
+    for (const base of bases){
+      for (const headers of headerVariants){
+        const url = `${base}/api/v1/bot/`;
+        try{
+          const resp = await fetch(url, { method:'POST', headers, body: JSON.stringify({ meeting_url: meetingUrl, bot_name: 'HIVE Assistant', recording_config: { transcript: {} } }) });
+          const text = await resp.text().catch(()=> '');
+          attempts.push({ url, headers: Object.keys(headers), status: resp.status, body: text.slice(0, 500) });
+          if (resp.ok){
+            try{ return { ok:true, data: JSON.parse(text), attempts }; }catch{ return { ok:true, data: {}, attempts }; }
+          }
+        }catch(e){
+          attempts.push({ url, headers: Object.keys(headers), error: String(e) });
+        }
+      }
+    }
+    return { ok:false, attempts };
+  }
+  
   // Authenticate user
   async function getToken(){
     const authz = req.headers.get('authorization') || req.headers.get('Authorization') || '';
@@ -106,25 +132,11 @@ export default async function handler(req){
       })
     });
     
-    // STEP 2: Create the bot via Recall API (direct join)
-    const botResp = await fetch(`${RECALL_BASE}/api/v1/bot/`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Token ${RECALL_API_KEY}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        meeting_url: urlStr,
-        bot_name: 'HIVE Assistant',
-        // Use modern recording configuration to enable transcripts
-        recording_config: { transcript: {} }
-      })
-    });
-    
-    if (!botResp.ok) {
-      const status = botResp.status;
-      let errorText = '';
-      try { errorText = await botResp.text(); } catch {}
+    // STEP 2: Create the bot via Recall API (direct join) with robust retries
+    const attempt = await tryCreateRecallBot(urlStr);
+    if (!attempt.ok) {
+      const status = 502;
+      const errorText = JSON.stringify({ attempts: attempt.attempts });
 
       // Mark failure on meeting_urls metadata
       try {
@@ -142,11 +154,12 @@ export default async function handler(req){
       return jres({ 
         error: 'Failed to create bot', 
         http_status: status,
-        details: errorText || 'Provider rejected the request. Check meeting link, account limits, and API key.'
+        details: 'Provider rejected the request. See attempts for diagnostics.',
+        attempts: attempt.attempts
       }, 502, cors);
     }
     
-    const botData = await botResp.json();
+    const botData = attempt.data || {};
     const botId = botData.id || botData.bot_id;
     
     // STEP 3: Immediately create bot-to-user mapping
