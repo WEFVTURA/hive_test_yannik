@@ -43,7 +43,7 @@ export default async function handler(req){
     const bases = [RECALL_BASE];
     if (!RECALL_BASE_URL) bases.push('https://api.recall.ai'); // fallback to PAYG host
     const paths = ['/api/v1/bot/', '/v1/bot/'];
-    const headerVariants = [
+    let headerVariants = [
       { Authorization: `Token ${RECALL_API_KEY}`, 'Content-Type': 'application/json', Accept:'application/json' },
       { 'X-Api-Key': RECALL_API_KEY, 'Content-Type': 'application/json', Accept:'application/json' }
     ];
@@ -58,12 +58,20 @@ export default async function handler(req){
       payloads.push({ label:'zoom_variant+recording', body: { meeting_url: meetingUrl, bot_name: 'HIVE Assistant', variant: { zoom: 'web_4_core' }, recording_config: { transcript: {} } } });
       payloads.push({ label:'zoom_variant_minimal', body: { meeting_url: meetingUrl, bot_name: 'HIVE Assistant', variant: { zoom: 'web_4_core' } } });
     }
+    // Strategy overrides
+    if (strategy === 'xapikey_minimal'){
+      headerVariants = [{ 'X-Api-Key': RECALL_API_KEY, 'Content-Type': 'application/json', Accept:'application/json' }];
+    }
     const attempts = [];
     for (const base of bases){
       for (const path of paths){
         const url = `${base}${path}`;
         for (const headers of headerVariants){
           for (const payload of payloads){
+            // Strategy path override
+            if (strategy === 'standard' && path !== '/api/v1/bot/') continue;
+            if (strategy === 'xapikey_minimal' && payload.label !== 'minimal') continue;
+            if (strategy === 'zoom_variant' && !/zoom\.us\//i.test(meetingUrl)) continue;
             try{
               const resp = await fetch(url, { method:'POST', headers, body: JSON.stringify(payload.body) });
               const text = await resp.text().catch(()=> '');
@@ -113,7 +121,9 @@ export default async function handler(req){
   }
   
   try {
-    const { meeting_url } = await req.json();
+    const bodyIn = await req.json();
+    const meeting_url = bodyIn?.meeting_url;
+    const strategy = String(bodyIn?.strategy||'').trim();
     
     if (!meeting_url) {
       return jres({ error: 'Meeting URL required' }, 400, cors);

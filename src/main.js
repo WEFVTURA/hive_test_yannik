@@ -286,17 +286,39 @@ document.getElementById('openGuide')?.addEventListener('click', async()=>{
 const meetingBtn = document.getElementById('meetingBtn');
 meetingBtn?.addEventListener('click', async ()=>{
   const res = await openModalWithExtractor('Send HIVE bot', `
-    <div class="field"><label>Meeting URL</label><input id="mUrl" placeholder="Paste Zoom/Meet/Teams URL"></div>
-    <div class="muted" style="font-size:12px">HIVE bot will join and record. Transcripts are available in the <strong>Meetings</strong> space in your dashboard. <em>(It can take a few minutes for transcripts to appear there after the call.)</em></div>
-    <div style="display:flex; gap:8px; align-items:center; margin-top:8px">
+    <div class="field"><label>Strategy A (Standard)</label><input id="mUrlA" placeholder="Paste Zoom/Meet/Teams URL"></div>
+    <div class="field"><label>Strategy B (X-Api-Key, minimal)</label><input id="mUrlB" placeholder="Paste Zoom/Meet/Teams URL"></div>
+    <div class="field"><label>Strategy C (Zoom variant)</label><input id="mUrlC" placeholder="Paste Zoom URL"></div>
+    <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:8px">
+      <button id="sendA" class="button" type="button">Send A</button>
+      <button id="sendB" class="button" type="button">Send B</button>
+      <button id="sendC" class="button" type="button">Send C</button>
       <button id="debugRecall" class="button ghost" type="button">Debug Recall</button>
       <span id="debugStatus" class="muted" style="font-size:12px"></span>
     </div>
     <pre id="debugOut" style="display:none; margin-top:8px; padding:8px; background:#0d1016; border:1px solid #1f2430; border-radius:8px; max-height:220px; overflow:auto"></pre>
-  `, (root)=>({ url: root.querySelector('#mUrl')?.value?.trim()||'' }), (root)=>{
+  `, (root)=>({ url: root.querySelector('#mUrlA')?.value?.trim()||'' }), (root)=>{
     const btn = root.querySelector('#debugRecall');
     const out = root.querySelector('#debugOut');
     const status = root.querySelector('#debugStatus');
+    async function sendWithStrategy(inputId, strategy){
+      const url = root.querySelector(inputId)?.value?.trim() || '';
+      if (!url){ window.showToast && window.showToast('Add a meeting URL'); return; }
+      try{
+        let token = '';
+        try { const sb = getSupabase(); const sessionRes = await sb.auth.getSession(); token = sessionRes?.data?.session?.access_token || ''; } catch {}
+        const headers = { 'Content-Type': 'application/json' };
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+        const resp = await fetch('/api/recall-create-bot-enhanced', { method:'POST', headers, body: JSON.stringify({ meeting_url: url, strategy }) });
+        const text = await resp.text();
+        let body = null; try{ body = JSON.parse(text); }catch{}
+        if (!resp.ok){ const msg = body?.error || body?.details || text || 'Failed'; window.showToast && window.showToast(`Bot error (${strategy}): ${msg}`); return; }
+        window.showToast && window.showToast(`HIVE bot joining (${strategy})`);
+      }catch(e){ window.showToast && window.showToast(`Failed to send bot (${strategy}): ${e?.message||e}`); }
+    }
+    root.querySelector('#sendA')?.addEventListener('click', ()=>sendWithStrategy('#mUrlA', 'standard'));
+    root.querySelector('#sendB')?.addEventListener('click', ()=>sendWithStrategy('#mUrlB', 'xapikey_minimal'));
+    root.querySelector('#sendC')?.addEventListener('click', ()=>sendWithStrategy('#mUrlC', 'zoom_variant'));
     if (btn){
       btn.addEventListener('click', async ()=>{
         status.textContent = 'Running diagnostics…';
