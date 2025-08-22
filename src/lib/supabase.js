@@ -1,9 +1,5 @@
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
 
-// Fallbacks to unblock production when envs are missing
-export const DEFAULT_SUPABASE_URL = 'https://lmrnnfjuytygomdfujhs.supabase.co';
-export const DEFAULT_SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imxtcm5uZmp1eXR5Z29tZGZ1amhzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTE3MjQ3NTMsImV4cCI6MjA2NzMwMDc1M30.BFj_fQyHX-vAwd65RQrZpq0TU2B87BfdRVrIcXuAv10';
-
 export function util_getEnv(key, promptLabel){
   // Production-safe: only trust build-time envs so we don't accidentally use stale window/localStorage
   try {
@@ -34,12 +30,12 @@ function util_deleteCookie(name){ util_setCookie(name, '', 0); }
 let cachedClient = null;
 export function getSupabase(){
   if (cachedClient) return cachedClient;
-  let url = util_getEnv('SUPABASE_URL', 'SUPABASE_URL') || DEFAULT_SUPABASE_URL;
-  let anon = util_getEnv('SUPABASE_ANON_KEY', 'SUPABASE_ANON_KEY') || DEFAULT_SUPABASE_ANON_KEY;
+  let url = util_getEnv('SUPABASE_URL', 'SUPABASE_URL');
+  let anon = util_getEnv('SUPABASE_ANON_KEY', 'SUPABASE_ANON_KEY');
   // Normalize values (trim quotes/spaces)
   if (typeof url === 'string') url = url.trim().replace(/^"|"$/g,'').replace(/^'|'$/g,'');
   if (typeof anon === 'string') anon = anon.trim().replace(/^"|"$/g,'').replace(/^'|'$/g,'');
-  try { new URL(url); } catch { url = DEFAULT_SUPABASE_URL; }
+  try { new URL(url); } catch { /* noop */ }
   if (!url || !anon){ throw new Error('Supabase URL/ANON KEY missing'); }
 
   // Debug: detect ref mismatch to explain "Invalid API key"
@@ -49,10 +45,8 @@ export function getSupabase(){
     const payloadJson = mid ? JSON.parse(atob(mid.replace(/-/g,'+').replace(/_/g,'/'))) : null;
     const keyRef = payloadJson?.ref || payloadJson?.project_id || '';
     if (hostRef && keyRef && hostRef !== keyRef){
-      console.error(`Supabase ref mismatch: URL ref=${hostRef}, anon ref=${keyRef}. Use the anon key from the same project as ${url}.`);
       throw new Error('Supabase anon key does not belong to the configured project URL');
     }
-    console.log('[Supabase]', { url, anon_prefix: String(anon).slice(0,6) });
   }catch{}
   cachedClient = createClient(url, anon, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true } });
 
@@ -143,11 +137,14 @@ export async function profile_uploadAvatar(file){
 // DB helpers
 export async function db_listSpaces(){
   const sb = getSupabase();
-  // Query without server-side filter to avoid 400s on schema mismatch, filter client-side instead
   const r = await sb.from('spaces').select('*').order('created_at', { ascending: true });
   if (r.error) throw r.error;
   const rows = r.data || [];
-  return rows.filter(s => !('deleted_at' in s) || s.deleted_at === null || s.deleted_at === '' || !s.deleted_at);
+  // Enforce per-user isolation: only return spaces the user owns or that are shared with their email
+  let meEmail=''; let meId='';
+  try{ const me = (await sb.auth.getUser()).data?.user; meEmail = me?.email||''; meId = me?.id||''; }catch{}
+  return rows.filter(s => !('deleted_at' in s) || s.deleted_at === null || s.deleted_at === '' || !s.deleted_at)
+             .filter(s => !s.owner_id || !meId ? true : s.owner_id === meId);
 }
 export async function db_getSpace(id){
   const sb = getSupabase();

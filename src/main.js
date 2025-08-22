@@ -3727,8 +3727,10 @@ async function performMeetingSearch() {
   results.innerHTML = '<div class="loading">Searching...</div>';
   
   try {
-    // Fetch meeting data from backend API
-    const response = await fetch('/api/meetings-data');
+    // Fetch meeting data from backend API with auth
+    const sb = (await import('./lib/supabase.js')).getSupabase();
+    let token=''; try{ token=(await sb.auth.getSession()).data.session?.access_token||''; }catch{}
+    const response = await fetch('/api/meetings-data', { headers: token ? { Authorization:`Bearer ${token}` } : {} });
     const data = await response.json();
     
     if (!data.success) {
