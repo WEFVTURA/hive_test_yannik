@@ -7,16 +7,18 @@ const SPEAKER_COLORS = ['#4CAF50', '#2196F3', '#FF9800', '#9C27B0', '#F44336', '
 export async function renderMeetingsHub() {
   const content = document.getElementById('content');
   
+  // MEETINGS HUB IS COMPLETELY SEPARATE FROM SPACES
   content.innerHTML = `
     <div style="padding: 24px; max-width: 1400px; margin: 0 auto;">
-      <h1 style="margin-bottom: 32px;">Meetings Hub</h1>
+      <h1 style="margin-bottom: 32px; font-size: 32px;">Meetings Hub</h1>
+      <p style="color: var(--muted); margin-bottom: 24px;">Your meeting transcripts with speaker diarization</p>
       
-      <div style="display: flex; gap: 12px; margin-bottom: 24px;">
+      <div style="display: flex; gap: 12px; margin-bottom: 32px;">
         <button class="button primary" onclick="window.location.hash='meetings/transcript-list'">
-          Import Transcripts
+          <i data-lucide="upload"></i> Import Transcripts
         </button>
         <button class="button" onclick="window.refreshMeetingsHub()">
-          Refresh
+          <i data-lucide="refresh-cw"></i> Refresh
         </button>
       </div>
       
@@ -25,6 +27,9 @@ export async function renderMeetingsHub() {
       </div>
     </div>
   `;
+  
+  // Initialize icons
+  if (window.lucide) lucide.createIcons();
   
   await loadMeetings();
 }
@@ -46,44 +51,98 @@ async function loadMeetings() {
       return;
     }
     
-    let html = '';
+    let html = '<div style="display: grid; gap: 16px;">';
+    
     notes.forEach(note => {
       const date = new Date(note.created_at);
+      const dateStr = date.toLocaleDateString();
+      const timeStr = date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
       
-      // Parse content to get preview
-      let preview = 'Click to view transcript';
+      // Get a clean preview without showing JSON
+      let preview = 'Click to view formatted transcript';
+      let speakerCount = 0;
+      
       try {
         let content = note.content;
         if (typeof content === 'string' && (content.startsWith('[') || content.startsWith('{'))) {
           const data = JSON.parse(content);
-          if (Array.isArray(data) && data[0]) {
-            const first = data[0];
-            const speaker = first.speaker || first.speaker_name || first.participant?.name || 'Speaker';
-            const text = first.text || (first.words ? first.words.map(w => w.text || w.word || w).join(' ') : '');
-            if (text) {
-              preview = `${speaker}: ${text}`.substring(0, 200) + '...';
+          if (Array.isArray(data)) {
+            // Count unique speakers
+            const speakers = new Set();
+            data.forEach(seg => {
+              const speaker = seg.speaker || seg.speaker_name || seg.participant?.name;
+              if (speaker) speakers.add(speaker);
+            });
+            speakerCount = speakers.size;
+            
+            // Get preview from first segment with text
+            const firstWithText = data.find(seg => {
+              const text = seg.text || (seg.words ? seg.words.map(w => w.text || w.word || w).join(' ') : '');
+              return text && text.trim();
+            });
+            
+            if (firstWithText) {
+              const speaker = firstWithText.speaker || firstWithText.speaker_name || firstWithText.participant?.name || 'Speaker';
+              const text = firstWithText.text || (firstWithText.words ? firstWithText.words.map(w => w.text || w.word || w).join(' ') : '');
+              preview = `${speaker}: ${text}`.substring(0, 150) + '...';
             }
           }
-        } else if (typeof content === 'string') {
-          preview = content.substring(0, 200) + '...';
         }
-      } catch(e) {}
+      } catch(e) {
+        // Don't show JSON errors to user
+        preview = 'Transcript available';
+      }
       
       html += `
-        <div style="background: var(--panel); padding: 20px; margin-bottom: 16px; border-radius: 8px; cursor: pointer;"
+        <div style="background: var(--panel); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; transition: all 0.2s; cursor: pointer;"
+             onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 4px 12px rgba(0,0,0,0.3)'"
+             onmouseout="this.style.transform=''; this.style.boxShadow=''"
              onclick="window.openTranscript('${note.id}')">
-          <h3 style="margin: 0 0 8px 0;">${escapeHtml(note.title || 'Untitled')}</h3>
-          <div style="color: var(--muted); font-size: 14px; margin-bottom: 12px;">
-            ${date.toLocaleDateString()} at ${date.toLocaleTimeString()}
+          
+          <div style="padding: 20px;">
+            <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 12px;">
+              <h3 style="margin: 0; font-size: 18px; color: var(--text);">
+                ${escapeHtml(note.title || 'Meeting Transcript')}
+              </h3>
+              ${speakerCount > 0 ? `
+                <span style="background: var(--accent); color: white; padding: 4px 8px; border-radius: 12px; font-size: 12px;">
+                  ${speakerCount} speakers
+                </span>
+              ` : ''}
+            </div>
+            
+            <div style="display: flex; gap: 16px; margin-bottom: 12px;">
+              <span style="color: var(--muted); font-size: 13px;">
+                <i data-lucide="calendar" style="width: 14px; height: 14px; display: inline-block; vertical-align: -2px;"></i>
+                ${dateStr}
+              </span>
+              <span style="color: var(--muted); font-size: 13px;">
+                <i data-lucide="clock" style="width: 14px; height: 14px; display: inline-block; vertical-align: -2px;"></i>
+                ${timeStr}
+              </span>
+            </div>
+            
+            <div style="color: var(--text-secondary); font-size: 14px; line-height: 1.5;">
+              ${escapeHtml(preview)}
+            </div>
           </div>
-          <div style="color: var(--text-secondary); font-size: 14px;">
-            ${escapeHtml(preview)}
+          
+          <div style="background: var(--panel-2); padding: 12px 20px; border-top: 1px solid var(--border);">
+            <button class="button sm primary" style="width: 100%;">
+              View Transcript with Diarization
+            </button>
           </div>
         </div>
       `;
     });
     
+    html += '</div>';
+    
     listEl.innerHTML = html;
+    
+    // Initialize icons
+    if (window.lucide) lucide.createIcons();
+    
   } catch(error) {
     listEl.innerHTML = `<div style="color: var(--danger);">Error: ${error.message}</div>`;
   }
