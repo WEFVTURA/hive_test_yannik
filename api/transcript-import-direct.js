@@ -41,6 +41,7 @@ export default async function handler(req){
   if (!email || !ALLOWED_EMAILS.includes(email)){
     return jres({ error:'Forbidden', message:'Access denied' }, 403, cors);
   }
+  const userId = user?.id || '';
   
   try {
     const { title, content, source = 'manual' } = await req.json();
@@ -104,7 +105,7 @@ export default async function handler(req){
       return jres({ error: 'Failed to access Meetings space' }, 500, cors);
     }
     
-    // Save the transcript
+    // Save the transcript (assign owner_id when available)
     const saveResp = await fetch(`${SUPABASE_URL}/rest/v1/notes`, {
       method: 'POST',
       headers: {
@@ -115,6 +116,7 @@ export default async function handler(req){
       },
       body: JSON.stringify({
         space_id: spaceId,
+        ...(userId ? { owner_id: userId } : {}),
         title: `[${source}] ${title}`,
         content: content
       })
