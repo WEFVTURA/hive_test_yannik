@@ -291,11 +291,20 @@ meetingBtn?.addEventListener('click', async ()=>{
   `, (root)=>({ url: root.querySelector('#mUrl')?.value?.trim()||'' }));
   if (!res.ok) return; const url = res.values?.url; if(!url){ window.showToast && window.showToast('Add a meeting URL'); return; }
   try{
-    const sb = getSupabase();
-    const { data, error } = await sb.functions.invoke('recall-create-bot', { body: { meeting_url: url } });
-    if (error) throw error;
-    window.showToast && window.showToast('HIVE bot joining meeting');
-  }catch(e){ window.showToast && window.showToast('Failed to send bot'); }
+    // Use enhanced endpoint that stores URL mapping
+    const token = localStorage.getItem('sb_access_token');
+    const resp = await fetch('/api/recall-create-bot-enhanced', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': token ? `Bearer ${token}` : ''
+      },
+      body: JSON.stringify({ meeting_url: url })
+    });
+    if (!resp.ok) throw new Error('Failed to create bot');
+    const data = await resp.json();
+    window.showToast && window.showToast('HIVE bot joining meeting - transcript will be automatically linked to your account');
+  }catch(e){ window.showToast && window.showToast('Failed to send bot: ' + e.message); }
 });
 
 // Deep Research button -> open chat side panel in Perplexity mode

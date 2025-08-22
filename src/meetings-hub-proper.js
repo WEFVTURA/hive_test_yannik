@@ -35,9 +35,6 @@ export async function initMeetingsHub() {
         <button class="button" onclick="window.refreshMeetings()">
           <i data-lucide="refresh-cw"></i> Refresh
         </button>
-        <button class="button ghost" onclick="window.trackMeetingUrl()">
-          <i data-lucide="link"></i> Track Meeting URL
-        </button>
       </div>
       
       <!-- Stats -->
@@ -401,33 +398,6 @@ window.importNewTranscript = function() {
   window.location.hash = 'meetings/transcript-list';
 };
 
-// Track meeting URL
-window.trackMeetingUrl = async function() {
-  const url = prompt('Enter the meeting URL you are about to join:');
-  if (!url) return;
-  
-  const token = localStorage.getItem('sb_access_token');
-  if (!token) {
-    alert('Please log in first');
-    return;
-  }
-  
-  // Store the meeting URL for automatic bot association
-  const response = await fetch('/api/track-meeting-url', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${token}`
-    },
-    body: JSON.stringify({ url })
-  });
-  
-  if (response.ok) {
-    alert('Meeting URL tracked! Any bot sent to this meeting will be automatically associated with your account.');
-  } else {
-    alert('Failed to track meeting URL');
-  }
-};
 
 // Refresh meetings
 window.refreshMeetings = loadMeetings;

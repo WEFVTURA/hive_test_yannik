@@ -34,11 +34,26 @@ export default async function handler(req){
       return jres({ error: 'Missing bot_id or transcript' }, 400, cors);
     }
     
-    // Step 1: Find user associated with this meeting URL
+    // Step 1: Find user associated with this bot or meeting URL
     let userId = null;
     
-    if (meeting_url) {
-      // Check if any user has sent a bot to this meeting URL recently
+    // First check if bot is already mapped
+    const botCheckResp = await fetch(`${SUPABASE_URL}/rest/v1/recall_bots?select=user_id&bot_id=eq.${bot_id}&limit=1`, {
+      headers: {
+        apikey: SERVICE_KEY,
+        Authorization: `Bearer ${SERVICE_KEY}`
+      }
+    });
+    
+    if (botCheckResp.ok) {
+      const botData = await botCheckResp.json();
+      if (botData?.[0]?.user_id) {
+        userId = botData[0].user_id;
+      }
+    }
+    
+    // If not found by bot_id, check by meeting URL
+    if (!userId && meeting_url) {
       const urlCheckResp = await fetch(`${SUPABASE_URL}/rest/v1/meeting_urls?select=user_id&url=eq.${encodeURIComponent(meeting_url)}&order=created_at.desc&limit=1`, {
         headers: {
           apikey: SERVICE_KEY,
