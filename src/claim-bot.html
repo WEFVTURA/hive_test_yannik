@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Claim Your Recall Bot</title>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      max-width: 600px;
+      margin: 50px auto;
+      padding: 20px;
+      background: #1a1a1a;
+      color: #e0e0e0;
+    }
+    h1 { color: #4CAF50; }
+    .info {
+      background: #2a2a2a;
+      padding: 15px;
+      border-radius: 8px;
+      margin: 20px 0;
+      border-left: 3px solid #4CAF50;
+    }
+    input {
+      width: 100%;
+      padding: 12px;
+      margin: 10px 0;
+      background: #2a2a2a;
+      border: 1px solid #444;
+      color: #e0e0e0;
+      border-radius: 4px;
+      font-size: 14px;
+    }
+    button {
+      background: #4CAF50;
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 16px;
+      width: 100%;
+      margin-top: 10px;
+    }
+    button:hover { background: #45a049; }
+    #result {
+      margin-top: 20px;
+      padding: 15px;
+      border-radius: 8px;
+      display: none;
+    }
+    .success { background: #1b5e20; border: 1px solid #4CAF50; }
+    .error { background: #b71c1c; border: 1px solid #f44336; }
+    .example { 
+      color: #888; 
+      font-size: 12px; 
+      margin-top: 5px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Claim Your Recall Bot</h1>
+  
+  <div class="info">
+    <strong>Why do this?</strong><br>
+    If you created Recall bots before the security update, they need to be linked to your account to see their transcripts.
+  </div>
+  
+  <div>
+    <label>Enter Your Bot ID:</label>
+    <input type="text" id="botId" placeholder="e.g., 089c5b47-bc78-4aa5-9c9c-de8245c408fe">
+    <div class="example">Find this in your Recall.ai dashboard or webhook data</div>
+  </div>
+  
+  <button onclick="claimBot()">Claim This Bot</button>
+  
+  <div id="result"></div>
+  
+  <div class="info" style="margin-top: 40px;">
+    <strong>Have multiple bots?</strong><br>
+    You can claim multiple bots at once. Separate them with commas:<br>
+    <textarea id="multipleBots" rows="4" style="width:100%;margin-top:10px;background:#2a2a2a;border:1px solid #444;color:#e0e0e0;padding:8px;border-radius:4px;" 
+              placeholder="bot-id-1, bot-id-2, bot-id-3"></textarea>
+    <button onclick="claimMultiple()" style="margin-top:10px;">Claim Multiple Bots</button>
+  </div>
+  
+  <script>
+    async function claimBot() {
+      const botId = document.getElementById('botId').value.trim();
+      const resultDiv = document.getElementById('result');
+      
+      if (!botId) {
+        alert('Please enter a bot ID');
+        return;
+      }
+      
+      resultDiv.innerHTML = 'Processing...';
+      resultDiv.className = '';
+      resultDiv.style.display = 'block';
+      
+      try {
+        const token = localStorage.getItem('sb_access_token');
+        const response = await fetch('/api/recall-claim-bot', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': token ? `Bearer ${token}` : ''
+          },
+          body: JSON.stringify({ bot_id: botId })
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok && data.success) {
+          resultDiv.className = 'success';
+          resultDiv.innerHTML = `✓ Success! ${data.message}<br><br>You can now see transcripts from this bot in the Meetings Hub.`;
+        } else {
+          resultDiv.className = 'error';
+          resultDiv.innerHTML = `✗ Error: ${data.error || 'Failed to claim bot'}<br>${data.details || ''}`;
+        }
+      } catch(e) {
+        resultDiv.className = 'error';
+        resultDiv.innerHTML = `✗ Error: ${e.message}`;
+      }
+    }
+    
+    async function claimMultiple() {
+      const botsText = document.getElementById('multipleBots').value.trim();
+      const resultDiv = document.getElementById('result');
+      
+      if (!botsText) {
+        alert('Please enter bot IDs');
+        return;
+      }
+      
+      const botIds = botsText.split(/[,\n]/).map(id => id.trim()).filter(id => id);
+      
+      resultDiv.innerHTML = 'Processing multiple bots...';
+      resultDiv.className = '';
+      resultDiv.style.display = 'block';
+      
+      try {
+        const token = localStorage.getItem('sb_access_token');
+        const response = await fetch('/api/recall-setup-mappings', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': token ? `Bearer ${token}` : ''
+          },
+          body: JSON.stringify({ bot_ids: botIds })
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok && data.success) {
+          resultDiv.className = 'success';
+          resultDiv.innerHTML = `✓ Success! ${data.message}<br>`;
+          if (data.results) {
+            resultDiv.innerHTML += `<br>Created: ${data.results.created.length} mappings`;
+            if (data.results.failed.length > 0) {
+              resultDiv.innerHTML += `<br>Failed: ${data.results.failed.length} (may already exist)`;
+            }
+          }
+        } else {
+          resultDiv.className = 'error';
+          resultDiv.innerHTML = `✗ Error: ${data.error || 'Failed to claim bots'}`;
+        }
+      } catch(e) {
+        resultDiv.className = 'error';
+        resultDiv.innerHTML = `✗ Error: ${e.message}`;
+      }
+    }
+  </script>
+</body>
+</html>

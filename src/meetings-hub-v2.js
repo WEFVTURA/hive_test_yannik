@@ -43,6 +43,10 @@ export async function renderMeetingsHubV2(root) {
           <i data-lucide="upload"></i> Import
         </button>
         
+        <button class="button" onclick="window.open('/src/claim-bot.html', '_blank')" style="background: var(--accent);">
+          <i data-lucide="link"></i> Claim Bot
+        </button>
+        
         <button class="button" onclick="window.refreshMeetingsV2()" style="background: var(--success);">
           <i data-lucide="refresh-cw"></i> Refresh
         </button>
