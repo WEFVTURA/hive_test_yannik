@@ -1439,32 +1439,46 @@ function setupMeetingsHubInteractions() {
     renderMeetingsHub(document.getElementById('content'));
   });
   // Back to library
-  document.getElementById('backToLibrary')?.addEventListener('click', ()=>{ location.hash=''; });
+  const backBtn = document.getElementById('backToLibrary');
+  if (backBtn) {
+    backBtn.addEventListener('click', () => { 
+      location.hash = ''; 
+    });
+  }
   
   // Direct Import button
-  document.getElementById('directImportBtn')?.addEventListener('click', () => {
-    location.hash = 'meetings/import';
-  });
-  
-  // Batch Import button
-  document.getElementById('batchImportBtn')?.addEventListener('click', () => {
-    location.hash = 'meetings/batch';
-  });
-  
-  // Recall Browser button
-  document.getElementById('recallBrowserBtn')?.addEventListener('click', () => {
-    location.hash = 'meetings/recall';
-  });
+  const importBtn = document.getElementById('directImportBtn');
+  if (importBtn) {
+    importBtn.addEventListener('click', () => {
+      location.hash = 'meetings/import';
+    });
+  }
   
   // Transcript List button
-  document.getElementById('transcriptListBtn')?.addEventListener('click', () => {
-    location.hash = 'transcripts';
-  });
+  const transcriptBtn = document.getElementById('transcriptListBtn');
+  if (transcriptBtn) {
+    transcriptBtn.addEventListener('click', () => {
+      location.hash = 'transcripts';
+    });
+  }
   
-  // Bot List button
-  document.getElementById('botListBtn')?.addEventListener('click', () => {
-    location.hash = 'bots';
-  });
+  // Also add inline onclick handlers as backup
+  setTimeout(() => {
+    const backBtn2 = document.getElementById('backToLibrary');
+    if (backBtn2 && !backBtn2.onclick) {
+      backBtn2.onclick = () => { location.hash = ''; };
+    }
+    
+    const importBtn2 = document.getElementById('directImportBtn');
+    if (importBtn2 && !importBtn2.onclick) {
+      importBtn2.onclick = () => { location.hash = 'meetings/import'; };
+    }
+    
+    const transcriptBtn2 = document.getElementById('transcriptListBtn');
+    if (transcriptBtn2 && !transcriptBtn2.onclick) {
+      transcriptBtn2.onclick = () => { location.hash = 'transcripts'; };
+    }
+  }, 100);
   
   // Test Auth button
   document.getElementById('testAuthBtn')?.addEventListener('click', async () => {

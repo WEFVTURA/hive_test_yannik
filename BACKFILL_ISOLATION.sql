@@ -6,7 +6,7 @@
 -- ============================================
 
 -- First, let's see what users we have
-SELECT DISTINCT email, id 
+SELECT DISTINCT email, id, created_at
 FROM auth.users 
 ORDER BY created_at;
 
