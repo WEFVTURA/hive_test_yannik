@@ -44,10 +44,10 @@ export default async function handler(req){
 
   try {
     const user = await getUser();
-    const email = (user?.email||'').toLowerCase();
-    if (!email || !ALLOWED_EMAILS.includes(email)){
-      return jres({ error: 'Forbidden', message: 'Access denied' }, 403, cors);
+    if (!user?.id){
+      return jres({ error: 'Forbidden', message: 'Not authenticated' }, 401, cors);
     }
+    const userId = user.id;
 
     // Debug info to help diagnose issues
     const debugInfo = {
@@ -56,11 +56,11 @@ export default async function handler(req){
       timestamp: new Date().toISOString()
     };
 
-    // Get meetings space ID by searching for a space named "Meetings"
+    // Get meetings space ID for this user only
     let meetingsSpaceId = '';
     
-    // Try exact match first
-    const spacesResp = await fetch(`${SUPABASE_URL}/rest/v1/spaces?select=id,name&name=eq.Meetings`, { 
+    // Try exact match for this owner first
+    const spacesResp = await fetch(`${SUPABASE_URL}/rest/v1/spaces?select=id,name&name=eq.Meetings&owner_id=eq.${userId}`, { 
       headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` } 
     });
     
@@ -72,8 +72,8 @@ export default async function handler(req){
       meetingsSpaceId = spaces[0].id;
       debugInfo.space_source = 'exact_match';
     } else {
-      // Try case-insensitive search
-      const spacesResp2 = await fetch(`${SUPABASE_URL}/rest/v1/spaces?select=id,name&name=ilike.meetings`, { 
+      // Try case-insensitive search (still scoped to owner)
+      const spacesResp2 = await fetch(`${SUPABASE_URL}/rest/v1/spaces?select=id,name&name=ilike.meetings&owner_id=eq.${userId}`, { 
         headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` } 
       });
       const spaces2 = await spacesResp2.json().catch(() => []);
@@ -86,23 +86,13 @@ export default async function handler(req){
     }
 
     if (!meetingsSpaceId) {
-      // Also try to list all spaces for debugging
-      const allSpacesResp = await fetch(`${SUPABASE_URL}/rest/v1/spaces?select=id,name`, { 
-        headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` } 
-      });
-      const allSpaces = await allSpacesResp.json().catch(() => []);
-      debugInfo.all_spaces = allSpaces.map(s => ({ id: s.id, name: s.name }));
-      
-      return jres({ 
-        error: 'Meetings space not found', 
-        notes: [],
-        debug: debugInfo
-      }, 404, cors);
+      // No personal Meetings space yet — return empty list for now
+      return jres({ success: true, space_id: null, notes: [], total: 0, debug: debugInfo }, 200, cors);
     }
 
     debugInfo.meetings_space_id = meetingsSpaceId;
 
-    // Fetch all notes from the meetings space
+    // Fetch all notes from the meetings space (implicitly owned by this user)
     const notesResp = await fetch(`${SUPABASE_URL}/rest/v1/notes?select=*&space_id=eq.${meetingsSpaceId}&order=created_at.desc`, { 
       headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` } 
     });
