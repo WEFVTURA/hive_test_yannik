@@ -58,31 +58,46 @@ export default async function handler(req){
 
     // Strong isolation: fetch notes by owner_id; fallback to space scoping only if needed
     let notes = [];
+    let fetchStatus = 200;
+    let fetchOk = true;
+    
     try{
       const byOwner = await fetch(`${SUPABASE_URL}/rest/v1/notes?select=*&owner_id=eq.${userId}&order=created_at.desc`, { headers:{ apikey:SERVICE_KEY, Authorization:`Bearer ${SERVICE_KEY}` } });
-      if (byOwner.ok){ notes = await byOwner.json().catch(()=>[]); debugInfo.mode='owner_only'; }
-    }catch{}
+      fetchStatus = byOwner.status;
+      fetchOk = byOwner.ok;
+      if (byOwner.ok){ 
+        notes = await byOwner.json().catch(()=>[]); 
+        debugInfo.mode='owner_only'; 
+      }
+    }catch(e){
+      debugInfo.fetch_error = e.message;
+    }
+    
     if (!Array.isArray(notes) || notes.length===0){
       // Optional fallback: look for a user-owned Meetings space and scope to it
       let meetingsSpaceId = '';
       try{
         const spacesResp = await fetch(`${SUPABASE_URL}/rest/v1/spaces?select=id,name&name=eq.Meetings&owner_id=eq.${userId}`, { headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` } });
         const spaces = await spacesResp.json().catch(() => []);
-        if (Array.isArray(spaces) && spaces.length > 0){ meetingsSpaceId = spaces[0].id; debugInfo.space_source='owner_meetings'; }
+        if (Array.isArray(spaces) && spaces.length > 0){ 
+          meetingsSpaceId = spaces[0].id; 
+          debugInfo.space_source='owner_meetings'; 
+        }
       }catch{}
+      
       if (meetingsSpaceId){
         const notesResp = await fetch(`${SUPABASE_URL}/rest/v1/notes?select=*&space_id=eq.${meetingsSpaceId}&order=created_at.desc`, { headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` } });
-        if (notesResp.ok){ notes = await notesResp.json().catch(()=>[]); debugInfo.mode='space_fallback'; }
+        fetchStatus = notesResp.status;
+        fetchOk = notesResp.ok;
+        if (notesResp.ok){ 
+          notes = await notesResp.json().catch(()=>[]); 
+          debugInfo.mode='space_fallback'; 
+        }
       }
     }
     
-    debugInfo.notes_fetch_status = notesResp.status;
-    
-    if (!notesResp.ok) {
-      const errorText = await notesResp.text();
-      debugInfo.notes_error = errorText;
-      throw new Error(`Failed to fetch notes: ${notesResp.status} - ${errorText}`);
-    }
+    debugInfo.notes_fetch_status = fetchStatus;
+    debugInfo.notes_fetch_ok = fetchOk;
     
     debugInfo.notes_type = Array.isArray(notes) ? 'array' : typeof notes;
     debugInfo.notes_count = Array.isArray(notes) ? notes.length : 0;
