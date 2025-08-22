@@ -97,75 +97,36 @@ export default async function handler(req){
       timestamp: new Date().toISOString()
     };
 
-    // Strong isolation: fetch notes by owner_id AND bot mappings
+    // Fetch notes ONLY by meeting_url mapping for this user
     let notes = [];
     let fetchStatus = 200;
     let fetchOk = true;
-    
-    // First, get all bot IDs mapped to this user
-    let userBotIds = [];
-    try {
-      const botMappingsResp = await fetch(`${SUPABASE_URL}/rest/v1/recall_bots?select=bot_id&user_id=eq.${userId}`, {
-        headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` }
-      });
-      if (botMappingsResp.ok) {
-        const mappings = await botMappingsResp.json();
-        userBotIds = mappings.map(m => m.bot_id);
-        debugInfo.mapped_bots = userBotIds.length;
-      }
-    } catch(e) {
-      debugInfo.bot_mapping_error = e.message;
-    }
-    
+
+    // Optional filter: meeting_url passed via query
+    const meetingUrlParam = url.searchParams.get('meeting_url') || '';
+
+    // Get this user's meeting URLs
+    let userMeetingUrls = [];
     try{
-      // Build query to get notes by owner_id OR by bot_id in metadata
-      let query = `${SUPABASE_URL}/rest/v1/notes?select=*&order=created_at.desc`;
-      
-      if (userBotIds.length > 0) {
-        // Include notes owned by user OR linked to user's bots
-        const botConditions = userBotIds.map(id => 
-          `metadata->>bot_id.eq.${id},metadata->>recording_id.eq.${id}`
-        ).join(',');
-        query += `&or=(owner_id.eq.${userId},${botConditions})`;
+      if (meetingUrlParam){
+        userMeetingUrls = [meetingUrlParam];
       } else {
-        // Just get notes owned by user
-        query += `&owner_id=eq.${userId}`;
+        const muResp = await fetch(`${SUPABASE_URL}/rest/v1/meeting_urls?select=url&user_id=eq.${userId}&order=created_at.desc&limit=200`, { headers:{ apikey:SERVICE_KEY, Authorization:`Bearer ${SERVICE_KEY}` } });
+        if (muResp.ok){ const arr = await muResp.json(); userMeetingUrls = Array.from(new Set(arr.map(r=>String(r.url||'').trim()).filter(Boolean))); }
       }
-      
-      const byOwner = await fetch(query, { 
-        headers:{ apikey:SERVICE_KEY, Authorization:`Bearer ${SERVICE_KEY}` } 
-      });
-      fetchStatus = byOwner.status;
-      fetchOk = byOwner.ok;
-      if (byOwner.ok){ 
-        notes = await byOwner.json().catch(()=>[]); 
-        debugInfo.mode='owner_and_bots'; 
-      }
-    }catch(e){
-      debugInfo.fetch_error = e.message;
-    }
-    
-    if (!Array.isArray(notes) || notes.length===0){
-      // Optional fallback: look for a user-owned Meetings space and scope to it
-      let meetingsSpaceId = '';
-      try{
-        const spacesResp = await fetch(`${SUPABASE_URL}/rest/v1/spaces?select=id,name&name=eq.Meetings&owner_id=eq.${userId}`, { headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` } });
-        const spaces = await spacesResp.json().catch(() => []);
-        if (Array.isArray(spaces) && spaces.length > 0){ 
-          meetingsSpaceId = spaces[0].id; 
-          debugInfo.space_source='owner_meetings'; 
-        }
-      }catch{}
-      
-      if (meetingsSpaceId){
-        const notesResp = await fetch(`${SUPABASE_URL}/rest/v1/notes?select=*&space_id=eq.${meetingsSpaceId}&order=created_at.desc`, { headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` } });
-        fetchStatus = notesResp.status;
-        fetchOk = notesResp.ok;
-        if (notesResp.ok){ 
-          notes = await notesResp.json().catch(()=>[]); 
-          debugInfo.mode='space_fallback'; 
-        }
-      }
+      debugInfo.meeting_urls_count = userMeetingUrls.length;
+    }catch(e){ debugInfo.meeting_urls_error = e.message; }
+
+    if (userMeetingUrls.length > 0){
+      const csv = userMeetingUrls.map(u=>`"${u.replace(/"/g,'""')}"`).join(',');
+      const q = `${SUPABASE_URL}/rest/v1/notes?select=*&metadata->>meeting_url=in.(${csv})&order=created_at.desc`;
+      const r = await fetch(q, { headers:{ apikey:SERVICE_KEY, Authorization:`Bearer ${SERVICE_KEY}` } });
+      fetchStatus = r.status; fetchOk = r.ok;
+      if (r.ok){ notes = await r.json().catch(()=>[]); debugInfo.mode = meetingUrlParam ? 'meeting_url_param' : 'meeting_urls_mapping'; }
+    } else {
+      // Nothing mapped yet for this user
+      notes = [];
+      fetchStatus = 200; fetchOk = true; debugInfo.mode = 'no_meeting_urls';
     }
     
     debugInfo.notes_fetch_status = fetchStatus;

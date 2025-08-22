@@ -16,11 +16,11 @@ export async function renderMeetingsHub() {
           <p class="muted">Your meeting transcripts with speaker diarization</p>
         </div>
         <div class="hub-actions">
+          <button class="button" onclick="location.hash='';">
+            <i data-lucide="arrow-left"></i> Back to Spaces
+          </button>
           <button class="button primary" onclick="window.showTranscriptImport()">
             <i data-lucide="upload"></i> Import Transcripts
-          </button>
-          <button class="button" onclick="window.refreshMeetingsHub()">
-            <i data-lucide="refresh-cw"></i> Refresh
           </button>
         </div>
       </div>
@@ -39,6 +39,8 @@ export async function renderMeetingsHub() {
   if (window.lucide) lucide.createIcons();
   
   await loadMeetings();
+  // Expose refresh in case other components call it
+  window.refreshMeetingsHub = loadMeetings;
 }
 
 async function loadMeetings() {
