@@ -114,14 +114,24 @@ export async function renderSpaceSettings(root, spaceId){
     const updates = {};
     if (name && name!==space.name) updates.name = name;
     if (vis && vis!==space.visibility) updates.visibility = vis;
-    if (Object.keys(updates).length) await db_updateSpace(spaceId, updates).catch(()=>window.showToast && window.showToast('Failed to save'));
+    // Use edge endpoint to avoid RLS client issues
+    try{
+      let token=''; try{ const sb = getSupabase(); const ss = await sb.auth.getSession(); token = ss?.data?.session?.access_token || ''; }catch{}
+      if (Object.keys(updates).length){
+        const r = await fetch('/api/space-update', { method:'POST', headers:{ 'Content-Type':'application/json', ...(token? { Authorization:`Bearer ${token}` }: {}) }, body: JSON.stringify({ id: spaceId, fields: updates }) });
+        if (!r.ok){ const t = await r.text(); window.showToast && window.showToast('Failed to save: '+t); }
+      }
+    }catch{}
     // Persist color locally
     try{ if (typeof localStorage!=='undefined'){ if (color){ localStorage.setItem('space_color_'+spaceId, color); } else { localStorage.removeItem('space_color_'+spaceId); } } }catch{}
     // Update public permissions in settings
     if (vis==='public'){
       const settings = { ...(space.settings||{}) };
       settings.public_permissions = pubPerm||'view';
-      await db_updateSpace(spaceId, { settings }).catch(()=>{});
+      try{
+        let token=''; try{ const sb = getSupabase(); const ss = await sb.auth.getSession(); token = ss?.data?.session?.access_token || ''; }catch{}
+        await fetch('/api/space-update', { method:'POST', headers:{ 'Content-Type':'application/json', ...(token? { Authorization:`Bearer ${token}` }: {}) }, body: JSON.stringify({ id: spaceId, fields: { settings } }) });
+      }catch{}
     }
     window.showToast && window.showToast('Saved');
   });
