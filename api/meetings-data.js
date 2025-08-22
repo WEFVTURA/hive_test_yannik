@@ -56,39 +56,25 @@ export default async function handler(req){
       timestamp: new Date().toISOString()
     };
 
-    // Per-user Meetings space lookup (isolation)
-    let meetingsSpaceId = '';
-    const spacesResp = await fetch(`${SUPABASE_URL}/rest/v1/spaces?select=id,name&name=eq.Meetings&owner_id=eq.${userId}`, { headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` } });
-    
-    debugInfo.spaces_fetch_status = spacesResp.status;
-    const spaces = await spacesResp.json().catch(() => []);
-    debugInfo.spaces_found_exact = spaces.length || 0;
-    
-    if (Array.isArray(spaces) && spaces.length > 0) {
-      meetingsSpaceId = spaces[0].id;
-      debugInfo.space_source = 'exact_match';
-    } else {
-      // Try case-insensitive search (still scoped to owner)
-      const spacesResp2 = await fetch(`${SUPABASE_URL}/rest/v1/spaces?select=id,name&name=ilike.meetings&owner_id=eq.${userId}`, { headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` } });
-      const spaces2 = await spacesResp2.json().catch(() => []);
-      debugInfo.spaces_found_ilike = spaces2.length || 0;
-      
-      if (Array.isArray(spaces2) && spaces2.length > 0) {
-        meetingsSpaceId = spaces2[0].id;
-        debugInfo.space_source = 'case_insensitive';
+    // Strong isolation: fetch notes by owner_id; fallback to space scoping only if needed
+    let notes = [];
+    try{
+      const byOwner = await fetch(`${SUPABASE_URL}/rest/v1/notes?select=*&owner_id=eq.${userId}&order=created_at.desc`, { headers:{ apikey:SERVICE_KEY, Authorization:`Bearer ${SERVICE_KEY}` } });
+      if (byOwner.ok){ notes = await byOwner.json().catch(()=>[]); debugInfo.mode='owner_only'; }
+    }catch{}
+    if (!Array.isArray(notes) || notes.length===0){
+      // Optional fallback: look for a user-owned Meetings space and scope to it
+      let meetingsSpaceId = '';
+      try{
+        const spacesResp = await fetch(`${SUPABASE_URL}/rest/v1/spaces?select=id,name&name=eq.Meetings&owner_id=eq.${userId}`, { headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` } });
+        const spaces = await spacesResp.json().catch(() => []);
+        if (Array.isArray(spaces) && spaces.length > 0){ meetingsSpaceId = spaces[0].id; debugInfo.space_source='owner_meetings'; }
+      }catch{}
+      if (meetingsSpaceId){
+        const notesResp = await fetch(`${SUPABASE_URL}/rest/v1/notes?select=*&space_id=eq.${meetingsSpaceId}&order=created_at.desc`, { headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` } });
+        if (notesResp.ok){ notes = await notesResp.json().catch(()=>[]); debugInfo.mode='space_fallback'; }
       }
     }
-
-    if (!meetingsSpaceId) {
-      return jres({ success: true, space_id: null, notes: [], total: 0, debug: debugInfo }, 200, cors);
-    }
-
-    debugInfo.meetings_space_id = meetingsSpaceId;
-
-    // Fetch all notes from the meetings space (implicitly owned by this user)
-    const notesResp = await fetch(`${SUPABASE_URL}/rest/v1/notes?select=*&space_id=eq.${meetingsSpaceId}&order=created_at.desc`, { 
-      headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` } 
-    });
     
     debugInfo.notes_fetch_status = notesResp.status;
     
@@ -98,7 +84,6 @@ export default async function handler(req){
       throw new Error(`Failed to fetch notes: ${notesResp.status} - ${errorText}`);
     }
     
-    const notes = await notesResp.json();
     debugInfo.notes_type = Array.isArray(notes) ? 'array' : typeof notes;
     debugInfo.notes_count = Array.isArray(notes) ? notes.length : 0;
     
@@ -112,13 +97,7 @@ export default async function handler(req){
       };
     }
 
-    return jres({ 
-      success: true, 
-      space_id: meetingsSpaceId,
-      notes: Array.isArray(notes) ? notes : [],
-      total: Array.isArray(notes) ? notes.length : 0,
-      debug: debugInfo
-    }, 200, cors);
+    return jres({ success: true, notes: Array.isArray(notes) ? notes : [], total: Array.isArray(notes) ? notes.length : 0, debug: debugInfo }, 200, cors);
 
   } catch (error) {
     return jres({ 
@@ -128,3 +107,4 @@ export default async function handler(req){
     }, 500, cors);
   }
 }
+

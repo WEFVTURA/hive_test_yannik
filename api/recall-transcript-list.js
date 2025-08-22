@@ -114,8 +114,8 @@ export default async function handler(req){
       
       for (const transcript of items) {
         // Skip transcripts not belonging to this user (no bot_id or not mapped)
-        const tBotId = transcript.bot_id || transcript.recording_id || null;
-        if (tBotId && allowedIds.size && !allowedIds.has(tBotId)) continue;
+        const tBotId = transcript.bot_id || transcript.recording_id || transcript.id || null;
+        if (allowedIds.size && (!tBotId || !allowedIds.has(tBotId))) continue;
         // Fetch the actual transcript content
         let transcriptText = '';
         let botInfo = {};
