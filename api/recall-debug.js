@@ -30,30 +30,35 @@ export default async function handler(req){
     { 'X-Api-Key': RECALL_KEY, Accept:'application/json' },
   ];
 
+  const probePaths = [
+    '/api/v1/bot/', // List bots (should be JSON when authenticated)
+  ];
   for (const base of bases) {
     for (const headers of headersList) {
-      const url = `${base}/v1/transcripts?status=completed&limit=1`;
-      try {
-        const resp = await fetch(url, { headers });
-        const status = resp.status;
-        const location = resp.headers.get('Location') || '';
-        let body = '';
-        try { body = await resp.text(); } catch {}
-        results.push({
-          url,
-          auth: headers.Authorization ? 'Token' : 'X-Api-Key',
-          status,
-          location,
-          bodySnippet: body.substring(0, 200),
-          ok: resp.ok
-        });
-        if (resp.ok) break; // Found working endpoint
-      } catch (err) {
-        results.push({
-          url,
-          auth: headers.Authorization ? 'Token' : 'X-Api-Key',
-          error: err.message
-        });
+      for (const path of probePaths){
+        const url = `${base}${path}`;
+        try {
+          const resp = await fetch(url, { headers });
+          const status = resp.status;
+          const contentType = resp.headers.get('content-type') || '';
+          let body = '';
+          try { body = await resp.text(); } catch {}
+          results.push({
+            url,
+            auth: headers.Authorization ? 'Token' : 'X-Api-Key',
+            status,
+            contentType,
+            bodySnippet: body.substring(0, 300),
+            ok: resp.ok
+          });
+          // Do not break on first ok; collect all permutations for visibility
+        } catch (err) {
+          results.push({
+            url,
+            auth: headers.Authorization ? 'Token' : 'X-Api-Key',
+            error: err.message
+          });
+        }
       }
     }
   }
