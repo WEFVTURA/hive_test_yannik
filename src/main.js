@@ -657,9 +657,10 @@ async function renderLibrary(){
     <div class="content-head">
       <div class="title"><h2>My Library</h2></div>
       <div class="view-controls">
-        <div class="segmented" role="tablist">
-          <button id="cardsBtn" class="active" role="tab">Cards</button>
-          <button id="listBtn" role="tab">List</button>
+        <div class="segmented" role="tablist" id="spacesTabs">
+          <button data-tab="mine" class="active" role="tab">My Spaces</button>
+          <button data-tab="shared" role="tab">Shared with me</button>
+          <button data-tab="public" role="tab">Public</button>
         </div>
       </div>
     </div>
@@ -669,6 +670,45 @@ async function renderLibrary(){
   const { db_listSpaces } = await import('./lib/supabase.js');
   let spaces = await db_listSpaces().catch(()=>[]);
   if (currentQuery) spaces = spaces.filter(s => (s.name||'').toLowerCase().includes(currentQuery));
+
+  // Tabs handler: fetch via API per tab
+  const tabs = document.getElementById('spacesTabs');
+  if (tabs){
+    tabs.addEventListener('click', async (e)=>{
+      const btn = e.target.closest('button[data-tab]'); if (!btn) return;
+      tabs.querySelectorAll('button').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      const type = btn.getAttribute('data-tab');
+      try{
+        let token = '';
+        try { const sb = getSupabase(); const s = await sb.auth.getSession(); token = s?.data?.session?.access_token || ''; } catch {}
+        const resp = await fetch(`/api/spaces-list?type=${type}`, { headers: token? { Authorization:`Bearer ${token}` } : {} });
+        const data = await resp.json().catch(()=>({spaces:[]}));
+        const arr = Array.isArray(data.spaces) ? data.spaces : [];
+        renderSpacesGrid(arr);
+      }catch{ renderSpacesGrid([]); }
+    });
+  }
+
+  function renderSpacesGrid(arr){
+    const grid = document.getElementById('grid'); if (!grid) return;
+    const meetingsId = localStorage.getItem('hive_meetings_space_id')||'';
+    const chatsId = localStorage.getItem('hive_chats_space_id')||'';
+    const researchId = localStorage.getItem('hive_research_space_id')||'';
+    arr.sort((a,b)=>{ const score=(s)=>((s.id===researchId)?-3:0)+((s.id===meetingsId)?-2:0)+((s.id===chatsId)?-1:0); return score(a)-score(b); });
+    grid.innerHTML = arr.map(s=>{
+      const color = (typeof localStorage!=='undefined') ? (localStorage.getItem('space_color_'+s.id)||'') : '';
+      let cover;
+      if (s.id===meetingsId){ cover = `<div style=\"display:grid; place-items:center; height:100%\"><svg class=\"icon card-icon\"><use href=\"#video\"></use></svg></div>`; }
+      else if (s.id===chatsId){ cover = `<div style=\"display:grid; place-items:center; height:100%\"><svg class=\"icon card-icon\"><use href=\"#chat\"></use></svg></div>`; }
+      else { cover = s.cover_url ? `<img src="${s.cover_url}" alt="cover" style="width:100%; height:100%; object-fit:cover; border-radius:12px">` : `<div style=\"display:grid; place-items:center; gap:8px\"><svg class=\"icon\"><use href=\"#box\"></use></svg><span class=\"muted\">Cover</span></div>`; }
+      return `<article class="lib-card" data-id="${s.id}">
+        <div class="lib-visual" style="${color?`border:2px solid ${color}`:''}">${cover}<div class="card-title-overlay">${s.name}</div></div>
+        <div class="lib-meta"><span>Space</span><span></span><button class="button ghost sm" data-space-menu-grid="${s.id}" title="Options">⋯</button></div>
+      </article>`; }).join('');
+    grid.querySelectorAll('[data-id]').forEach(el=>{ el.addEventListener('click', ()=>{ location.hash = 'space/'+el.getAttribute('data-id'); }); });
+    grid.querySelectorAll('[data-space-menu-grid]').forEach(btn=>{ btn.addEventListener('click', async (e)=>{ e.stopPropagation(); const id=btn.getAttribute('data-space-menu-grid'); const s=arr.find(x=>x.id===id); if (!s) return; await openSpaceOptions(s); }); });
+  }
 
   // Render sidebar spaces
   const list = document.getElementById('spacesList');
