@@ -67,12 +67,12 @@ export default async function handler(req){
       return jres({ error: 'Meeting URL required' }, 400, cors);
     }
 
-    // Basic validation for common platforms (Zoom/Meet/Teams)
+    // Relaxed validation: only require http(s); do not block unfamiliar domains
     const urlStr = String(meeting_url || '').trim();
     const validUrl = /^(https?:\/\/).+$/i.test(urlStr);
-    const looksLikeKnown = /(zoom\.us\/j\/|meet\.google\.com\/|teams\.microsoft\.com\/|teams\.live\.com\/)/i.test(urlStr);
-    if (!validUrl || !looksLikeKnown) {
-      return jres({ error: 'Invalid meeting link', details: 'Provide a direct Zoom/Google Meet/Microsoft Teams URL' }, 400, cors);
+    const looksLikeKnown = /(zoom\.us\/|meet\.google\.com\/|teams\.microsoft\.com\/|teams\.live\.com\/)/i.test(urlStr);
+    if (!validUrl) {
+      return jres({ error: 'Invalid meeting link', details: 'URL must start with http(s)://' }, 400, cors);
     }
     
     // STEP 1: Store the meeting URL with user association IMMEDIATELY
@@ -91,7 +91,8 @@ export default async function handler(req){
         metadata: {
           user_email: user.email,
           source: 'meeting_intelligence',
-          status: 'requested'
+          status: 'requested',
+          url_validation: { valid_scheme: true, looks_like_known: looksLikeKnown }
         }
       })
     });
