@@ -28,18 +28,33 @@ export default async function handler(req){
   if (debugEmail) {
     const headers = { 'apikey': SERVICE_KEY, 'Authorization': `Bearer ${SERVICE_KEY}` };
     try {
-      const userResp = await fetch(`${SUPABASE_URL}/rest/v1/users?email=eq.${encodeURIComponent(debugEmail)}&select=id`, { headers });
-      const users = await userResp.json();
-      if (!users || users.length === 0) return jres({ error: 'User not found for email: ' + debugEmail }, 404, cors);
-      const userId = users[0].id;
+      // Use Supabase Auth Admin API to lookup user by email
+      const userResp = await fetch(`${SUPABASE_URL}/auth/v1/admin/users?email=${encodeURIComponent(debugEmail)}`, { headers });
+      if (!userResp.ok) {
+        const msg = await userResp.text().catch(()=>'');
+        return jres({ error: 'Admin user lookup failed', details: msg }, 500, cors);
+      }
+      const users = await userResp.json().catch(()=>null);
+      const userId = Array.isArray(users) && users[0]?.id ? users[0].id : users?.id || null;
+      if (!userId) return jres({ error: 'User not found for email: ' + debugEmail }, 404, cors);
 
+      // Find user's bots
       const botsResp = await fetch(`${SUPABASE_URL}/rest/v1/recall_bots?user_id=eq.${userId}&select=bot_id`, { headers });
+      if (!botsResp.ok) {
+        const err = await botsResp.text().catch(()=> '');
+        return jres({ error: 'Failed to fetch bots', details: err }, 500, cors);
+      }
       const bots = await botsResp.json();
       if (!bots || bots.length === 0) return jres({ email: debugEmail, userId, meeting_count: 0, message: 'User has no bots.' }, 200, cors);
       const botIds = bots.map(b => b.bot_id);
 
+      // Count meetings
       const notesQuery = `${SUPABASE_URL}/rest/v1/notes?select=id&metadata->>bot_id=in.("${botIds.join('","')}")`;
       const notesResp = await fetch(notesQuery, { headers });
+      if (!notesResp.ok) {
+        const err = await notesResp.text().catch(()=> '');
+        return jres({ error: 'Failed to fetch notes', details: err }, 500, cors);
+      }
       const notes = await notesResp.json();
       return jres({ email: debugEmail, userId, bot_count: botIds.length, meeting_count: notes.length }, 200, cors);
     } catch (e) {

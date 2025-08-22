@@ -291,20 +291,30 @@ meetingBtn?.addEventListener('click', async ()=>{
   `, (root)=>({ url: root.querySelector('#mUrl')?.value?.trim()||'' }));
   if (!res.ok) return; const url = res.values?.url; if(!url){ window.showToast && window.showToast('Add a meeting URL'); return; }
   try{
-    // Use enhanced endpoint that stores URL mapping
-    const token = localStorage.getItem('sb_access_token');
+    // Obtain Supabase access token reliably
+    let token = '';
+    try {
+      const sb = getSupabase();
+      const sessionRes = await sb.auth.getSession();
+      token = sessionRes?.data?.session?.access_token || '';
+    } catch {}
+
+    const headers = { 'Content-Type': 'application/json' };
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+
     const resp = await fetch('/api/recall-create-bot-enhanced', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': token ? `Bearer ${token}` : ''
-      },
+      headers,
       body: JSON.stringify({ meeting_url: url })
     });
-    if (!resp.ok) throw new Error('Failed to create bot');
+    if (!resp.ok) {
+      let details = '';
+      try { details = await resp.text(); } catch {}
+      throw new Error(details || 'Failed to create bot');
+    }
     const data = await resp.json();
     window.showToast && window.showToast('HIVE bot joining meeting - transcript will be automatically linked to your account');
-  }catch(e){ window.showToast && window.showToast('Failed to send bot: ' + e.message); }
+  }catch(e){ window.showToast && window.showToast('Failed to send bot: ' + (e?.message || e)); }
 });
 
 // Deep Research button -> open chat side panel in Perplexity mode

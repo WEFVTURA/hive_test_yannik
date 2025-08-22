@@ -22,6 +22,14 @@ export default async function handler(req){
   const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SERVICE_KEY || '';
   const RECALL_API_KEY = process.env.RECALL_API_KEY || '';
   
+  // Quick env validation with actionable messages
+  if (!SUPABASE_URL || !SERVICE_KEY) {
+    return jres({ error: 'Server misconfiguration', details: 'Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY' }, 500, cors);
+  }
+  if (!RECALL_API_KEY) {
+    return jres({ error: 'Bot provider not configured', details: 'Missing RECALL_API_KEY on server' }, 500, cors);
+  }
+  
   // Authenticate user
   async function getToken(){
     const authz = req.headers.get('authorization') || req.headers.get('Authorization') || '';
@@ -58,6 +66,14 @@ export default async function handler(req){
     if (!meeting_url) {
       return jres({ error: 'Meeting URL required' }, 400, cors);
     }
+
+    // Basic validation for common platforms (Zoom/Meet/Teams)
+    const urlStr = String(meeting_url || '').trim();
+    const validUrl = /^(https?:\/\/).+$/i.test(urlStr);
+    const looksLikeKnown = /(zoom\.us\/j\/|meet\.google\.com\/|teams\.microsoft\.com\/|teams\.live\.com\/)/i.test(urlStr);
+    if (!validUrl || !looksLikeKnown) {
+      return jres({ error: 'Invalid meeting link', details: 'Provide a direct Zoom/Google Meet/Microsoft Teams URL' }, 400, cors);
+    }
     
     // STEP 1: Store the meeting URL with user association IMMEDIATELY
     await fetch(`${SUPABASE_URL}/rest/v1/meeting_urls`, {
@@ -65,15 +81,17 @@ export default async function handler(req){
       headers: {
         'Content-Type': 'application/json',
         apikey: SERVICE_KEY,
-        Authorization: `Bearer ${SERVICE_KEY}`
+        Authorization: `Bearer ${SERVICE_KEY}`,
+        'Prefer': 'resolution=merge-duplicates'
       },
       body: JSON.stringify({
         user_id: userId,
-        url: meeting_url,
+        url: urlStr,
         created_at: new Date().toISOString(),
         metadata: {
           user_email: user.email,
-          source: 'meeting_intelligence'
+          source: 'meeting_intelligence',
+          status: 'requested'
         }
       })
     });
@@ -86,20 +104,35 @@ export default async function handler(req){
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        meeting_url: meeting_url,
+        meeting_url: urlStr,
         bot_name: 'HIVE Assistant',
-        transcription_options: {
-          provider: 'default'
-        }
+        transcription_options: { provider: 'default' }
       })
     });
     
     if (!botResp.ok) {
-      const error = await botResp.text();
+      const status = botResp.status;
+      let errorText = '';
+      try { errorText = await botResp.text(); } catch {}
+
+      // Mark failure on meeting_urls metadata
+      try {
+        await fetch(`${SUPABASE_URL}/rest/v1/meeting_urls`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}`, 'Prefer': 'resolution=merge-duplicates' },
+          body: JSON.stringify({
+            user_id: userId,
+            url: urlStr,
+            metadata: { status: 'failed', provider_error: String(errorText).slice(0, 500), http_status: status }
+          })
+        });
+      } catch {}
+
       return jres({ 
         error: 'Failed to create bot', 
-        details: error 
-      }, 500, cors);
+        http_status: status,
+        details: errorText || 'Provider rejected the request. Check meeting link, account limits, and API key.'
+      }, 502, cors);
     }
     
     const botData = await botResp.json();
@@ -118,17 +151,26 @@ export default async function handler(req){
         body: JSON.stringify({
           bot_id: botId,
           user_id: userId,
-          meeting_url: meeting_url,
+          meeting_url: urlStr,
           created_at: new Date().toISOString()
         })
       });
+
+      // Update meeting_urls with success status
+      try {
+        await fetch(`${SUPABASE_URL}/rest/v1/meeting_urls`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}`, 'Prefer': 'resolution=merge-duplicates' },
+          body: JSON.stringify({ user_id: userId, url: urlStr, metadata: { status: 'launched', bot_id: botId } })
+        });
+      } catch {}
     }
     
     return jres({
       success: true,
       bot_id: botId,
       message: 'Bot created and automatically associated with your account',
-      meeting_url: meeting_url
+      meeting_url: urlStr
     }, 200, cors);
     
   } catch(e) {
