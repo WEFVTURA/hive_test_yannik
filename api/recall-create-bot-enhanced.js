@@ -146,7 +146,7 @@ export default async function handler(req){
           body: JSON.stringify({
             user_id: userId,
             url: urlStr,
-            metadata: { status: 'failed', provider_error: String(errorText).slice(0, 500), http_status: status }
+            metadata: { status: 'failed', provider_error: String(errorText).slice(0, 500), http_status: status, attempts: attempt.attempts }
           })
         });
       } catch {}
