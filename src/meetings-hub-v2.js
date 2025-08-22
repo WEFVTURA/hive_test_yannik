@@ -277,9 +277,132 @@ window.debugMeetingsV2 = async function() {
   debugEl.innerHTML = html;
 };
 
-// View meeting function
-window.viewMeetingV2 = function(noteId) {
-  window.location.hash = `space/note/${noteId}`;
+// View meeting function - show rich transcript view
+window.viewMeetingV2 = async function(noteId) {
+  // Get the note data
+  const sb = getSupabase();
+  const { data: note, error } = await sb
+    .from('notes')
+    .select('*')
+    .eq('id', noteId)
+    .single();
+    
+  if (error || !note) {
+    alert('Error loading meeting');
+    return;
+  }
+  
+  // Show rich transcript view in a modal
+  const modal = document.createElement('div');
+  modal.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.9);z-index:9999;overflow-y:auto;padding:24px;';
+  modal.innerHTML = `
+    <div style="max-width:1200px;margin:0 auto;background:var(--panel);border-radius:12px;padding:24px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;">
+        <h2 style="margin:0;font-size:24px;">${escapeHtml(note.title || 'Meeting Transcript')}</h2>
+        <button class="button ghost" onclick="this.closest('div[style*=fixed]').remove()">✕ Close</button>
+      </div>
+      
+      <!-- Editable metadata -->
+      <div style="background:var(--panel-2);padding:16px;border-radius:8px;margin-bottom:24px;">
+        <div style="display:grid;gap:16px;grid-template-columns:1fr 1fr;">
+          <div>
+            <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px;">Meeting Title</label>
+            <input type="text" value="${escapeHtml(note.title || '')}" 
+                   onchange="window.updateMeetingTitle('${noteId}', this.value)"
+                   style="width:100%;padding:8px;border:1px solid var(--border);border-radius:4px;background:var(--panel);">
+          </div>
+          <div>
+            <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px;">Participants (click to add)</label>
+            <div id="speakers-${noteId}" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px;">
+              <!-- Speaker tags will be populated here -->
+            </div>
+            <button class="button sm ghost" onclick="window.addSpeakerTag('${noteId}')">
+              + Add Participant
+            </button>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Rich formatted transcript -->
+      <div style="background:var(--panel-1);padding:24px;border-radius:8px;max-height:600px;overflow-y:auto;">
+        <div id="transcript-${noteId}">
+          ${window.formatEnhancedTranscript ? window.formatEnhancedTranscript(note.content, noteId) : formatTranscriptContent(note.content)}
+        </div>
+      </div>
+      
+      <!-- Actions -->
+      <div style="margin-top:24px;display:flex;gap:12px;">
+        <button class="button primary" onclick="window.generateSummaryForNote('${noteId}')">
+          Generate Summary
+        </button>
+        <button class="button" onclick="navigator.clipboard.writeText(document.getElementById('transcript-${noteId}').innerText)">
+          Copy Transcript
+        </button>
+        <button class="button ghost" onclick="window.location.hash='space/note/${noteId}'">
+          Open in Space
+        </button>
+      </div>
+      
+      <!-- Summary section -->
+      <div id="summary-container-${noteId}" style="margin-top:24px;display:none;">
+        <h3 style="margin-bottom:12px;">AI Summary</h3>
+        <div id="summary-${noteId}" style="background:var(--panel-2);padding:16px;border-radius:8px;border-left:3px solid var(--accent);">
+          <!-- Summary will appear here -->
+        </div>
+      </div>
+    </div>
+  `;
+  
+  document.body.appendChild(modal);
+  
+  // Initialize speaker tags
+  if (window.initializeSpeakerTags) {
+    window.initializeSpeakerTags(noteId, note);
+  }
+  
+  // Initialize icons
+  if (window.lucide) lucide.createIcons();
+};
+
+// Fallback transcript formatting if main formatter not available
+function formatTranscriptContent(content) {
+  if (!content) return '<p style="color:var(--muted)">No transcript content</p>';
+  
+  try {
+    // Try to parse as JSON for structured data
+    const data = JSON.parse(content);
+    if (Array.isArray(data)) {
+      let html = '';
+      data.forEach(segment => {
+        const speaker = segment.participant?.name || 
+                       segment.speaker || 
+                       segment.speaker_name || 
+                       'Speaker';
+        const text = segment.text || 
+                    (segment.words ? segment.words.map(w => w.text || w.word || w).join(' ') : '');
+        
+        if (text) {
+          // Color-code speakers
+          const colors = ['#4CAF50', '#2196F3', '#FF9800', '#9C27B0', '#F44336'];
+          const colorIndex = speaker.charCodeAt(0) % colors.length;
+          const color = colors[colorIndex];
+          
+          html += `
+            <div style="margin-bottom:16px;padding:12px;background:var(--panel-2);border-radius:8px;border-left:3px solid ${color};">
+              <div style="font-weight:600;color:${color};margin-bottom:4px;">${escapeHtml(speaker)}</div>
+              <div style="line-height:1.6;">${escapeHtml(text)}</div>
+            </div>
+          `;
+        }
+      });
+      return html || '<p>No content</p>';
+    }
+  } catch(e) {
+    // Not JSON, display as plain text
+  }
+  
+  // Plain text fallback
+  return `<pre style="white-space:pre-wrap;font-family:inherit;">${escapeHtml(content)}</pre>`;
 };
 
 // Helper function to escape HTML
@@ -287,6 +410,284 @@ function escapeHtml(text) {
   const div = document.createElement('div');
   div.textContent = text;
   return div.innerHTML;
+}
+
+// Update meeting title
+window.updateMeetingTitle = async function(noteId, newTitle) {
+  const sb = getSupabase();
+  const { error } = await sb
+    .from('notes')
+    .update({ title: newTitle })
+    .eq('id', noteId);
+    
+  if (error) {
+    console.error('Error updating title:', error);
+    alert('Failed to update title');
+  }
+};
+
+// Initialize speaker tags from note metadata
+window.initializeSpeakerTags = function(noteId, note) {
+  const container = document.getElementById(`speakers-${noteId}`);
+  if (!container) return;
+  
+  // Parse existing tags from metadata or content
+  const metadata = note.metadata || {};
+  const speakers = metadata.speakers || [];
+  
+  // If no speakers in metadata, try to extract from content
+  if (speakers.length === 0 && note.content) {
+    try {
+      const data = JSON.parse(note.content);
+      if (Array.isArray(data)) {
+        const uniqueSpeakers = new Set();
+        data.forEach(segment => {
+          const speaker = segment.participant?.name || segment.speaker || segment.speaker_name;
+          if (speaker) uniqueSpeakers.add(speaker);
+        });
+        speakers.push(...Array.from(uniqueSpeakers).map(name => ({ name, email: '', tag: '' })));
+      }
+    } catch(e) {}
+  }
+  
+  // Render speaker tags
+  container.innerHTML = '';
+  speakers.forEach((speaker, index) => {
+    const tag = document.createElement('div');
+    tag.style.cssText = 'background:var(--accent);color:white;padding:4px 12px;border-radius:16px;font-size:14px;display:inline-flex;align-items:center;gap:4px;';
+    tag.innerHTML = `
+      <span contenteditable="true" onblur="window.updateSpeakerInfo('${noteId}', ${index}, 'name', this.textContent)">${escapeHtml(speaker.name)}</span>
+      ${speaker.email ? `<span style="opacity:0.8;font-size:12px;">(${speaker.email})</span>` : ''}
+      <button onclick="window.removeSpeakerTag('${noteId}', ${index})" style="background:none;border:none;color:white;cursor:pointer;padding:0;margin-left:4px;">✕</button>
+    `;
+    container.appendChild(tag);
+  });
+};
+
+// Add new speaker tag
+window.addSpeakerTag = async function(noteId) {
+  const name = prompt('Enter participant name:');
+  if (!name) return;
+  
+  const email = prompt('Enter email (optional):') || '';
+  const tag = prompt('Enter tag/role (optional):') || '';
+  
+  const sb = getSupabase();
+  const { data: note } = await sb
+    .from('notes')
+    .select('metadata')
+    .eq('id', noteId)
+    .single();
+    
+  const metadata = note?.metadata || {};
+  const speakers = metadata.speakers || [];
+  speakers.push({ name, email, tag });
+  
+  const { error } = await sb
+    .from('notes')
+    .update({ metadata: { ...metadata, speakers } })
+    .eq('id', noteId);
+    
+  if (!error) {
+    // Refresh the tags
+    const { data: updatedNote } = await sb.from('notes').select('*').eq('id', noteId).single();
+    window.initializeSpeakerTags(noteId, updatedNote);
+  }
+};
+
+// Update speaker info
+window.updateSpeakerInfo = async function(noteId, index, field, value) {
+  const sb = getSupabase();
+  const { data: note } = await sb
+    .from('notes')
+    .select('metadata')
+    .eq('id', noteId)
+    .single();
+    
+  const metadata = note?.metadata || {};
+  const speakers = metadata.speakers || [];
+  if (speakers[index]) {
+    speakers[index][field] = value;
+    
+    await sb
+      .from('notes')
+      .update({ metadata: { ...metadata, speakers } })
+      .eq('id', noteId);
+  }
+};
+
+// Remove speaker tag
+window.removeSpeakerTag = async function(noteId, index) {
+  const sb = getSupabase();
+  const { data: note } = await sb
+    .from('notes')
+    .select('metadata')
+    .eq('id', noteId)
+    .single();
+    
+  const metadata = note?.metadata || {};
+  const speakers = metadata.speakers || [];
+  speakers.splice(index, 1);
+  
+  const { error } = await sb
+    .from('notes')
+    .update({ metadata: { ...metadata, speakers } })
+    .eq('id', noteId);
+    
+  if (!error) {
+    // Refresh the tags
+    const { data: updatedNote } = await sb.from('notes').select('*').eq('id', noteId).single();
+    window.initializeSpeakerTags(noteId, updatedNote);
+  }
+};
+
+// Generate summary for a note
+window.generateSummaryForNote = async function(noteId) {
+  const summaryContainer = document.getElementById(`summary-container-${noteId}`);
+  const summaryDiv = document.getElementById(`summary-${noteId}`);
+  
+  if (!summaryContainer || !summaryDiv) return;
+  
+  summaryContainer.style.display = 'block';
+  summaryDiv.innerHTML = '<div style="color:var(--muted)">Generating summary...</div>';
+  
+  try {
+    const sb = getSupabase();
+    const { data: note } = await sb
+      .from('notes')
+      .select('content')
+      .eq('id', noteId)
+      .single();
+      
+    if (!note?.content) {
+      summaryDiv.innerHTML = '<div style="color:var(--danger)">No content to summarize</div>';
+      return;
+    }
+    
+    // Call summary API
+    const response = await fetch('/api/summary', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${localStorage.getItem('sb_access_token')}`
+      },
+      body: JSON.stringify({ content: note.content })
+    });
+    
+    if (!response.ok) throw new Error('Failed to generate summary');
+    
+    const { summary } = await response.json();
+    
+    // Format and display summary
+    summaryDiv.innerHTML = `
+      <div style="line-height:1.6;">
+        ${summary.split('\n').map(line => {
+          if (line.startsWith('•') || line.startsWith('-')) {
+            return `<div style="margin-left:20px;margin-bottom:8px;">${escapeHtml(line)}</div>`;
+          }
+          return `<p style="margin-bottom:12px;">${escapeHtml(line)}</p>`;
+        }).join('')}
+      </div>
+    `;
+    
+    // Save summary to note metadata
+    const { data: currentNote } = await sb.from('notes').select('metadata').eq('id', noteId).single();
+    const metadata = currentNote?.metadata || {};
+    metadata.summary = summary;
+    metadata.summary_generated_at = new Date().toISOString();
+    
+    await sb.from('notes').update({ metadata }).eq('id', noteId);
+    
+  } catch(error) {
+    summaryDiv.innerHTML = `<div style="color:var(--danger)">Error: ${error.message}</div>`;
+  }
+};
+
+// Enhanced transcript formatter with better speaker colors
+window.formatEnhancedTranscript = function(content, noteId) {
+  if (!content) return '<p style="color:var(--muted)">No transcript content</p>';
+  
+  try {
+    const data = JSON.parse(content);
+    if (!Array.isArray(data)) throw new Error('Invalid format');
+    
+    // Define a better color palette for speakers
+    const speakerColors = {
+      default: ['#4CAF50', '#2196F3', '#FF9800', '#9C27B0', '#F44336', '#00BCD4', '#FFC107', '#795548']
+    };
+    
+    const speakerMap = new Map();
+    let colorIndex = 0;
+    
+    let html = '<div style="font-size:15px;line-height:1.8;">';
+    
+    data.forEach((segment, i) => {
+      const speakerName = segment.participant?.name || 
+                         segment.speaker || 
+                         segment.speaker_name || 
+                         `Speaker ${i+1}`;
+      
+      // Assign color to speaker if not already assigned
+      if (!speakerMap.has(speakerName)) {
+        speakerMap.set(speakerName, speakerColors.default[colorIndex % speakerColors.default.length]);
+        colorIndex++;
+      }
+      
+      const color = speakerMap.get(speakerName);
+      const text = segment.text || 
+                  (segment.words ? segment.words.map(w => w.text || w.word || w).join(' ') : '');
+      
+      if (text.trim()) {
+        // Add timestamp if available
+        const timestamp = segment.start_time ? 
+          `<span style="opacity:0.6;font-size:12px;">[${formatTime(segment.start_time)}]</span>` : '';
+        
+        html += `
+          <div style="margin-bottom:20px;padding:16px;background:var(--panel-2);border-radius:8px;border-left:4px solid ${color};">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+              <span style="font-weight:600;color:${color};font-size:14px;">${escapeHtml(speakerName)}</span>
+              ${timestamp}
+            </div>
+            <div style="color:var(--text);font-size:15px;line-height:1.7;">${escapeHtml(text)}</div>
+          </div>
+        `;
+      }
+    });
+    
+    html += '</div>';
+    
+    // Add speaker legend at the top
+    if (speakerMap.size > 0) {
+      let legend = '<div style="margin-bottom:20px;padding:12px;background:var(--panel-2);border-radius:8px;">';
+      legend += '<div style="font-size:12px;color:var(--muted);margin-bottom:8px;">Participants:</div>';
+      legend += '<div style="display:flex;flex-wrap:wrap;gap:12px;">';
+      
+      speakerMap.forEach((color, name) => {
+        legend += `
+          <div style="display:flex;align-items:center;gap:6px;">
+            <div style="width:12px;height:12px;background:${color};border-radius:50%;"></div>
+            <span style="font-size:14px;">${escapeHtml(name)}</span>
+          </div>
+        `;
+      });
+      
+      legend += '</div></div>';
+      html = legend + html;
+    }
+    
+    return html;
+    
+  } catch(e) {
+    // Fallback to basic formatting
+    return formatTranscriptContent(content);
+  }
+};
+
+// Helper to format time in MM:SS
+function formatTime(seconds) {
+  const mins = Math.floor(seconds / 60);
+  const secs = Math.floor(seconds % 60);
+  return `${mins}:${secs.toString().padStart(2, '0')}`;
 }
 
 // Auto-refresh on visibility
