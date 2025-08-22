@@ -18,10 +18,10 @@ export default async function handler(req){
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
   if (req.method !== 'POST') return jres({ error:'Method not allowed' }, 405, cors);
   
-  // Temporary allowlist
+  // Get authentication
   const SUPABASE_URL = process.env.SUPABASE_URL || '';
   const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SERVICE_KEY || '';
-  const ALLOWED_EMAILS = ['ggg@fvtura.com'];
+  
   async function getToken(){
     const authz = req.headers.get('authorization') || req.headers.get('Authorization') || '';
     if (authz.startsWith('Bearer ')) return authz.slice(7).trim();
@@ -29,6 +29,7 @@ export default async function handler(req){
     const m = cookie.match(/(?:^|;\s*)sb_access_token=([^;]+)/);
     return m ? decodeURIComponent(m[1]) : '';
   }
+  
   async function getUser(){
     try{
       const token = await getToken(); if (!token) return null;
@@ -36,12 +37,14 @@ export default async function handler(req){
       if (!r.ok) return null; return await r.json();
     }catch{ return null; }
   }
+  
   const user = await getUser();
-  const email = (user?.email||'').toLowerCase();
-  if (!email || !ALLOWED_EMAILS.includes(email)){
-    return jres({ error:'Forbidden', message:'Access denied' }, 403, cors);
-  }
   const userId = user?.id || '';
+  
+  // Require authentication
+  if (!userId){
+    return jres({ error:'Forbidden', message:'Authentication required' }, 401, cors);
+  }
   
   try {
     const { title, content, source = 'manual' } = await req.json();
@@ -56,9 +59,9 @@ export default async function handler(req){
       return jres({ error: 'Missing configuration' }, 500, cors);
     }
     
-    // Get or create Meetings space
+    // Get or create user's personal Meetings space
     let spaceId = '';
-    const spacesResp = await fetch(`${SUPABASE_URL}/rest/v1/spaces?select=id,name&name=eq.Meetings`, {
+    const spacesResp = await fetch(`${SUPABASE_URL}/rest/v1/spaces?select=id,name&name=eq.Meetings&owner_id=eq.${userId}`, {
       headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` }
     });
     
@@ -76,7 +79,7 @@ export default async function handler(req){
     if (spaces.length > 0) {
       spaceId = spaces[0].id;
     } else {
-      // Create Meetings space
+      // Create user's personal Meetings space
       const createResp = await fetch(`${SUPABASE_URL}/rest/v1/spaces`, {
         method: 'POST',
         headers: {
@@ -85,7 +88,11 @@ export default async function handler(req){
           Authorization: `Bearer ${SERVICE_KEY}`,
           'Prefer': 'return=representation'
         },
-        body: JSON.stringify({ name: 'Meetings', visibility: 'private' })
+        body: JSON.stringify({ 
+          name: 'Meetings', 
+          visibility: 'private',
+          owner_id: userId  // Set owner to current user
+        })
       });
       
       if (!createResp.ok) {
@@ -105,7 +112,7 @@ export default async function handler(req){
       return jres({ error: 'Failed to access Meetings space' }, 500, cors);
     }
     
-    // Save the transcript (assign owner_id when available)
+    // Save the transcript with proper owner_id
     const saveResp = await fetch(`${SUPABASE_URL}/rest/v1/notes`, {
       method: 'POST',
       headers: {
@@ -116,8 +123,8 @@ export default async function handler(req){
       },
       body: JSON.stringify({
         space_id: spaceId,
-        ...(userId ? { owner_id: userId } : {}),
-        title: `[${source}] ${title}`,
+        owner_id: userId,  // Always set owner_id to current user
+        title: `[Meeting] ${title}`,  // Use generic [Meeting] prefix
         content: content
       })
     });

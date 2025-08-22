@@ -2512,9 +2512,11 @@ async function renderTranscriptImport(root) {
     statusEl.innerHTML = '⏳ Importing transcript...';
     
     try {
+      const sb = getSupabase();
+      let token=''; try{ token = (await sb.auth.getSession()).data.session?.access_token || ''; }catch{}
       const response = await fetch('/api/transcript-import-direct', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
         body: JSON.stringify({ title, content, source })
       });
       
@@ -3298,9 +3300,11 @@ window.importTranscriptDirect = async (transcriptId, idx) => {
   }
   
   try {
+    const sb = getSupabase();
+    let token=''; try{ token = (await sb.auth.getSession()).data.session?.access_token || ''; }catch{}
     const response = await fetch('/api/transcript-import-direct', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
       body: JSON.stringify({
         title: transcript.title || `Transcript ${transcriptId}`,
         content: transcript.full_transcript,
@@ -3565,13 +3569,15 @@ window.importBotTranscript = async (botId, idx) => {
   }
   
   try {
+    const sb = getSupabase();
+    let token=''; try{ token = (await sb.auth.getSession()).data.session?.access_token || ''; }catch{}
     const response = await fetch('/api/transcript-import-direct', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
       body: JSON.stringify({
         title: bot.meeting_title || `Bot ${botId}`,
         content: bot.full_transcript,
-        source: 'Recall'
+        source: 'Meeting Recording'
       })
     });
     
