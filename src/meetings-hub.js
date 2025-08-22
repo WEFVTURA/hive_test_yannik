@@ -14,7 +14,7 @@ export async function renderMeetingsHub() {
       <p style="color: var(--muted); margin-bottom: 24px;">Your meeting transcripts with speaker diarization</p>
       
       <div style="display: flex; gap: 12px; margin-bottom: 32px;">
-        <button class="button primary" onclick="window.location.hash='meetings/transcript-list'">
+        <button class="button primary" onclick="window.showTranscriptImport()">
           <i data-lucide="upload"></i> Import Transcripts
         </button>
         <button class="button" onclick="window.refreshMeetingsHub()">
@@ -246,6 +246,156 @@ window.openTranscript = async function(noteId) {
   `;
   
   document.body.appendChild(modal);
+};
+
+window.refreshMeetingsHub = loadMeetings;
+
+// Show transcript import IN MEETINGS HUB - NOT IN SPACES
+window.showTranscriptImport = async function() {
+  const modal = document.createElement('div');
+  modal.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.9);z-index:10000;display:flex;align-items:center;justify-content:center;';
+  
+  modal.innerHTML = `
+    <div style="background:var(--panel);border-radius:12px;padding:32px;max-width:600px;width:90%;max-height:80vh;overflow-y:auto;">
+      <h2 style="margin:0 0 24px 0;">Import Transcripts</h2>
+      
+      <div style="margin-bottom:24px;">
+        <h3 style="margin-bottom:12px;">From Recall.ai</h3>
+        <button class="button primary" onclick="window.fetchRecallTranscripts()" style="width:100%;">
+          Fetch Available Transcripts from Recall
+        </button>
+      </div>
+      
+      <div style="margin-bottom:24px;">
+        <h3 style="margin-bottom:12px;">Or Paste JSON</h3>
+        <textarea id="transcriptJson" placeholder="Paste transcript JSON here..." 
+                  style="width:100%;height:200px;padding:12px;background:var(--panel-2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:monospace;"></textarea>
+        <button class="button" onclick="window.importJsonTranscript()" style="width:100%;margin-top:12px;">
+          Import JSON Transcript
+        </button>
+      </div>
+      
+      <div id="importStatus" style="margin-top:16px;"></div>
+      
+      <button class="button ghost" onclick="this.closest('div[style*=fixed]').remove()" style="width:100%;margin-top:16px;">
+        Close
+      </button>
+    </div>
+  `;
+  
+  document.body.appendChild(modal);
+};
+
+// Fetch transcripts from Recall
+window.fetchRecallTranscripts = async function() {
+  const statusEl = document.getElementById('importStatus');
+  statusEl.innerHTML = '<div class="loading">Fetching transcripts...</div>';
+  
+  try {
+    const token = localStorage.getItem('sb_access_token');
+    const response = await fetch('/api/recall-transcript-list', {
+      headers: token ? { Authorization: `Bearer ${token}` } : {}
+    });
+    
+    const data = await response.json();
+    
+    if (!data.success || !data.transcripts?.length) {
+      statusEl.innerHTML = '<div style="color:var(--muted);">No transcripts available</div>';
+      return;
+    }
+    
+    statusEl.innerHTML = `
+      <div style="margin-bottom:12px;">Found ${data.transcripts.length} transcripts:</div>
+      <div style="max-height:300px;overflow-y:auto;">
+        ${data.transcripts.map((t, i) => `
+          <div style="padding:12px;background:var(--panel-2);margin-bottom:8px;border-radius:8px;">
+            <div style="font-weight:600;">${t.title || `Transcript ${i+1}`}</div>
+            <button class="button sm" onclick="window.importRecallTranscript('${t.id || i}')" style="margin-top:8px;">
+              Import This
+            </button>
+          </div>
+        `).join('')}
+      </div>
+    `;
+  } catch(error) {
+    statusEl.innerHTML = `<div style="color:var(--danger);">Error: ${error.message}</div>`;
+  }
+};
+
+// Import specific Recall transcript
+window.importRecallTranscript = async function(transcriptId) {
+  const statusEl = document.getElementById('importStatus');
+  statusEl.innerHTML = '<div class="loading">Importing...</div>';
+  
+  try {
+    const token = localStorage.getItem('sb_access_token');
+    const response = await fetch('/api/transcript-import-direct', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': token ? `Bearer ${token}` : ''
+      },
+      body: JSON.stringify({ transcript_id: transcriptId })
+    });
+    
+    const result = await response.json();
+    
+    if (result.success) {
+      statusEl.innerHTML = '<div style="color:var(--success);">✓ Transcript imported successfully!</div>';
+      setTimeout(() => {
+        document.querySelector('div[style*=fixed]')?.remove();
+        window.refreshMeetingsHub();
+      }, 1500);
+    } else {
+      statusEl.innerHTML = `<div style="color:var(--danger);">Import failed: ${result.error}</div>`;
+    }
+  } catch(error) {
+    statusEl.innerHTML = `<div style="color:var(--danger);">Error: ${error.message}</div>`;
+  }
+};
+
+// Import JSON transcript
+window.importJsonTranscript = async function() {
+  const jsonText = document.getElementById('transcriptJson').value.trim();
+  const statusEl = document.getElementById('importStatus');
+  
+  if (!jsonText) {
+    statusEl.innerHTML = '<div style="color:var(--danger);">Please paste transcript JSON</div>';
+    return;
+  }
+  
+  try {
+    const data = JSON.parse(jsonText);
+    
+    statusEl.innerHTML = '<div class="loading">Importing...</div>';
+    
+    const token = localStorage.getItem('sb_access_token');
+    const response = await fetch('/api/transcript-import-direct', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': token ? `Bearer ${token}` : ''
+      },
+      body: JSON.stringify({
+        title: data.title || 'Imported Transcript',
+        content: JSON.stringify(data.transcript || data)
+      })
+    });
+    
+    const result = await response.json();
+    
+    if (result.success) {
+      statusEl.innerHTML = '<div style="color:var(--success);">✓ Transcript imported successfully!</div>';
+      setTimeout(() => {
+        document.querySelector('div[style*=fixed]')?.remove();
+        window.refreshMeetingsHub();
+      }, 1500);
+    } else {
+      statusEl.innerHTML = `<div style="color:var(--danger);">Import failed: ${result.error}</div>`;
+    }
+  } catch(error) {
+    statusEl.innerHTML = `<div style="color:var(--danger);">Invalid JSON: ${error.message}</div>`;
+  }
 };
 
 window.refreshMeetingsHub = loadMeetings;
