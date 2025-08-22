@@ -39,7 +39,7 @@ export default async function handler(req){
     return jres({ error: 'Bot provider not configured', details: 'Missing RECALL_API_KEY on server' }, 500, cors);
   }
   
-  async function tryCreateRecallBot(meetingUrl){
+  async function tryCreateRecallBot(meetingUrl, strategyParam){
     const bases = [RECALL_BASE];
     if (!RECALL_BASE_URL) bases.push('https://api.recall.ai'); // fallback to PAYG host
     const paths = ['/api/v1/bot/', '/v1/bot/'];
@@ -59,7 +59,7 @@ export default async function handler(req){
       payloads.push({ label:'zoom_variant_minimal', body: { meeting_url: meetingUrl, bot_name: 'HIVE Assistant', variant: { zoom: 'web_4_core' } } });
     }
     // Strategy overrides
-    if (strategy === 'xapikey_minimal'){
+    if (strategyParam === 'xapikey_minimal'){
       headerVariants = [{ 'X-Api-Key': RECALL_API_KEY, 'Content-Type': 'application/json', Accept:'application/json' }];
     }
     const attempts = [];
@@ -69,9 +69,9 @@ export default async function handler(req){
         for (const headers of headerVariants){
           for (const payload of payloads){
             // Strategy path override
-            if (strategy === 'standard' && path !== '/api/v1/bot/') continue;
-            if (strategy === 'xapikey_minimal' && payload.label !== 'minimal') continue;
-            if (strategy === 'zoom_variant' && !/zoom\.us\//i.test(meetingUrl)) continue;
+            if (strategyParam === 'standard' && path !== '/api/v1/bot/') continue;
+            if (strategyParam === 'xapikey_minimal' && payload.label !== 'minimal') continue;
+            if (strategyParam === 'zoom_variant' && !/zoom\.us\//i.test(meetingUrl)) continue;
             try{
               const resp = await fetch(url, { method:'POST', headers, body: JSON.stringify(payload.body) });
               const text = await resp.text().catch(()=> '');
@@ -168,7 +168,7 @@ export default async function handler(req){
     });
     
     // STEP 2: Create the bot via Recall API (direct join) with robust retries
-    const attempt = await tryCreateRecallBot(urlStr);
+    const attempt = await tryCreateRecallBot(urlStr, strategy);
     if (!attempt.ok) {
       const status = 502;
       const errorText = JSON.stringify({ attempts: attempt.attempts });
