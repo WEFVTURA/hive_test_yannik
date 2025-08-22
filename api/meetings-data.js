@@ -56,13 +56,9 @@ export default async function handler(req){
       timestamp: new Date().toISOString()
     };
 
-    // Get meetings space ID for this user only
+    // Restore original global Meetings space lookup (Hub logic expects a single Meetings space)
     let meetingsSpaceId = '';
-    
-    // Try exact match for this owner first
-    const spacesResp = await fetch(`${SUPABASE_URL}/rest/v1/spaces?select=id,name&name=eq.Meetings&owner_id=eq.${userId}`, { 
-      headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` } 
-    });
+    const spacesResp = await fetch(`${SUPABASE_URL}/rest/v1/spaces?select=id,name&name=eq.Meetings`, { headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` } });
     
     debugInfo.spaces_fetch_status = spacesResp.status;
     const spaces = await spacesResp.json().catch(() => []);
@@ -72,10 +68,8 @@ export default async function handler(req){
       meetingsSpaceId = spaces[0].id;
       debugInfo.space_source = 'exact_match';
     } else {
-      // Try case-insensitive search (still scoped to owner)
-      const spacesResp2 = await fetch(`${SUPABASE_URL}/rest/v1/spaces?select=id,name&name=ilike.meetings&owner_id=eq.${userId}`, { 
-        headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` } 
-      });
+      // Try case-insensitive search
+      const spacesResp2 = await fetch(`${SUPABASE_URL}/rest/v1/spaces?select=id,name&name=ilike.meetings`, { headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` } });
       const spaces2 = await spacesResp2.json().catch(() => []);
       debugInfo.spaces_found_ilike = spaces2.length || 0;
       
@@ -86,8 +80,7 @@ export default async function handler(req){
     }
 
     if (!meetingsSpaceId) {
-      // No personal Meetings space yet — return empty list for now
-      return jres({ success: true, space_id: null, notes: [], total: 0, debug: debugInfo }, 200, cors);
+      return jres({ error: 'Meetings space not found', notes: [], debug: debugInfo }, 404, cors);
     }
 
     debugInfo.meetings_space_id = meetingsSpaceId;

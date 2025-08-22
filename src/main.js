@@ -274,18 +274,7 @@ askBtn?.addEventListener('click', ()=>{
 
 // Meetings navigation
 const meetingsHubBtn = document.getElementById('meetingsHubBtn');
-meetingsHubBtn?.addEventListener('click', async()=>{
-  try{
-    const { auth_getUser } = await import('./lib/supabase.js');
-    const me = await auth_getUser();
-    const email = (me?.email||'').toLowerCase();
-    if (email !== 'ggg@fvtura.com'){
-      alert('Meetings Hub is temporarily restricted');
-      return;
-    }
-  }catch{}
-  location.hash = 'meetings/hub';
-});
+meetingsHubBtn?.addEventListener('click', ()=>{ location.hash = 'meetings/hub'; });
 
 // Tour trigger
 document.getElementById('openGuide')?.addEventListener('click', async()=>{
