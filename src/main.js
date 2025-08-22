@@ -274,7 +274,18 @@ askBtn?.addEventListener('click', ()=>{
 
 // Meetings navigation
 const meetingsHubBtn = document.getElementById('meetingsHubBtn');
-meetingsHubBtn?.addEventListener('click', ()=>{ location.hash = 'meetings/hub'; });
+meetingsHubBtn?.addEventListener('click', async()=>{
+  try{
+    const { auth_getUser } = await import('./lib/supabase.js');
+    const me = await auth_getUser();
+    const email = (me?.email||'').toLowerCase();
+    if (email !== 'ggg@fvtura.com'){
+      alert('Meetings Hub is temporarily restricted');
+      return;
+    }
+  }catch{}
+  location.hash = 'meetings/hub';
+});
 
 // Tour trigger
 document.getElementById('openGuide')?.addEventListener('click', async()=>{
@@ -751,8 +762,10 @@ async function renderMeetingsHub(root){
   lucide.createIcons();
   
   try {
-    // Fetch meeting data from backend API
-    const response = await fetch('/api/meetings-data');
+    // Fetch meeting data from backend API with auth token
+    const sb = (await import('./lib/supabase.js')).getSupabase();
+    let token=''; try{ token = (await sb.auth.getSession()).data.session?.access_token || ''; }catch{}
+    const response = await fetch('/api/meetings-data', { headers: token ? { Authorization: `Bearer ${token}` } : {} });
     const data = await response.json();
     
     // Log debug info to console
@@ -969,7 +982,9 @@ async function renderMeetingsDashboard(root){
   
   try {
     // Fetch meeting data from backend API
-    const response = await fetch('/api/meetings-data');
+    const sb = (await import('./lib/supabase.js')).getSupabase();
+    let token=''; try{ token = (await sb.auth.getSession()).data.session?.access_token || ''; }catch{}
+    const response = await fetch('/api/meetings-data', { headers: token ? { Authorization: `Bearer ${token}` } : {} });
     const data = await response.json();
     
     if (!data.success) {
@@ -1052,7 +1067,9 @@ async function renderMeetingsList(root){
   
   try {
     // Fetch meeting data from backend API
-    const response = await fetch('/api/meetings-data');
+    const sb = (await import('./lib/supabase.js')).getSupabase();
+    let token=''; try{ token = (await sb.auth.getSession()).data.session?.access_token || ''; }catch{}
+    const response = await fetch('/api/meetings-data', { headers: token ? { Authorization: `Bearer ${token}` } : {} });
     const data = await response.json();
     
     if (!data.success) {
@@ -1570,9 +1587,11 @@ Check browser console for full details.`);
     
     try {
       // Call the new v2 sync endpoint that properly lists bots first
+      const sb = (await import('./lib/supabase.js')).getSupabase();
+      let token=''; try{ token = (await sb.auth.getSession()).data.session?.access_token || ''; }catch{}
       const response = await fetch('/api/recall-sync-v2', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' }
+        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) }
       });
       
       const result = await response.json();
@@ -2664,9 +2683,11 @@ async function renderBatchImport(root) {
     statusEl.innerHTML = `⏳ Importing ${transcripts.length} transcript(s)...`;
     
     try {
+      const sb = (await import('./lib/supabase.js')).getSupabase();
+      let token=''; try{ token = (await sb.auth.getSession()).data.session?.access_token || ''; }catch{}
       const response = await fetch('/api/transcript-import-batch', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
         body: JSON.stringify({ transcripts })
       });
       
@@ -2857,12 +2878,14 @@ async function renderRecallBrowser(root) {
     
     try {
       // First try the new recordings endpoint
-      let response = await fetch('/api/recall-fetch-recordings');
+      const sb = (await import('./lib/supabase.js')).getSupabase();
+      let token=''; try{ token = (await sb.auth.getSession()).data.session?.access_token || ''; }catch{}
+      let response = await fetch('/api/recall-fetch-recordings', { headers: token ? { Authorization: `Bearer ${token}` } : {} });
       let data = await response.json();
       
       // If that fails or returns no transcripts, fall back to the original endpoint
       if (!data.success || !data.transcripts || data.transcripts.length === 0) {
-        response = await fetch('/api/recall-list-transcripts');
+        response = await fetch('/api/recall-list-transcripts', { headers: token ? { Authorization: `Bearer ${token}` } : {} });
         data = await response.json();
       }
       
@@ -3018,9 +3041,11 @@ async function renderRecallBrowser(root) {
     btn.disabled = true;
     
     try {
+      const sb = (await import('./lib/supabase.js')).getSupabase();
+      let token=''; try{ token = (await sb.auth.getSession()).data.session?.access_token || ''; }catch{}
       const response = await fetch('/api/transcript-import-batch', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
         body: JSON.stringify({ transcripts: selected })
       });
       
@@ -3154,7 +3179,9 @@ async function renderTranscriptList(root) {
     errorEl.style.display = 'none';
     
     try {
-      const response = await fetch('/api/recall-transcript-list');
+      const sb = (await import('./lib/supabase.js')).getSupabase();
+      let token=''; try{ token = (await sb.auth.getSession()).data.session?.access_token || ''; }catch{}
+      const response = await fetch('/api/recall-transcript-list', { headers: token ? { Authorization: `Bearer ${token}` } : {} });
       const data = await response.json();
       
       console.log('Transcript List API response:', data);
@@ -3409,7 +3436,9 @@ async function renderBotList(root) {
     errorEl.style.display = 'none';
     
     try {
-      const response = await fetch('/api/recall-bot-list');
+      const sb = (await import('./lib/supabase.js')).getSupabase();
+      let token=''; try{ token = (await sb.auth.getSession()).data.session?.access_token || ''; }catch{}
+      const response = await fetch('/api/recall-bot-list', { headers: token ? { Authorization: `Bearer ${token}` } : {} });
       const data = await response.json();
       
       console.log('Bot List API response:', data);
@@ -3917,22 +3946,41 @@ async function hydrateProfileUI(){
 		fullName = (p?.full_name||'').trim();
 		avatarUrl = p?.avatar_url||'';
 	}catch{}
+
+	// Additional name sources to avoid showing generic "User"
+	const userMeta = me?.user_metadata || {};
+	const identities = Array.isArray(me?.identities) ? me.identities : [];
+	let identityName = '';
+	for (const id of identities){
+		const d = id?.identity_data || {};
+		identityName = (d.full_name || d.name || d.user_name || '').trim();
+		if (identityName) break;
+	}
+	const storedName = (localStorage.getItem('hive_user_name')||'').trim();
+	const emailName = (me?.email||'').split('@')[0]||'';
+
+	const resolvedName = (
+		fullName ||
+		(userMeta.full_name||'').trim() ||
+		(userMeta.name||'').trim() ||
+		(userMeta.user_name||'').trim() ||
+		identityName ||
+		storedName ||
+		emailName ||
+		(me?.email||'') ||
+		'User'
+	);
+
 	if (brandEl){
-		const fallbackName = (me?.email||'User');
-		const displayName = fullName || fallbackName;
-		brandEl.textContent = displayName;
-		// Store the name for use in prefs
-		if (fullName) {
-			localStorage.setItem('hive_user_name', fullName);
+		brandEl.textContent = resolvedName;
+		// Store a good name for future prefs if we have something non-empty and not the generic placeholder
+		if (resolvedName && resolvedName !== 'User'){
+			try{ localStorage.setItem('hive_user_name', resolvedName); }catch{}
 		}
 	}
 	// Update all brand elements
 	const allBrandEls = document.querySelectorAll('.brand');
-	allBrandEls.forEach(el => {
-		if (el && el !== brandEl) {
-			el.textContent = fullName || (me?.email||'User');
-		}
-	});
+	allBrandEls.forEach(el => { if (el) el.textContent = resolvedName; });
 	if (avatarEl){
 		if (avatarUrl){
 			avatarEl.style.backgroundImage = `url('${avatarUrl}')`;
@@ -3940,7 +3988,7 @@ async function hydrateProfileUI(){
 			avatarEl.textContent = '';
 		}else{
 			avatarEl.style.backgroundImage = '';
-			const letterSource = fullName || me.email || 'U';
+			const letterSource = resolvedName || me.email || 'U';
 			avatarEl.textContent = letterSource.slice(0,1).toUpperCase();
 		}
 	}

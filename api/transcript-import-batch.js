@@ -11,12 +11,36 @@ export default async function handler(req){
   const cors = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
   };
   
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
   if (req.method !== 'POST') return jres({ error:'Method not allowed' }, 405, cors);
   
+  // Temporary allowlist
+  const SUPABASE_URL = process.env.SUPABASE_URL || '';
+  const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SERVICE_KEY || '';
+  const ALLOWED_EMAILS = ['ggg@fvtura.com'];
+  async function getToken(){
+    const authz = req.headers.get('authorization') || req.headers.get('Authorization') || '';
+    if (authz.startsWith('Bearer ')) return authz.slice(7).trim();
+    const cookie = req.headers.get('cookie') || req.headers.get('Cookie') || '';
+    const m = cookie.match(/(?:^|;\s*)sb_access_token=([^;]+)/);
+    return m ? decodeURIComponent(m[1]) : '';
+  }
+  async function getUser(){
+    try{
+      const token = await getToken(); if (!token) return null;
+      const r = await fetch(`${SUPABASE_URL}/auth/v1/user`, { headers:{ apikey: SERVICE_KEY, Authorization:`Bearer ${token}` } });
+      if (!r.ok) return null; return await r.json();
+    }catch{ return null; }
+  }
+  const user = await getUser();
+  const email = (user?.email||'').toLowerCase();
+  if (!email || !ALLOWED_EMAILS.includes(email)){
+    return jres({ error: 'Forbidden', message: 'Access denied' }, 403, cors);
+  }
+
   try {
     const { transcripts } = await req.json();
     
@@ -24,8 +48,7 @@ export default async function handler(req){
       return jres({ error: 'No transcripts provided' }, 400, cors);
     }
     
-    const SUPABASE_URL = process.env.SUPABASE_URL || '';
-    const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SERVICE_KEY || '';
+    // SUPABASE_URL and SERVICE_KEY declared above
     
     if (!SUPABASE_URL || !SERVICE_KEY) {
       return jres({ error: 'Missing configuration' }, 500, cors);

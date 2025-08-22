@@ -22,7 +22,33 @@ export default async function handler(req){
     return jres({ error: 'Missing Supabase configuration' }, 500, cors);
   }
 
+  // Temporary allowlist while we harden per-user access
+  const ALLOWED_EMAILS = ['ggg@fvtura.com'];
+
+  async function getToken(){
+    const authz = req.headers.get('authorization') || req.headers.get('Authorization') || '';
+    if (authz.startsWith('Bearer ')) return authz.slice(7).trim();
+    const cookie = req.headers.get('cookie') || req.headers.get('Cookie') || '';
+    const m = cookie.match(/(?:^|;\s*)sb_access_token=([^;]+)/);
+    return m ? decodeURIComponent(m[1]) : '';
+  }
+
+  async function getUser(){
+    try{
+      const token = await getToken();
+      if (!token) return null;
+      const r = await fetch(`${SUPABASE_URL}/auth/v1/user`, { headers:{ apikey: SERVICE_KEY, Authorization: `Bearer ${token}` } });
+      if (!r.ok) return null; const j = await r.json().catch(()=>null); return j || null;
+    }catch{ return null; }
+  }
+
   try {
+    const user = await getUser();
+    const email = (user?.email||'').toLowerCase();
+    if (!email || !ALLOWED_EMAILS.includes(email)){
+      return jres({ error: 'Forbidden', message: 'Access denied' }, 403, cors);
+    }
+
     // Debug info to help diagnose issues
     const debugInfo = {
       supabase_url: SUPABASE_URL.substring(0, 30) + '...',

@@ -27,6 +27,28 @@ export default async function handler(req){
     }, 500, cors);
   }
 
+  // Temporary allowlist until per-user scoping is implemented
+  const ALLOWED_EMAILS = ['ggg@fvtura.com'];
+  async function getToken(){
+    const authz = req.headers.get('authorization') || req.headers.get('Authorization') || '';
+    if (authz.startsWith('Bearer ')) return authz.slice(7).trim();
+    const cookie = req.headers.get('cookie') || req.headers.get('Cookie') || '';
+    const m = cookie.match(/(?:^|;\s*)sb_access_token=([^;]+)/);
+    return m ? decodeURIComponent(m[1]) : '';
+  }
+  async function getUser(){
+    try{
+      const token = await getToken(); if (!token) return null;
+      const r = await fetch(`${SUPABASE_URL}/auth/v1/user`, { headers:{ apikey: SERVICE_KEY, Authorization:`Bearer ${token}` } });
+      if (!r.ok) return null; return await r.json();
+    }catch{ return null; }
+  }
+  const user = await getUser();
+  const email = (user?.email||'').toLowerCase();
+  if (!email || !ALLOWED_EMAILS.includes(email)){
+    return jres({ error:'Forbidden', message:'Access denied' }, 403, cors);
+  }
+
   // Ensure Meetings space
   let spaceId = '';
   let spaceDebug = '';
