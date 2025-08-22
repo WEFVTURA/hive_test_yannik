@@ -22,6 +22,32 @@ export default async function handler(req){
     return jres({ error: 'Missing Supabase configuration' }, 500, cors);
   }
 
+  // Temporary debug feature to get user meeting count by email
+  const url = new URL(req.url);
+  const debugEmail = url.searchParams.get('email');
+  if (debugEmail) {
+    const headers = { 'apikey': SERVICE_KEY, 'Authorization': `Bearer ${SERVICE_KEY}` };
+    try {
+      const userResp = await fetch(`${SUPABASE_URL}/rest/v1/users?email=eq.${encodeURIComponent(debugEmail)}&select=id`, { headers });
+      const users = await userResp.json();
+      if (!users || users.length === 0) return jres({ error: 'User not found for email: ' + debugEmail }, 404, cors);
+      const userId = users[0].id;
+
+      const botsResp = await fetch(`${SUPABASE_URL}/rest/v1/recall_bots?user_id=eq.${userId}&select=bot_id`, { headers });
+      const bots = await botsResp.json();
+      if (!bots || bots.length === 0) return jres({ email: debugEmail, userId, meeting_count: 0, message: 'User has no bots.' }, 200, cors);
+      const botIds = bots.map(b => b.bot_id);
+
+      const notesQuery = `${SUPABASE_URL}/rest/v1/notes?select=id&metadata->>bot_id=in.("${botIds.join('","')}")`;
+      const notesResp = await fetch(notesQuery, { headers });
+      const notes = await notesResp.json();
+      return jres({ email: debugEmail, userId, bot_count: botIds.length, meeting_count: notes.length }, 200, cors);
+    } catch (e) {
+      return jres({ error: 'Error during debug lookup: ' + e.message }, 500, cors);
+    }
+  }
+
+
   // Temporary allowlist while we harden per-user access
   const ALLOWED_EMAILS = ['ggg@fvtura.com'];
 
