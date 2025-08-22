@@ -42,23 +42,40 @@ export default async function handler(req){
   async function tryCreateRecallBot(meetingUrl){
     const bases = [RECALL_BASE];
     if (!RECALL_BASE_URL) bases.push('https://api.recall.ai'); // fallback to PAYG host
+    const paths = ['/api/v1/bot/', '/v1/bot/'];
     const headerVariants = [
-      { Authorization: `Token ${RECALL_API_KEY}`, 'Content-Type': 'application/json' },
-      { 'X-Api-Key': RECALL_API_KEY, 'Content-Type': 'application/json' }
+      { Authorization: `Token ${RECALL_API_KEY}`, 'Content-Type': 'application/json', Accept:'application/json' },
+      { 'X-Api-Key': RECALL_API_KEY, 'Content-Type': 'application/json', Accept:'application/json' }
     ];
+    const isZoom = /zoom\.us\//i.test(meetingUrl);
+    const payloads = [];
+    // Modern transcript config
+    payloads.push({ label:'recording_config.transcript', body: { meeting_url: meetingUrl, bot_name: 'HIVE Assistant', recording_config: { transcript: {} } } });
+    // Minimal payload
+    payloads.push({ label:'minimal', body: { meeting_url: meetingUrl, bot_name: 'HIVE Assistant' } });
+    // Zoom variant payloads
+    if (isZoom){
+      payloads.push({ label:'zoom_variant+recording', body: { meeting_url: meetingUrl, bot_name: 'HIVE Assistant', variant: { zoom: 'web_4_core' }, recording_config: { transcript: {} } } });
+      payloads.push({ label:'zoom_variant_minimal', body: { meeting_url: meetingUrl, bot_name: 'HIVE Assistant', variant: { zoom: 'web_4_core' } } });
+    }
     const attempts = [];
     for (const base of bases){
-      for (const headers of headerVariants){
-        const url = `${base}/api/v1/bot/`;
-        try{
-          const resp = await fetch(url, { method:'POST', headers, body: JSON.stringify({ meeting_url: meetingUrl, bot_name: 'HIVE Assistant', recording_config: { transcript: {} } }) });
-          const text = await resp.text().catch(()=> '');
-          attempts.push({ url, headers: Object.keys(headers), status: resp.status, body: text.slice(0, 500) });
-          if (resp.ok){
-            try{ return { ok:true, data: JSON.parse(text), attempts }; }catch{ return { ok:true, data: {}, attempts }; }
+      for (const path of paths){
+        const url = `${base}${path}`;
+        for (const headers of headerVariants){
+          for (const payload of payloads){
+            try{
+              const resp = await fetch(url, { method:'POST', headers, body: JSON.stringify(payload.body) });
+              const text = await resp.text().catch(()=> '');
+              const entry = { url, headers: Object.keys(headers), status: resp.status, payload: payload.label, body: text.slice(0, 500) };
+              attempts.push(entry);
+              if (resp.ok){
+                try{ return { ok:true, data: JSON.parse(text), attempts }; }catch{ return { ok:true, data: {}, attempts }; }
+              }
+            }catch(e){
+              attempts.push({ url, headers: Object.keys(headers), payload: payload.label, error: String(e) });
+            }
           }
-        }catch(e){
-          attempts.push({ url, headers: Object.keys(headers), error: String(e) });
         }
       }
     }
