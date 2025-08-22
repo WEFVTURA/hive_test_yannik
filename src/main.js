@@ -3446,7 +3446,8 @@ async function renderTranscriptList(root) {
     try {
       const sb = (await import('./lib/supabase.js')).getSupabase();
       let token=''; try{ token = (await sb.auth.getSession()).data.session?.access_token || ''; }catch{}
-      const response = await fetch('/api/recall-transcript-list', { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+      // Use the new endpoint that shows ALL transcripts without filtering
+      const response = await fetch('/api/recall-transcript-list-all', { headers: token ? { Authorization: `Bearer ${token}` } : {} });
       const data = await response.json();
       
       console.log('Transcript List API response:', data);
