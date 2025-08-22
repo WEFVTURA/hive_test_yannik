@@ -227,13 +227,23 @@ export default async function handler(req){
     }
   }catch{}
 
+  // Determine owner via recall_bots mapping
+  let ownerId = '';
+  try{
+    if (botId){
+      const mapResp = await fetch(`${SUPABASE_URL}/rest/v1/recall_bots?select=user_id&bot_id=eq.${botId}`, { headers:{ apikey:SERVICE_KEY, Authorization:`Bearer ${SERVICE_KEY}` } });
+      const arr = await mapResp.json().catch(()=>[]);
+      ownerId = Array.isArray(arr) && arr[0]?.user_id ? arr[0].user_id : '';
+    }
+  }catch{}
+
   // Save webhook data even if no transcript yet (for debugging and tracking)
   let saved = false;
   let noteId = '';
   
   try{
     // For transcript.done events with text, save the transcript
-    if (eventName === 'transcript.done' && text) {
+    if (eventName === 'transcript.done' && text && ownerId) {
       const saveResp = await fetch(`${SUPABASE_URL}/rest/v1/notes`, { 
         method:'POST', 
         headers:{ 
@@ -244,6 +254,7 @@ export default async function handler(req){
         }, 
         body: JSON.stringify({ 
           space_id: spaceId||null, 
+          owner_id: ownerId,
           title: title.replace('[transcript.done]', '[Recall]'), 
           content: text 
         }) 
@@ -256,7 +267,7 @@ export default async function handler(req){
       }
     }
     // For other events, save minimal tracking info
-    else if (eventName && botId) {
+    else if (eventName && botId && ownerId) {
       const trackingContent = `Event: ${eventName}\nBot ID: ${botId}\nRecording ID: ${recordingId}\nTimestamp: ${new Date().toISOString()}\n\nWaiting for transcript...`;
       
       // Check if we already have a note for this bot
@@ -277,6 +288,7 @@ export default async function handler(req){
           }, 
           body: JSON.stringify({ 
             space_id: spaceId||null, 
+            owner_id: ownerId,
             title: `[Tracking] ${title} (${botId})`, 
             content: trackingContent 
           }) 

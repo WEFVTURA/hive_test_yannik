@@ -170,8 +170,14 @@ export async function db_deleteSpace(id){
 }
 export async function db_createSpace(name){
   const sb = getSupabase();
-  const { data, error } = await sb.from('spaces').insert({ name }).select('*').single();
-  if (error) throw error; return data;
+  // Try to include owner_id when the column exists (migration-safe fallback)
+  let userId = '';
+  try { userId = (await sb.auth.getUser()).data?.user?.id || ''; } catch {}
+  let resp = await sb.from('spaces').insert(userId ? { name, owner_id: userId } : { name }).select('*').single();
+  if (resp.error && /column .*owner_id.* does not exist/i.test(String(resp.error?.message||''))){
+    resp = await sb.from('spaces').insert({ name }).select('*').single();
+  }
+  if (resp.error) throw resp.error; return resp.data;
 }
 export async function db_updateSpace(id, fields){
   const sb = getSupabase();
@@ -203,8 +209,12 @@ export async function stats_summary(){
 }
 export async function db_createNote(spaceId){
   const sb = getSupabase();
-  const { data, error } = await sb.from('notes').insert({ space_id: spaceId, title: 'Untitled', content: '' }).select('*').single();
-  if (error) throw error; return data;
+  let userId=''; try{ userId = (await sb.auth.getUser()).data?.user?.id || ''; }catch{}
+  let resp = await sb.from('notes').insert(userId ? { space_id: spaceId, owner_id: userId, title: 'Untitled', content: '' } : { space_id: spaceId, title: 'Untitled', content: '' }).select('*').single();
+  if (resp.error && /column .*owner_id.* does not exist/i.test(String(resp.error?.message||''))){
+    resp = await sb.from('notes').insert({ space_id: spaceId, title: 'Untitled', content: '' }).select('*').single();
+  }
+  if (resp.error) throw resp.error; return resp.data;
 }
 export async function db_updateNote(id, fields){
   const sb = getSupabase();
