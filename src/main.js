@@ -753,6 +753,115 @@ async function renderMeetingsHub(root){
   
   lucide.createIcons();
   
+  // Force add debug button if it doesn't exist and attach handler
+  setTimeout(() => {
+    let debugBtn = document.getElementById('debugTranscriptsBtn');
+    if (!debugBtn) {
+      const importBtn = document.getElementById('directImportBtn');
+      if (importBtn) {
+        debugBtn = document.createElement('button');
+        debugBtn.className = 'button';
+        debugBtn.id = 'debugTranscriptsBtn';
+        debugBtn.style.cssText = 'margin-left:8px; background: #ff9800; color: white;';
+        debugBtn.title = 'Debug Transcripts';
+        debugBtn.innerHTML = '<i data-lucide="bug" class="icon"></i> Debug';
+        importBtn.parentNode.insertBefore(debugBtn, importBtn.nextSibling);
+        lucide.createIcons();
+      }
+    }
+    
+    // Attach click handler directly
+    if (debugBtn && !debugBtn.onclick) {
+      debugBtn.onclick = async () => {
+        const sb = getSupabase();
+        const user = await sb.auth.getUser();
+        const session = await sb.auth.getSession();
+        const token = session?.data?.session?.access_token || '';
+        
+        console.log('Debug button clicked!');
+        console.log('Current user:', user?.data?.user?.email, user?.data?.user?.id);
+        
+        // Create debug modal
+        const modal = document.createElement('div');
+        modal.className = 'modal-overlay';
+        modal.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.8);display:flex;align-items:center;justify-content:center;z-index:9999';
+        modal.innerHTML = `
+          <div class="modal-content" style="background:white;color:black;border-radius:12px;padding:24px;max-width:900px;max-height:80vh;overflow-y:auto;width:90%">
+            <h2 style="margin-bottom:16px;color:black">🔍 Transcript Debug Information</h2>
+            <div id="debugContent">
+              <div class="loading">Gathering debug data...</div>
+            </div>
+            <button class="button" onclick="this.closest('.modal-overlay').remove()" style="margin-top:16px">Close</button>
+          </div>
+        `;
+        document.body.appendChild(modal);
+        
+        const debugContent = modal.querySelector('#debugContent');
+        let debugHtml = '';
+        
+        // 1. Check current user
+        debugHtml += `<h3 style="color:black">1. Current User</h3>`;
+        debugHtml += `<pre style="background:#f5f5f5;padding:12px;border-radius:6px;overflow-x:auto;color:black">`;
+        debugHtml += `Email: ${user?.data?.user?.email || 'Not logged in'}\n`;
+        debugHtml += `User ID: ${user?.data?.user?.id || 'N/A'}\n`;
+        debugHtml += `Has Token: ${token ? 'Yes' : 'No'}`;
+        debugHtml += `</pre>`;
+        
+        // 2. Check notes directly
+        debugHtml += `<h3 style="color:black">2. Direct Database Query - Your Notes</h3>`;
+        try {
+          const { data: notes, error } = await sb
+            .from('notes')
+            .select('id, title, owner_id, space_id, created_at')
+            .eq('owner_id', user?.data?.user?.id)
+            .order('created_at', { ascending: false })
+            .limit(20);
+          
+          if (error) {
+            debugHtml += `<pre style="background:#ffebee;padding:12px;border-radius:6px;color:red">Error: ${error.message}</pre>`;
+          } else {
+            debugHtml += `<pre style="background:#f5f5f5;padding:12px;border-radius:6px;overflow-x:auto;color:black">`;
+            debugHtml += `Found ${notes?.length || 0} note(s) owned by you\n\n`;
+            if (notes && notes.length > 0) {
+              notes.forEach((note, i) => {
+                debugHtml += `${i+1}. ${note.title}\n`;
+                debugHtml += `   ID: ${note.id}\n`;
+                debugHtml += `   Owner: ${note.owner_id === user?.data?.user?.id ? 'YOU ✓' : note.owner_id}\n`;
+                debugHtml += `   Created: ${note.created_at}\n\n`;
+              });
+            }
+            debugHtml += `</pre>`;
+          }
+        } catch(e) {
+          debugHtml += `<pre style="background:#ffebee;padding:12px;border-radius:6px;color:red">Error: ${e.message}</pre>`;
+        }
+        
+        // 3. Test API
+        debugHtml += `<h3 style="color:black">3. API Response</h3>`;
+        try {
+          const resp = await fetch('/api/meetings-data', {
+            headers: token ? { Authorization: `Bearer ${token}` } : {}
+          });
+          const data = await resp.json();
+          debugHtml += `<pre style="background:#f5f5f5;padding:12px;border-radius:6px;overflow-x:auto;color:black">`;
+          debugHtml += `Status: ${resp.status} ${resp.ok ? '✅' : '❌'}\n`;
+          debugHtml += `Notes returned: ${data.notes?.length || 0}\n`;
+          if (data.notes?.length > 0) {
+            debugHtml += `\nFirst few notes:\n`;
+            data.notes.slice(0, 3).forEach((n, i) => {
+              debugHtml += `${i+1}. ${n.title}\n`;
+            });
+          }
+          debugHtml += `</pre>`;
+        } catch(e) {
+          debugHtml += `<pre style="background:#ffebee;padding:12px;border-radius:6px;color:red">API Error: ${e.message}</pre>`;
+        }
+        
+        debugContent.innerHTML = debugHtml;
+      };
+    }
+  }, 200);
+  
   try {
     // Fetch meeting data from backend API with auth token
     const sb = (await import('./lib/supabase.js')).getSupabase();
