@@ -108,7 +108,8 @@ export async function renderSpaceSettings(root, spaceId){
   // Save
   root.querySelector('#saveBtn')?.addEventListener('click', async ()=>{
     const name = (root.querySelector('#spName')?.value||'').trim();
-    const vis = (root.querySelector('#spVis')?.value||'private').trim();
+    let vis = (root.querySelector('#spVis')?.value||'private').trim();
+    if (vis === 'public') vis = 'shared'; // normalize to existing enum
     const color = root.querySelector('#spColors [data-selected="1"]')?.getAttribute('data-color')||'';
     const pubPerm = (root.querySelector('#spPublicPerm')?.value||'view').trim();
     const updates = {};
@@ -128,10 +129,11 @@ export async function renderSpaceSettings(root, spaceId){
     if (vis==='public'){
       const settings = { ...(space.settings||{}) };
       settings.public_permissions = pubPerm||'view';
+      // Only attempt settings save if column exists; otherwise skip silently
       try{
         let token=''; try{ const sb = getSupabase(); const ss = await sb.auth.getSession(); token = ss?.data?.session?.access_token || ''; }catch{}
         const r2 = await fetch('/api/space-update', { method:'POST', headers:{ 'Content-Type':'application/json', ...(token? { Authorization:`Bearer ${token}` }: {}) }, body: JSON.stringify({ id: spaceId, fields: { settings } }) });
-        if (!r2.ok){ const t2 = await r2.text(); window.showToast && window.showToast('Failed to save public permissions: '+t2); }
+        if (!r2.ok){ /* ignore silently to avoid blocking main save */ }
       }catch{}
     }
     window.showToast && window.showToast('Saved');

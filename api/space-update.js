@@ -29,6 +29,12 @@ export default async function handler(req){
   try{
     const { id, fields } = await req.json();
     if (!id || !fields || typeof fields !== 'object') return new Response(JSON.stringify({ error:'bad_request' }), { status:400, headers:{...cors,'Content-Type':'application/json'} });
+    // Normalize visibility values to allowed set
+    if (typeof fields.visibility === 'string'){
+      const v = fields.visibility.toLowerCase();
+      if (v === 'public') fields.visibility = 'shared';
+      if (!['private','team','shared'].includes(fields.visibility)) delete fields.visibility;
+    }
 
     // Verify ownership; if legacy space has null owner_id, claim it for the caller
     const s = await fetch(`${SUPABASE_URL}/rest/v1/spaces?select=id,owner_id&id=eq.${id}&limit=1`, { headers:{ apikey: SERVICE_KEY, Authorization:`Bearer ${SERVICE_KEY}` } });
@@ -48,7 +54,9 @@ export default async function handler(req){
       return { ok: r.ok, status: r.status, text: t };
     }
     let result = await patchFields(fields);
-    if (!result.ok && fields && typeof fields==='object' && Object.prototype.hasOwnProperty.call(fields,'settings') && /column\s+"?settings"?\s+does not exist/i.test(result.text||'')){
+    const textLower = String(result.text||'').toLowerCase();
+    const settingsMissing = /column\s+"?settings"?\s+does not exist/i.test(textLower) || textLower.includes("could not find the 'settings' column") || /pgrst204/i.test(textLower);
+    if (!result.ok && fields && typeof fields==='object' && Object.prototype.hasOwnProperty.call(fields,'settings') && settingsMissing){
       const { settings, ...rest } = fields;
       result = await patchFields(rest);
     }
