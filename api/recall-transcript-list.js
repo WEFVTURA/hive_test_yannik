@@ -66,7 +66,9 @@ export default async function handler(req){
 
     //-- Backfill logic start --//
     try {
+      console.log('Starting backfill for user:', user.id);
       await backfillUserTranscripts(user);
+      console.log('Backfill finished for user:', user.id);
     } catch(e) {
       console.error('Backfill failed:', e.message);
     }
@@ -300,11 +302,13 @@ async function backfillUserTranscripts(user){
 
   if (!userId || !userEmail) return;
 
+  console.log('Backfill: Fetching all mapped bots...');
   const allBotsResp = await fetch(`${SUPABASE_URL}/rest/v1/recall_bots?select=bot_id`, { 
       headers:{ apikey: SERVICE_KEY, Authorization:`Bearer ${SERVICE_KEY}` } 
   });
   const allBotsData = await allBotsResp.json();
   const mappedBotIds = new Set(allBotsData.map(b => b.bot_id));
+  console.log(`Backfill: Found ${mappedBotIds.size} mapped bots.`);
 
   const region = (process.env.RECALL_REGION || 'us').trim().toLowerCase();
   const regionBases = {
@@ -318,6 +322,7 @@ async function backfillUserTranscripts(user){
   
   let candidates = [];
   let guard = 0;
+  console.log('Backfill: Fetching all candidates from Recall...');
   while (nextUrl && guard < 20){
     guard++;
     const resp = await fetch(nextUrl, { headers: { Authorization:`Token ${RECALL_KEY}`, Accept:'application/json' } });
@@ -328,10 +333,13 @@ async function backfillUserTranscripts(user){
     nextUrl = data?.next || '';
     if (nextUrl && nextUrl.startsWith('/')) nextUrl = `${base}${nextUrl}`;
   }
+  console.log(`Backfill: Fetched ${candidates.length} total candidates.`);
 
   const unmappedCandidates = candidates.filter(c => !mappedBotIds.has(c.bot_id || c.recording_id || c.id));
+  console.log(`Backfill: Found ${unmappedCandidates.length} unmapped candidates.`);
 
   const userBots = [];
+  console.log(`Backfill: Searching for bots for user ${userEmail}...`);
   for (const transcript of unmappedCandidates) {
     if (transcript.recording_id) {
       const recordingUrl = `https://api.recall.ai/api/v2/recordings/${transcript.recording_id}/`;
@@ -342,23 +350,29 @@ async function backfillUserTranscripts(user){
         const recData = await recResp.json();
         const participants = recData.participants || [];
         if (participants.some(p => p.email && p.email.toLowerCase() === userEmail.toLowerCase())) {
+          console.log(`Backfill: Found match for user ${userEmail} in recording ${transcript.recording_id}`);
           userBots.push(transcript);
         }
       }
     }
   }
+  console.log(`Backfill: Found ${userBots.length} bots for user ${userEmail}.`);
   
-  for(const bot of userBots){
-      const mapId = bot.bot_id || bot.recording_id || bot.id;
-      await fetch(`${SUPABASE_URL}/rest/v1/recall_bots`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          apikey: SERVICE_KEY,
-          Authorization: `Bearer ${SERVICE_KEY}`,
-          'Prefer': 'resolution=merge-duplicates'
-        },
-        body: JSON.stringify({ bot_id: mapId, user_id: userId })
-      });
+  if (userBots.length > 0) {
+    console.log(`Backfill: Claiming ${userBots.length} bots...`);
+    for(const bot of userBots){
+        const mapId = bot.bot_id || bot.recording_id || bot.id;
+        await fetch(`${SUPABASE_URL}/rest/v1/recall_bots`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            apikey: SERVICE_KEY,
+            Authorization: `Bearer ${SERVICE_KEY}`,
+            'Prefer': 'resolution=merge-duplicates'
+          },
+          body: JSON.stringify({ bot_id: mapId, user_id: userId })
+        });
+    }
+    console.log('Backfill: Finished claiming bots.');
   }
 }
