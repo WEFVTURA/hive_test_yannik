@@ -108,7 +108,7 @@ body{margin:0; background:var(--bg); color:var(--text); font:14px/1.45 ui-sans-s
 .select-glass-wrap{position:relative; display:inline-block}
 .select-glass-wrap:after{content:"▾"; position:absolute; right:12px; top:50%; transform:translateY(-50%); color:var(--muted); pointer-events:none}
 
-.card-grid{margin-top:12px;display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;grid-auto-flow:row dense; align-items:start; align-content:start; justify-content:stretch}
+.card-grid{margin-top:12px;display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;grid-auto-flow:row dense; align-items:start; align-content:start; justify-content:stretch; justify-items:stretch}
 .space-2col{grid-template-columns:1fr 1fr}
 .space-1col{grid-template-columns:1fr}
 .space-2col .lib-card{max-width:none}
@@ -116,7 +116,7 @@ body{margin:0; background:var(--bg); color:var(--text); font:14px/1.45 ui-sans-s
 .lib-card.collapsed{padding:12px}
 .lib-card.collapsed #filesList{display:none}
 .lib-card.collapsed #filesActions{display:none}
-.lib-visual{aspect-ratio:20/9; max-height:192px; border:1px dashed var(--border);border-radius:12px;display:grid;place-items:center;color:var(--muted);position:relative;overflow:hidden}
+.lib-visual{aspect-ratio:16/9; max-height:180px; border:1px dashed var(--border);border-radius:12px;display:grid;place-items:center;color:var(--muted);position:relative;overflow:hidden}
 .card-title-overlay{position:absolute; left:8px; right:8px; bottom:8px; padding:6px 10px; border-radius:8px; background:rgba(0,0,0,.45); color:#fff; font-weight:600; backdrop-filter: blur(2px);}
 .lib-meta{display:flex; align-items:center; justify-content:space-between; color:var(--muted); font-size:12px}
 
@@ -400,9 +400,10 @@ a { color: inherit; text-decoration: none; }
 
 /* Meetings Hub Styles */
 .meetings-hub { padding: 24px; max-width: 1400px; margin: 0 auto; }
-.hub-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 32px; }
+.hub-header { display: flex; justify-content: flex-start; align-items: center; gap: 16px; margin-bottom: 32px; }
 .hub-header h1 { margin: 0; font-size: 32px; }
-.hub-actions { display: flex; gap: 12px; justify-content: flex-start; }
+.hub-actions { display: flex; gap: 12px; justify-content: flex-start; flex-wrap: wrap; }
+.hub-actions .button { min-width: 180px; }
 .insights-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 32px; }
 .insight-card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 20px; }
 .insight-card h4 { margin: 0 0 8px; color: var(--muted); font-size: 14px; }
