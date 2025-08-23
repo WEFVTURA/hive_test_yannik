@@ -33,7 +33,6 @@ export default async function handler(req){
       if (!r.ok) return null; return await r.json();
     }catch{ return null; }
   }
-  const user = await getUser();
   
   const RECALL_KEY = process.env.RECALL_API_KEY || process.env.RECALL_KEY || process.env.RECALL || '';
   const region = (process.env.RECALL_REGION || 'us').trim().toLowerCase();
@@ -61,18 +60,43 @@ export default async function handler(req){
   };
   
   try {
-    // Authenticate
-    const authz = req.headers.get('authorization') || req.headers.get('Authorization') || '';
-    const token = authz.startsWith('Bearer ')? authz.slice(7).trim() : '';
-    if (!token) return jres({ error:'Forbidden' }, 401, cors);
-    let user=null; try{ const r=await fetch(`${SUPABASE_URL}/auth/v1/user`, { headers:{ apikey: SERVICE_KEY, Authorization:`Bearer ${token}` } }); user = await r.json(); }catch{}
+    // Authenticate and get user
+    const user = await getUser();
     const userId = user?.id || '';
     if (!userId) return jres({ error:'Forbidden' }, 401, cors);
 
-    // Only allow transcripts for mapped bots of this user
-    const mapResp = await fetch(`${SUPABASE_URL}/rest/v1/recall_bots?select=bot_id&user_id=eq.${userId}`, { headers:{ apikey: SERVICE_KEY, Authorization:`Bearer ${SERVICE_KEY}` } });
-    const mapped = await mapResp.json().catch(()=>[]);
-    const allowedIds = new Set((mapped||[]).map((r)=>r.bot_id));
+    // Get all bots owned by the user
+    const ownedBotsResp = await fetch(`${SUPABASE_URL}/rest/v1/recall_bots?select=bot_id,meeting_url&user_id=eq.${userId}`, { 
+      headers:{ apikey: SERVICE_KEY, Authorization:`Bearer ${SERVICE_KEY}` } 
+    });
+    if (!ownedBotsResp.ok) throw new Error('failed_to_fetch_owned_bots');
+    const ownedBots = await ownedBotsResp.json().catch(()=>[]);
+    
+    // Get meeting URLs the user participated in
+    const meetingUrls = [...new Set((ownedBots||[]).map(b => b.meeting_url).filter(Boolean))];
+    
+    let participantBots = [];
+    if (meetingUrls.length > 0) {
+      // Build a filter like meeting_url=in.("url1","url2")
+      const urlFilter = `meeting_url=in.(${meetingUrls.map(u => `"${u}"`).join(',')})`;
+      const participantBotsResp = await fetch(`${SUPABASE_URL}/rest/v1/recall_bots?select=bot_id&${urlFilter}`, { 
+        headers:{ apikey: SERVICE_KEY, Authorization:`Bearer ${SERVICE_KEY}` } 
+      });
+      if (participantBotsResp.ok) {
+        participantBots = await participantBotsResp.json().catch(()=>[]);
+      }
+    }
+
+    // Combine owned and participant bot IDs
+    const ownedBotIds = (ownedBots||[]).map(r => r.bot_id);
+    const participantBotIds = (participantBots||[]).map(r => r.bot_id);
+    const allowedIds = new Set([...ownedBotIds, ...participantBotIds]);
+
+    // If a user has no bots at all, return empty list.
+    if (allowedIds.size === 0) {
+      return jres({ success: true, transcripts: [], total: 0, debug: results.debug }, 200, cors);
+    }
+    
     // Use the exact endpoint from Recall documentation
     let url = `${base}/api/v1/transcript/?status_code=done&limit=100`;
     let pageCount = 0;
@@ -106,9 +130,10 @@ export default async function handler(req){
       const items = data.results || data.data || (Array.isArray(data) ? data : []);
       
       for (const transcript of items) {
-        // Skip transcripts not belonging to this user (no bot_id or not mapped)
+        // Skip transcripts not belonging to this user (no bot_id or not in allowed set)
         const tBotId = transcript.bot_id || transcript.recording_id || transcript.id || null;
-        if (allowedIds.size && (!tBotId || !allowedIds.has(tBotId))) continue;
+        if (!tBotId || !allowedIds.has(tBotId)) continue;
+        
         // Fetch the actual transcript content
         let transcriptText = '';
         let botInfo = {};
