@@ -60,12 +60,18 @@ export default async function handler(req){
   };
   
   try {
-    // Authenticate and get user
     const user = await getUser();
     const userId = user?.id || '';
     if (!userId) return jres({ error:'Forbidden' }, 401, cors);
 
-    // Get all bots owned by the user
+    //-- Backfill logic start --//
+    try {
+      await backfillUserTranscripts(user);
+    } catch(e) {
+      console.error('Backfill failed:', e.message);
+    }
+    //-- Backfill logic end --//
+
     const ownedBotsResp = await fetch(`${SUPABASE_URL}/rest/v1/recall_bots?select=bot_id,meeting_url&user_id=eq.${userId}`, { 
       headers:{ apikey: SERVICE_KEY, Authorization:`Bearer ${SERVICE_KEY}` } 
     });
@@ -283,4 +289,76 @@ export default async function handler(req){
     total: results.total,
     debug: results.debug
   }, 200, cors);
+}
+
+async function backfillUserTranscripts(user){
+  const SUPABASE_URL = process.env.SUPABASE_URL || '';
+  const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SERVICE_KEY || '';
+  const RECALL_KEY = process.env.RECALL_API_KEY || process.env.RECALL_KEY || process.env.RECALL || '';
+  const userId = user?.id || '';
+  const userEmail = user?.email || '';
+
+  if (!userId || !userEmail) return;
+
+  const allBotsResp = await fetch(`${SUPABASE_URL}/rest/v1/recall_bots?select=bot_id`, { 
+      headers:{ apikey: SERVICE_KEY, Authorization:`Bearer ${SERVICE_KEY}` } 
+  });
+  const allBotsData = await allBotsResp.json();
+  const mappedBotIds = new Set(allBotsData.map(b => b.bot_id));
+
+  const region = (process.env.RECALL_REGION || 'us').trim().toLowerCase();
+  const regionBases = {
+    'us': 'https://us-west-2.recall.ai',
+    'eu': 'https://eu-west-1.recall.ai', 
+    'jp': 'https://ap-northeast-1.recall.ai',
+    'payg': 'https://api.recall.ai'
+  };
+  const base = regionBases[region] || regionBases.us;
+  let nextUrl = `${base}/api/v1/transcript/?limit=100`;
+  
+  let candidates = [];
+  let guard = 0;
+  while (nextUrl && guard < 20){
+    guard++;
+    const resp = await fetch(nextUrl, { headers: { Authorization:`Token ${RECALL_KEY}`, Accept:'application/json' } });
+    if(!resp.ok) break;
+    const data = await resp.json();
+    const chunk = Array.isArray(data?.results) ? data.results : [];
+    if (chunk.length) candidates.push(...chunk);
+    nextUrl = data?.next || '';
+    if (nextUrl && nextUrl.startsWith('/')) nextUrl = `${base}${nextUrl}`;
+  }
+
+  const unmappedCandidates = candidates.filter(c => !mappedBotIds.has(c.bot_id || c.recording_id || c.id));
+
+  const userBots = [];
+  for (const transcript of unmappedCandidates) {
+    if (transcript.recording_id) {
+      const recordingUrl = `https://api.recall.ai/api/v2/recordings/${transcript.recording_id}/`;
+      const recResp = await fetch(recordingUrl, {
+        headers: { 'Accept': 'application/json', 'Authorization': `Token ${RECALL_KEY}` }
+      });
+      if (recResp.ok) {
+        const recData = await recResp.json();
+        const participants = recData.participants || [];
+        if (participants.some(p => p.email && p.email.toLowerCase() === userEmail.toLowerCase())) {
+          userBots.push(transcript);
+        }
+      }
+    }
+  }
+  
+  for(const bot of userBots){
+      const mapId = bot.bot_id || bot.recording_id || bot.id;
+      await fetch(`${SUPABASE_URL}/rest/v1/recall_bots`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          apikey: SERVICE_KEY,
+          Authorization: `Bearer ${SERVICE_KEY}`,
+          'Prefer': 'resolution=merge-duplicates'
+        },
+        body: JSON.stringify({ bot_id: mapId, user_id: userId })
+      });
+  }
 }
