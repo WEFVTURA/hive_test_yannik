@@ -47,7 +47,8 @@ export default async function handler(req){
       return new Response(JSON.stringify({ spaces: spaces||[] }), { headers:{...cors,'Content-Type':'application/json'} });
     }
     if (type === 'public'){
-      const r = await fetch(`${SUPABASE_URL}/rest/v1/spaces?select=*&visibility=eq.public`, { headers:{ apikey: SERVICE_KEY, Authorization:`Bearer ${SERVICE_KEY}` } });
+      // Public semantics were normalized to 'shared' in the app layer; support both values
+      const r = await fetch(`${SUPABASE_URL}/rest/v1/spaces?select=*&or=(visibility.eq.public,visibility.eq.shared)`, { headers:{ apikey: SERVICE_KEY, Authorization:`Bearer ${SERVICE_KEY}` } });
       const data = await r.json();
       return new Response(JSON.stringify({ spaces: data||[] }), { headers:{...cors,'Content-Type':'application/json'} });
     }

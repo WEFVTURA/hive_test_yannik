@@ -402,7 +402,7 @@ a { color: inherit; text-decoration: none; }
 .meetings-hub { padding: 24px; max-width: 1400px; margin: 0 auto; }
 .hub-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 32px; }
 .hub-header h1 { margin: 0; font-size: 32px; }
-.hub-actions { display: flex; gap: 12px; }
+.hub-actions { display: flex; gap: 12px; justify-content: flex-start; }
 .insights-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 32px; }
 .insight-card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 20px; }
 .insight-card h4 { margin: 0 0 8px; color: var(--muted); font-size: 14px; }

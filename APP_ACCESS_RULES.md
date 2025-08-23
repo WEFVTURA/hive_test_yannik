@@ -20,11 +20,11 @@
 - Database-level isolation via Supabase Row Level Security (RLS).
 - All server/edge endpoints must resolve the authenticated `user_id` and enforce owner-level filters.
 - RAG/search calls MUST include the user’s JWT to Supabase functions so RLS is enforced on the vector search side.
-- UI should visually distinguish private vs shared items and allow filtering by ownership and visibility.
+- UI should visually distinguish private vs shared items and allow filtering by ownership and visibility. The app now exposes tabs in `My Library` for `My Spaces`, `Shared with me`, and `Public`.
 
 ## Sharing Model (High-Level)
 
-- Each record has an `owner_id` and optional `visibility`/`sharing` metadata.
+- Each record has an `owner_id` and optional `visibility`/`sharing` metadata. Values: `private`, `team`, `shared` (public-compatible). Legacy `public` is normalized to `shared` on save.
 - Sharing to users by email or user id, with roles (viewer/editor/owner).
 - Shared-with and shared-by lists should be queryable by the user.
 

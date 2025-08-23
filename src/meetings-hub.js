@@ -15,11 +15,11 @@ export async function renderMeetingsHub() {
           <h1>Meetings Hub</h1>
           <p class="muted">Your meeting transcripts with speaker diarization</p>
         </div>
-        <div class="hub-actions">
-          <button class="button" onclick="location.hash='';">
+        <div class="hub-actions" style="justify-content:flex-start; gap:12px;">
+          <button class="button" style="min-width:180px" onclick="location.hash='';">
             <i data-lucide="arrow-left"></i> Back to Spaces
           </button>
-          <button class="button primary" onclick="window.showTranscriptImport()">
+          <button class="button primary" style="min-width:180px" onclick="window.showTranscriptImport()">
             <i data-lucide="upload"></i> Import Transcripts
           </button>
         </div>

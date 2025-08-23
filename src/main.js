@@ -106,6 +106,7 @@ app.innerHTML = `
       </div>
 
       <button class="button primary" id="askHiveBtn" style="width:100%"><svg class="icon"><use href="#spark"></use></svg> Ask Hive</button>
+      <button class="button" id="mySpacesBtn" style="width:100%"><svg class="icon"><use href="#book"></use></svg> My Spaces</button>
       <button class="button" id="meetingBtn" style="width:100%"><svg class="icon"><use href="#spark"></use></svg> Meeting Intelligence</button>
       <button class="button" id="deepResearchBtn" style="width:100%"><svg class="icon"><use href="#search"></use></svg> Deep Research</button>
       <button class="button" id="quickNewNoteBtn" style="width:100%"><svg class="icon"><use href="#edit"></use></svg> New Note</button>
@@ -114,10 +115,6 @@ app.innerHTML = `
       <div class="section">Transcripts</div>
       <button class="button" id="meetingsHubBtn" style="width:100%"><i data-lucide="calendar" class="icon" aria-hidden="true"></i> Meetings Hub</button>
 
-      <div class="section">Giannandrea's Library</div>
-      <div class="nav-group" id="spacesList"></div>
-
-      <button class="button" id="createSpaceBtn" style="width:100%"><svg class="icon"><use href="#plus"></use></svg> Create a new space</button>
 
       <div class="promo panel" style="border-radius:12px; position:relative">
         <strong>Upgrade to Hive Pro</strong>
@@ -271,6 +268,10 @@ askBtn?.addEventListener('click', ()=>{
   if (appRoot){ appRoot.classList.remove('chat-closed'); appRoot.classList.add('chat-open'); }
   setTimeout(()=>{ try{ document.getElementById('chatInput')?.focus(); }catch{} }, 0);
 });
+
+// My Spaces -> go to library view
+const mySpacesBtn = document.getElementById('mySpacesBtn');
+mySpacesBtn?.addEventListener('click', ()=>{ location.hash = ''; });
 
 // Meetings navigation
 const meetingsHubBtn = document.getElementById('meetingsHubBtn');
@@ -710,33 +711,7 @@ async function renderLibrary(){
     grid.querySelectorAll('[data-space-menu-grid]').forEach(btn=>{ btn.addEventListener('click', async (e)=>{ e.stopPropagation(); const id=btn.getAttribute('data-space-menu-grid'); const s=arr.find(x=>x.id===id); if (!s) return; await openSpaceOptions(s); }); });
   }
 
-  // Render sidebar spaces
-  const list = document.getElementById('spacesList');
-  if (list) {
-    list.innerHTML = `
-      <div class="nav-header" style="display:flex; align-items:center; justify-content:space-between; padding:10px 12px; background:var(--panel-2)">
-        <div style="display:flex; align-items:center; gap:8px"><svg class="icon"><use href="#folder"></use></svg><span>Library</span></div>
-        <div class="badge">${spaces.length}</div>
-      </div>
-      <div class="nav-items" id="navItems"></div>`;
-    
-    const navItems = document.getElementById('navItems');
-    if (navItems) {
-      const topSpaces = spaces.slice(0, Math.max(4, spaces.length));
-      navItems.innerHTML = topSpaces.map(s=>`<div class="nav-item" data-id="${s.id}"><div style="display:flex; align-items:center; gap:8px"><svg class="icon"><use href="#book"></use></svg><span>${s.name}</span></div><button class="button ghost sm" data-space-menu="${s.id}" title="Options">⋯</button></div>`).join('');
-      navItems.querySelectorAll('[data-id]').forEach(el=>{ el.addEventListener('click', ()=>{ location.hash = 'space/'+el.getAttribute('data-id'); }); });
-      // Prevent row navigation when clicking the options button
-      navItems.querySelectorAll('[data-space-menu]').forEach(btn=>{
-        btn.addEventListener('click', async (e)=>{
-          e.stopPropagation();
-          const id = btn.getAttribute('data-space-menu');
-          const space = spaces.find(s=>s.id===id);
-          if (!space) return;
-          await openSpaceOptions(space);
-        });
-      });
-    }
-  }
+  // Sidebar mini list is removed per new design; keep function for route refresh safety
 
   const grid = document.getElementById('grid');
   // Promote baseline spaces first: Deep Research, Meetings, Chats

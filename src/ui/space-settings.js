@@ -109,7 +109,7 @@ export async function renderSpaceSettings(root, spaceId){
   root.querySelector('#saveBtn')?.addEventListener('click', async ()=>{
     const name = (root.querySelector('#spName')?.value||'').trim();
     let vis = (root.querySelector('#spVis')?.value||'private').trim();
-    if (vis === 'public') vis = 'shared'; // normalize to existing enum
+    if (vis === 'public') vis = 'shared'; // normalize to existing enum used by DB policies
     const color = root.querySelector('#spColors [data-selected="1"]')?.getAttribute('data-color')||'';
     const pubPerm = (root.querySelector('#spPublicPerm')?.value||'view').trim();
     const updates = {};
@@ -125,8 +125,8 @@ export async function renderSpaceSettings(root, spaceId){
     }catch{}
     // Persist color locally
     try{ if (typeof localStorage!=='undefined'){ if (color){ localStorage.setItem('space_color_'+spaceId, color); } else { localStorage.removeItem('space_color_'+spaceId); } } }catch{}
-    // Update public permissions in settings
-    if (vis==='public'){
+    // Update public/shared permissions in settings
+    if (vis==='public' || vis==='shared'){
       const settings = { ...(space.settings||{}) };
       settings.public_permissions = pubPerm||'view';
       // Only attempt settings save if column exists; otherwise skip silently

@@ -136,16 +136,35 @@ export async function profile_uploadAvatar(file){
 
 // DB helpers
 export async function db_listSpaces(){
+  // Use edge endpoint that aggregates owned, shared, and public according to access rules
   const sb = getSupabase();
-  const r = await sb.from('spaces').select('*').order('created_at', { ascending: true });
-  if (r.error) throw r.error;
-  const rows = r.data || [];
-  // Enforce per-user isolation: only return spaces the user owns or that are shared with their email
-  let meEmail=''; let meId='';
-  try{ const me = (await sb.auth.getUser()).data?.user; meEmail = me?.email||''; meId = me?.id||''; }catch{}
-  return rows
-    .filter(s => !('deleted_at' in s) || s.deleted_at === null || s.deleted_at === '' || !s.deleted_at)
-    .filter(s => meId ? s.owner_id === meId : false);
+  let token = '';
+  try{ const ss = await sb.auth.getSession(); token = ss?.data?.session?.access_token || ''; }catch{}
+  async function fetchType(type){
+    const r = await fetch(`/api/spaces-list?type=${type}`, { headers: { ...(token? { Authorization:`Bearer ${token}` }: {} ) } });
+    if (!r.ok) return [];
+    const j = await r.json().catch(()=>({spaces:[]}));
+    return Array.isArray(j.spaces) ? j.spaces : [];
+  }
+  const [mine, shared, pub] = await Promise.all([fetchType('mine'), fetchType('shared'), fetchType('public')]).catch(()=>[[],[],[]]);
+  const all = [...mine, ...shared, ...pub];
+  // Deduplicate by id and filter deleted
+  const seen = new Set();
+  const list = [];
+  for (const s of all){
+    if (!s || !s.id) continue;
+    if (seen.has(s.id)) continue;
+    if ('deleted_at' in s && s.deleted_at && s.deleted_at !== null && s.deleted_at !== '') continue;
+    seen.add(s.id);
+    list.push(s);
+  }
+  // Stable sort by created_at ascending if available, else name
+  return list.sort((a,b)=>{
+    const ac = a.created_at? new Date(a.created_at).getTime():0;
+    const bc = b.created_at? new Date(b.created_at).getTime():0;
+    if (ac !== bc) return ac - bc;
+    return String(a.name||'').localeCompare(String(b.name||''));
+  });
 }
 export async function db_getSpace(id){
   const sb = getSupabase();
