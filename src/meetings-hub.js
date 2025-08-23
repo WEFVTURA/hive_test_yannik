@@ -15,7 +15,7 @@ export async function renderMeetingsHub() {
           <h1>Meetings Hub</h1>
           <p class="muted">Your meeting transcripts with speaker diarization</p>
         </div>
-        <div class="hub-actions" style="justify-content:flex-start; gap:12px;">
+        <div class="hub-actions" style="display:flex; justify-content:flex-start; gap:12px; flex-wrap:wrap;">
           <button class="button" style="min-width:180px" onclick="location.hash='';">
             <i data-lucide="arrow-left"></i> Back to Spaces
           </button>

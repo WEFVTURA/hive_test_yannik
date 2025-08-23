@@ -402,10 +402,10 @@ a { color: inherit; text-decoration: none; }
 
 /* Meetings Hub Styles */
 .meetings-hub { padding: 24px; max-width: 1400px; margin: 0 auto; }
-.hub-header { display: flex; justify-content: flex-start; align-items: center; gap: 16px; margin-bottom: 32px; }
-.hub-header h1 { margin: 0; font-size: 32px; }
-.hub-actions { display: flex; gap: 12px; justify-content: flex-start; flex-wrap: wrap; }
-.hub-actions .button { min-width: 180px; }
+.meetings-hub .hub-header { display: grid; grid-template-columns: 1fr; gap: 12px; align-items: start; margin-bottom: 32px; }
+.meetings-hub .hub-header h1 { margin: 0; font-size: 32px; }
+.meetings-hub .hub-actions { display: flex; gap: 12px; justify-content: flex-start; flex-wrap: wrap; }
+.meetings-hub .hub-actions .button { min-width: 180px; }
 .insights-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 32px; }
 .insight-card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 20px; }
 .insight-card h4 { margin: 0 0 8px; color: var(--muted); font-size: 14px; }
