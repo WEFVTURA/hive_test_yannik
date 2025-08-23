@@ -120,7 +120,16 @@ export async function renderSpaceSettings(root, spaceId){
       let token=''; try{ const sb = getSupabase(); const ss = await sb.auth.getSession(); token = ss?.data?.session?.access_token || ''; }catch{}
       if (Object.keys(updates).length){
         const r = await fetch('/api/space-update', { method:'POST', headers:{ 'Content-Type':'application/json', ...(token? { Authorization:`Bearer ${token}` }: {}) }, body: JSON.stringify({ id: spaceId, fields: updates }) });
-        if (!r.ok){ const t = await r.text(); window.showToast && window.showToast('Failed to save: '+t); }
+        if (!r.ok){
+          try{
+            const j = await r.json();
+            if (j?.error === 'duplicate_name'){
+              window.showToast && window.showToast('Name already in use. Please choose a different space name.');
+            } else {
+              window.showToast && window.showToast('Failed to save: '+(j?.detail||j?.error||r.status));
+            }
+          }catch{ window.showToast && window.showToast('Failed to save'); }
+        }
       }
     }catch{}
     // Persist color locally

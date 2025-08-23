@@ -108,7 +108,7 @@ body{margin:0; background:var(--bg); color:var(--text); font:14px/1.45 ui-sans-s
 .select-glass-wrap{position:relative; display:inline-block}
 .select-glass-wrap:after{content:"▾"; position:absolute; right:12px; top:50%; transform:translateY(-50%); color:var(--muted); pointer-events:none}
 
-.card-grid{margin-top:12px;display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;grid-auto-flow:row dense; align-items:start; align-content:start; justify-content:stretch; justify-items:stretch}
+.card-grid{margin-top:12px;display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,300px));gap:12px;grid-auto-flow:row dense; align-items:start; align-content:start; justify-content:flex-start; justify-items:start}
 .space-2col{grid-template-columns:1fr 1fr}
 .space-1col{grid-template-columns:1fr}
 .space-2col .lib-card{max-width:none}

@@ -54,6 +54,10 @@ export default async function handler(req){
       return { ok: r.ok, status: r.status, text: t };
     }
     let result = await patchFields(fields);
+    // Handle duplicate owner_id+name constraint gracefully and return friendly error
+    if (!result.ok && /duplicate key value/i.test(String(result.text||'')) && /ux_spaces_owner_name/i.test(String(result.text||''))){
+      return new Response(JSON.stringify({ error:'duplicate_name', detail:'A space with this name already exists for your account.' }), { status:409, headers:{...cors,'Content-Type':'application/json'} });
+    }
     const textLower = String(result.text||'').toLowerCase();
     const settingsMissing = /column\s+"?settings"?\s+does not exist/i.test(textLower) || textLower.includes("could not find the 'settings' column") || /pgrst204/i.test(textLower);
     if (!result.ok && fields && typeof fields==='object' && Object.prototype.hasOwnProperty.call(fields,'settings') && settingsMissing){
