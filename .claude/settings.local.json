@@ -11,7 +11,13 @@
       "Bash(git commit:*)",
       "Bash(npm run build:*)",
       "Bash(npm run dev:*)",
-      "Bash(rm:*)"
+      "Bash(rm:*)",
+      "Bash(git remote add:*)",
+      "Bash(gh repo create:*)",
+      "Bash(./gh_2.40.1_linux_amd64/bin/gh auth:*)",
+      "Bash(./gh_2.40.1_linux_amd64/bin/gh repo create villagaiaimpacthub/hive_test_yannik --public --source=. --remote=vercel --push)",
+      "Bash(./gh_2.40.1_linux_amd64/bin/gh repo create hive_test_yannik --public --source=. --remote=vercel --push)",
+      "Bash(git remote:*)"
     ],
     "deny": [],
     "ask": []
