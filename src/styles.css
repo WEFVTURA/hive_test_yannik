@@ -108,11 +108,11 @@ body{margin:0; background:var(--bg); color:var(--text); font:14px/1.45 ui-sans-s
 .select-glass-wrap{position:relative; display:inline-block}
 .select-glass-wrap:after{content:"▾"; position:absolute; right:12px; top:50%; transform:translateY(-50%); color:var(--muted); pointer-events:none}
 
-.card-grid{margin-top:12px;display:flex;flex-wrap:wrap;gap:12px;align-items:stretch;align-content:flex-start;justify-content:flex-start}
+.card-grid{margin-top:12px;display:grid;gap:12px;align-items:start;justify-content:start}
 .space-2col{grid-template-columns:1fr 1fr}
 .space-1col{grid-template-columns:1fr}
-.space-2col .lib-card{max-width:none}
-.lib-card{background:linear-gradient(180deg, rgba(255,255,255,.02), rgba(0,0,0,.02)), var(--panel-2); border:1px solid var(--border); border-radius:12px; padding:12px; display:flex; flex-direction:column; gap:12px; align-self:start; width:300px; box-shadow:0 1px 0 rgba(255,255,255,.03) inset}
+.space-2col .lib-card{max-width:none;width:100%}
+.lib-card{background:linear-gradient(180deg, rgba(255,255,255,.02), rgba(0,0,0,.02)), var(--panel-2); border:1px solid var(--border); border-radius:12px; padding:12px; display:flex; flex-direction:column; gap:12px; align-self:start; width:100%; box-shadow:0 1px 0 rgba(255,255,255,.03) inset}
 .lib-card.collapsed{padding:12px}
 .lib-card.collapsed #filesList{display:none}
 .lib-card.collapsed #filesActions{display:none}
@@ -759,6 +759,10 @@ a { color: inherit; text-decoration: none; }
   
   /* Responsive cards */
   .card-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .space-2col {
     grid-template-columns: 1fr;
   }
   

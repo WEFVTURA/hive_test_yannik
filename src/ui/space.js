@@ -45,10 +45,10 @@ export async function renderSpace(root, spaceId){
           <div style="font-weight:600">Files</div>
           <button class="button sm ghost mobile-hidden" id="filesCollapseBtn">Collapse</button>
         </div>
-        <div id="filesActions" style="display:flex; gap:8px; margin-bottom:6px">
+        <div id="filesActions" style="display:flex; flex-wrap:wrap; gap:8px; margin-bottom:6px">
           <button class="button" id="addLinkBtn">Add link</button>
           <button class="button" id="uploadBtn">Upload file</button>
-          <div id="transcribeWrap" style="position:relative">
+          <div id="transcribeWrap" style="position:relative; flex-shrink:0">
             <button class="button" id="uploadAudioBtn">Transcribe audio ▾</button>
             <div class="menu" id="uploadRouteMenu" style="display:none; right:0; min-width:260px">
               <button class="button" data-route="vercel" style="justify-content:flex-start">Route A · Vercel proxy → AssemblyAI</button>
